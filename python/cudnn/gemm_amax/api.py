@@ -1,20 +1,22 @@
 from .dense_blockscaled_gemm_persistent_amax import (
     Sm100BlockScaledPersistentDenseGemmKernel,
+    Sm100BlockScaledPersistentDenseGemmKernelNoDlpack,
 )
 
 from cuda.bindings import driver as cuda
 import torch
 from typing import Tuple, Optional
+from packaging import version
 
 import cutlass
 import cutlass.cute as cute
-from cutlass.cute.runtime import from_dlpack
+from cutlass.cute.runtime import from_dlpack, make_ptr
 
 from cudnn.datatypes import _convert_to_cutlass_data_type
 from cudnn.api_base import APIBase
 
 
-class GemmAmax(APIBase):
+class GemmAmaxSm100(APIBase):
     def __init__(
         self,
         sample_a: torch.Tensor,
@@ -29,9 +31,8 @@ class GemmAmax(APIBase):
         sf_vec_size: int = 32,
     ):
         super().__init__()
-        self._kernel = Sm100BlockScaledPersistentDenseGemmKernel
 
-        self._logger.warning("GemmAmax is an experimental API")
+        self._logger.warning("GemmAmaxSm100 is an experimental API")
         self._logger.debug("Entering __init__")
 
         self.sample_a = sample_a
@@ -65,88 +66,158 @@ class GemmAmax(APIBase):
         ab_dtype = self.sample_a.dtype
         sf_dtype = self.sample_sfa.dtype
         c_dtype = self.sample_c.dtype
-        if ab_dtype == torch.float4_e2m1fn_x2 or c_dtype == torch.float4_e2m1fn_x2:
-            self._logger.warning(
-                "Running GemmAmax with float4_e2m1fn_x2 is not numerically correct due to limited support and may not give correct results."
-            )
-        m, k, l = self.sample_a.shape
-        n, k, l = self.sample_b.shape
-        m, n, l = self.sample_c.shape
-        _, _, m_div_atom_m0_m1, _, sf_k_div_atom_k, l = self.sample_sfa.shape
-        _, _, n_div_atom_m0_m1, _, sf_k_div_atom_k, l = self.sample_sfb.shape
-        _, _, _ = self.sample_amax.shape
 
         self._logger.debug("Checking dtypes and sf_vec_size")
-        assert (
-            self.sample_a.dtype == self.sample_b.dtype
-        ), "A and B tensor dtypes must match"
-        assert ab_dtype in {
+        if self.sample_a.dtype != self.sample_b.dtype:
+            raise ValueError(
+                f"A and B tensor dtypes must match, got {self.sample_a.dtype} and {self.sample_b.dtype}"
+            )
+        if ab_dtype not in {
             torch.float4_e2m1fn_x2,
+            torch.uint8,
             torch.float8_e5m2,
             torch.float8_e4m3fn,
-        }, "Unsupported ab_dtype"
-        assert self.sf_vec_size in {16, 32}, "Unsupported sf_vec_size"
-        assert (
-            sf_dtype != torch.float8_e8m0fnu
-        ), "Please pass in sf tensors as torch.int8 instead of torch.float8_e8m0fnu"
-        assert sf_dtype in {
+        }:
+            raise ValueError(
+                f"Unsupported ab_dtype: received {ab_dtype}, expected {{float4_e2m1fn_x2, uint8, float8_e5m2, float8_e4m3fn}}"
+            )
+        if ab_dtype == torch.uint8:
+            self._logger.warning(
+                "Uint8 ab_dtype will be interpreted as packed fp4, not as native uint8"
+            )
+        if self.sf_vec_size not in {16, 32}:
+            raise ValueError(
+                f"Unsupported sf_vec_size: received {self.sf_vec_size}, expected {{16, 32}}"
+            )
+        if sf_dtype not in {
             torch.float8_e8m0fnu,
             torch.float8_e4m3fn,
             torch.int8,
-        }, "Unsupported sf_dtype"
-        assert not (
-            sf_dtype == torch.float8_e4m3fn and self.sf_vec_size == 32
-        ), "Unsupported sf_dtype and sf_vec_size combination"
-        assert not (
+        }:
+            raise ValueError(
+                f"Unsupported sf_dtype: received {sf_dtype}, expected {{float8_e8m0fnu, float8_e4m3fn, int8}}"
+            )
+        if sf_dtype == torch.int8:
+            self._logger.warning(
+                "Int8 sf_dtype will be interpreted as float8_e8m0fnu, not as native int8"
+            )
+        if sf_dtype == torch.float8_e4m3fn and self.sf_vec_size == 32:
+            raise ValueError(
+                "Unsupported sf_dtype and sf_vec_size combination: float8_e4m3fn and 32 is not supported"
+            )
+        if (
             ab_dtype in {torch.float8_e5m2, torch.float8_e4m3fn}
             and self.sf_vec_size == 16
-        ), "Unsupported ab_dtype and sf_vec_size combination"
-        assert c_dtype in {
+        ):
+            raise ValueError(
+                f"Unsupported ab_dtype and sf_vec_size combination: {{float8_e5m2, float8_e4m3fn}} and 16 is not supported"
+            )
+        if c_dtype not in {
             torch.float32,
             torch.float16,
             torch.bfloat16,
             torch.float8_e5m2,
             torch.float8_e4m3fn,
             torch.float4_e2m1fn_x2,
-        }, "Unsupported c_dtype"
-        assert (
-            self.acc_dtype == torch.float32
-        ), "Unsupported acc_dtype: accumulator dtype must be float32"
+            torch.uint8,
+        }:
+            raise ValueError(
+                f"Unsupported c_dtype: received {c_dtype}, expected {{float32, float16, bfloat16, float8_e5m2, float8_e4m3fn, float4_e2m1fn_x2, uint8}}"
+            )
+        if c_dtype in {torch.float4_e2m1fn_x2, torch.uint8}:
+            if ab_dtype not in {torch.float4_e2m1fn_x2, torch.uint8}:
+                raise ValueError(
+                    f"Unsupported c_dtype and ab_dtype combination: fp4 c_dtype requires fp4 ab_dtype, got {ab_dtype}"
+                )  # Kernel fails to launch with other ab_dtype
+        if c_dtype in {torch.float8_e5m2, torch.float8_e4m3fn} and ab_dtype in {
+            torch.float8_e5m2,
+            torch.float8_e4m3fn,
+        }:
+            raise NotImplementedError(
+                f"fp8 ab_dtype and fp8 c_dtype currently fails to launch"
+            )
+        if not (self.acc_dtype == torch.float32):
+            raise ValueError(
+                f"Unsupported acc_dtype: received {self.acc_dtype}, expected {{float32}}"
+            )
+        self.ab_dtype = ab_dtype
+        self.c_dtype = c_dtype
 
         self._logger.debug("Checking tensor layout")
-        assert self.sample_a.shape == (m, k, l), "Input/Output shape mismatch"
-        assert self.sample_b.shape == (n, k, l), "Input/Output shape mismatch"
-        assert self.sample_c.shape == (m, n, l), "Input/Output shape mismatch"
-        assert self.sample_sfa.shape == (
+        m, k, l = self.sample_a.shape
+        n, k, l = self.sample_b.shape
+        m_, n_, l = self.sample_c.shape
+        _, _, m_div_atom_m0_m1, _, sf_k_div_atom_k, l = self.sample_sfa.shape
+        _, _, n_div_atom_m0_m1, _, sf_k_div_atom_k, l = self.sample_sfb.shape
+        _, _, _ = self.sample_amax.shape
+
+        if self.sample_a.shape != (m, k, l):
+            raise ValueError(
+                f"Input/Output shape mismatch: expected A tensor shape {m, k, l}, got {self.sample_a.shape}"
+            )
+        if self.sample_b.shape != (n, k, l):
+            raise ValueError(
+                f"Input/Output shape mismatch: expected B tensor shape {n, k, l}, got {self.sample_b.shape}"
+            )
+        if c_dtype == torch.float4_e2m1fn_x2 or c_dtype == torch.uint8:
+            if self.sample_c.shape != (
+                m,
+                (n + 1) // 2,
+                l,
+            ):
+                raise ValueError(
+                    f"Input/Output shape mismatch: expected C tensor shape {m, (n + 1) // 2, l}, got {self.sample_c.shape}"
+                )
+        else:
+            if self.sample_c.shape != (m, n, l):
+                raise ValueError(
+                    f"Input/Output shape mismatch: expected C tensor shape {m, n, l}, got {self.sample_c.shape}"
+                )
+        if self.sample_sfa.shape != (
             self.atom_m[0],
             self.atom_m[1],
             m_div_atom_m0_m1,
             self.atom_k,
             sf_k_div_atom_k,
             l,
-        ), "Input/Output shape mismatch"
-        assert self.sample_sfb.shape == (
+        ):
+            raise ValueError(
+                f"Input/Output shape mismatch: expected sfa tensor shape {self.atom_m[0], self.atom_m[1], m_div_atom_m0_m1, self.atom_k, sf_k_div_atom_k, l}, got {self.sample_sfa.shape}"
+            )
+        if self.sample_sfb.shape != (
             self.atom_m[0],
             self.atom_m[1],
             n_div_atom_m0_m1,
             self.atom_k,
             sf_k_div_atom_k,
             l,
-        ), "Input/Output shape mismatch"
-        assert self.sample_amax.shape == (1, 1, 1), "Input/Output shape mismatch"
-        assert m_div_atom_m0_m1 == (m + self.atom_m[0] * self.atom_m[1] - 1) // (
+        ):
+            raise ValueError(
+                f"Input/Output shape mismatch: expected sfb tensor shape {self.atom_m[0], self.atom_m[1], n_div_atom_m0_m1, self.atom_k, sf_k_div_atom_k, l}, got {self.sample_sfb.shape}"
+            )
+        if self.sample_amax.shape != (1, 1, 1):
+            raise ValueError(
+                f"Input/Output shape mismatch: expected amax tensor shape {1, 1, 1}, got {self.sample_amax.shape}"
+            )
+        if m_div_atom_m0_m1 != (m + self.atom_m[0] * self.atom_m[1] - 1) // (
             self.atom_m[0] * self.atom_m[1]
-        ), "Input/Output shape mismatch"
-        assert n_div_atom_m0_m1 == (n + self.atom_m[0] * self.atom_m[1] - 1) // (
+        ):
+            raise ValueError(
+                f"Input/Output shape mismatch: expected m_div_atom_m0_m1 (sfa.shape[2]) = {(m + self.atom_m[0] * self.atom_m[1] - 1) // (self.atom_m[0] * self.atom_m[1])}, got {m_div_atom_m0_m1}"
+            )
+        if n_div_atom_m0_m1 != (n + self.atom_m[0] * self.atom_m[1] - 1) // (
             self.atom_m[0] * self.atom_m[1]
-        ), "Input/Output shape mismatch"
+        ):
+            raise ValueError(
+                f"Input/Output shape mismatch: expected n_div_atom_m0_m1 (sfb.shape[2]) = {(n + self.atom_m[0] * self.atom_m[1] - 1) // (self.atom_m[0] * self.atom_m[1])}, got {n_div_atom_m0_m1}"
+            )
         if self.sample_a.stride() == (1, m, m * k):
             self.a_major = "m"
         elif self.sample_a.stride() == (k, 1, m * k):
             self.a_major = "k"
         else:
             raise ValueError(
-                f"Unsupported A tensor stride pattern: {self.sample_a.stride()}. Expected (1, m, m * k) or (k, 1, m * k)"
+                f"Unsupported A tensor stride: expected {{(1, m, m * k), (k, 1, m * k)}}, got {self.sample_a.stride()}"
             )
         if self.sample_b.stride() == (1, n, n * k):
             self.b_major = "n"
@@ -154,47 +225,76 @@ class GemmAmax(APIBase):
             self.b_major = "k"
         else:
             raise ValueError(
-                f"Unsupported B tensor stride pattern: {self.sample_b.stride()}. Expected (1, n, n * k) or (k, 1, n * k)"
+                f"Unsupported B tensor stride: expected {{(1, n, n * k), (k, 1, n * k)}}, got {self.sample_b.stride()}"
             )
-        if self.sample_c.stride() == (1, m, m * n):
+        if self.sample_c.stride() == (1, m_, m_ * n_):
             self.c_major = "m"
-        elif self.sample_c.stride() == (n, 1, m * n):
+        elif self.sample_c.stride() == (n_, 1, m_ * n_):
             self.c_major = "n"
         else:
             raise ValueError(
-                f"Unsupported C tensor stride pattern: {self.sample_c.stride()}. Expected (1, m, m * n) or (n, 1, m * n) for C"
+                f"Unsupported C tensor stride: expected {{(1, m, m * n), (n, 1, m * n)}}, got {self.sample_c.stride()}"
             )
-        assert not (
-            ab_dtype is torch.float4_e2m1fn_x2
-            and not (self.a_major == "k" and self.b_major == "k")
-        ), "Unsupported ab_dtype and layout combination"
-        assert not (
-            c_dtype is torch.float4_e2m1fn_x2 and self.c_major == "m"
-        ), "Unsupported c_dtype and layout combination"
+
+        if ab_dtype in {torch.float4_e2m1fn_x2, torch.uint8} and not (
+            self.a_major == "k" and self.b_major == "k"
+        ):
+            raise ValueError(
+                f"Unsupported A or B tensor stride: Float4 tensors require k-major layout for hardware efficiency, got {self.a_major} and {self.b_major}"
+            )
+        if c_dtype in {torch.float4_e2m1fn_x2, torch.uint8} and self.c_major == "m":
+            raise ValueError(
+                f"Unsupported C tensor stride: Float4 tensors require n-major layout for hardware efficiency, got {self.c_major}"
+            )
 
         self._logger.debug("Checking mma tiler and cluster shape")
-        assert self.mma_tiler_mn[0] in [128, 256], "Unsupported mma tile shape"
-        assert self.mma_tiler_mn[1] in [128, 256], "Unsupported mma tile shape"
-        assert (
+        if self.mma_tiler_mn[0] not in [128, 256]:
+            raise ValueError(
+                f"Unsupported mma_tiler_mn[0]: expected {{128, 256}}, got {self.mma_tiler_mn[0]}"
+            )
+        if self.mma_tiler_mn[1] not in [128, 256]:
+            raise ValueError(
+                f"Unsupported mma_tiler_mn[1]: expected {{128, 256}}, got {self.mma_tiler_mn[1]}"
+            )
+        if self.mma_tiler_mn[0] == 256:
+            raise NotImplementedError("mma_tiler_mn[0] == 256 currently hangs")
+        if (
+            self.ab_dtype in {torch.float4_e2m1fn_x2, torch.uint8}
+            and self.mma_tiler_mn[1] == 256
+            and k <= 128
+        ):
+            raise ValueError(
+                f"mma_tiler_mn (X, 256) requires k > 128 (packed x2), got {k}"
+            )
+        if not (
             self.cluster_shape_mn[0] % (2 if self.mma_tiler_mn[0] == 256 else 1) == 0
-        ), "Illegal cluster shape"
+        ):
+            raise ValueError("Illegal cluster shape")
+        if (
+            self.mma_tiler_mn == (128, 256)
+            and self.sf_vec_size == 16
+            and c_dtype in {torch.float32, torch.float16, torch.bfloat16}
+        ):
+            raise NotImplementedError(
+                "mma_tiler_mn (128, 256), sf_vec_size 16, c_dtype {torch.float32, torch.float16, torch.bfloat16} fails to launch"
+            )
 
+        # Special cluster shape check for scale factor multicasts.
+        # Due to limited size of scale factors, we can't multicast among more than 4 CTAs.
         def is_power_of_2(x):
             return x > 0 and (x & (x - 1)) == 0
 
-        assert (
-            self.cluster_shape_mn[0] * self.cluster_shape_mn[1] <= 16
-            and self.cluster_shape_mn[0] > 0
-            and self.cluster_shape_mn[1] > 0
-        ), "Invalid cluster shape"
-        # Special cluster shape check for scale factor multicasts.
-        # Due to limited size of scale factors, we can't multicast among more than 4 CTAs.
-        assert (
+        if not (
             self.cluster_shape_mn[0] <= 4
             and self.cluster_shape_mn[1] <= 4
+            and self.cluster_shape_mn[0] > 0
+            and self.cluster_shape_mn[1] > 0
             and is_power_of_2(self.cluster_shape_mn[0])
             and is_power_of_2(self.cluster_shape_mn[1])
-        ), "Invalid cluster shape"
+        ):
+            raise ValueError(
+                f"Invalid cluster shape: expected cluster_shape_mn values in {{1, 2, 4}}, got {self.cluster_shape_mn}"
+            )
 
         self._logger.debug("Checking tensor alignment")
 
@@ -206,11 +306,25 @@ class GemmAmax(APIBase):
             )
             return num_major_elements % num_contiguous_elements == 0
 
-        assert (
+        if not (
             check_contigous_16B_alignment(ab_dtype, self.a_major == "m", (m, k, l))
             and check_contigous_16B_alignment(ab_dtype, self.b_major == "n", (n, k, l))
             and check_contigous_16B_alignment(c_dtype, self.c_major == "m", (m, n, l))
-        ), "Unsupported tensor alignment"
+        ):
+            raise ValueError(
+                "Unsupported tensor alignment: tensors must be 16B aligned"
+            )
+
+        self._logger.debug("Checking environment")
+        if not torch.cuda.is_available():
+            raise RuntimeError("CUDA is not available")
+        device = torch.cuda.current_device()
+        major, minor = torch.cuda.get_device_capability(device)
+        compute_capability = major * 10 + minor
+        if compute_capability < 100:
+            raise RuntimeError(
+                f"GemmAmax requires SM100+ compute capability, but found SM{compute_capability} on device {device}"
+            )
 
         self._is_supported = True
         self._logger.debug("check_support completed successfully")
@@ -220,6 +334,22 @@ class GemmAmax(APIBase):
         self._logger.debug("Entering compile")
         current_stream = self._get_default_stream(current_stream)
         self._ensure_support_checked()
+
+        is_ab_fp4 = self.ab_dtype in {torch.float4_e2m1fn_x2, torch.uint8}
+        is_c_fp4 = self.c_dtype in {torch.float4_e2m1fn_x2, torch.uint8}
+        torch_version = version.parse(torch.__version__)
+        _fp8_dlpack_supported = version.parse(
+            torch_version.base_version
+        ) >= version.parse("2.10.0")
+        use_no_dlpack_kernel = is_ab_fp4 or is_c_fp4 or not _fp8_dlpack_supported
+
+        if use_no_dlpack_kernel:
+            self._logger.debug(
+                "Running no_dlpack kernel wrapper due to fp4 dtype or fp8 dtype on incompatible torch version"
+            )
+            self._kernel = Sm100BlockScaledPersistentDenseGemmKernelNoDlpack
+        else:
+            self._kernel = Sm100BlockScaledPersistentDenseGemmKernel
 
         gemm_amax = self._kernel(
             self.sf_vec_size,
@@ -231,40 +361,156 @@ class GemmAmax(APIBase):
             self.cluster_shape_mn[0] * self.cluster_shape_mn[1]
         )
 
-        sample_a_cute = from_dlpack(
-            self.sample_a, assumed_align=16
-        ).mark_compact_shape_dynamic(
-            mode=1 if self.a_major == "k" else 0,
-            stride_order=(2, 0, 1) if self.a_major == "k" else (2, 1, 0),
-            divisibility=32 if self.sample_a.dtype == torch.float4_e2m1fn_x2 else 16,
-        )
-        sample_b_cute = from_dlpack(
-            self.sample_b, assumed_align=16
-        ).mark_compact_shape_dynamic(
-            mode=1 if self.b_major == "k" else 0,
-            stride_order=(2, 0, 1) if self.b_major == "k" else (2, 1, 0),
-            divisibility=32 if self.sample_b.dtype == torch.float4_e2m1fn_x2 else 16,
-        )
-        sample_c_cute = from_dlpack(
-            self.sample_c, assumed_align=16
-        ).mark_compact_shape_dynamic(
-            mode=1 if self.c_major == "n" else 0,
-            stride_order=(2, 0, 1) if self.c_major == "n" else (2, 1, 0),
-            divisibility=32 if self.sample_c.dtype == torch.float4_e2m1fn_x2 else 16,
-        )
+        if not use_no_dlpack_kernel:
+            sample_a_cute = from_dlpack(
+                self.sample_a, assumed_align=16
+            ).mark_compact_shape_dynamic(
+                mode=1 if self.a_major == "k" else 0,
+                stride_order=(2, 0, 1) if self.a_major == "k" else (2, 1, 0),
+                divisibility=(16),
+            )
+            sample_b_cute = from_dlpack(
+                self.sample_b, assumed_align=16
+            ).mark_compact_shape_dynamic(
+                mode=1 if self.b_major == "k" else 0,
+                stride_order=(2, 0, 1) if self.b_major == "k" else (2, 1, 0),
+                divisibility=(16),
+            )
 
-        self._logger.debug("Compiling gemm_amax")
-        self._compiled_kernel = cute.compile(
-            gemm_amax,
-            sample_a_cute,
-            sample_b_cute,
-            from_dlpack(self.sample_sfa, assumed_align=16),
-            from_dlpack(self.sample_sfb, assumed_align=16),
-            sample_c_cute,
-            from_dlpack(self.sample_amax, assumed_align=16),
-            max_active_clusters,
-            current_stream,
-        )
+            sample_c_cute = from_dlpack(
+                self.sample_c, assumed_align=16
+            ).mark_compact_shape_dynamic(
+                mode=1 if self.c_major == "n" else 0,
+                stride_order=(2, 0, 1) if self.c_major == "n" else (2, 1, 0),
+                divisibility=16,
+            )
+
+            self._logger.debug("Compiling gemm_amax")
+            self._compiled_kernel = cute.compile(
+                gemm_amax,
+                sample_a_cute,
+                sample_b_cute,
+                from_dlpack(self.sample_sfa, assumed_align=16),
+                from_dlpack(self.sample_sfb, assumed_align=16),
+                sample_c_cute,
+                from_dlpack(self.sample_amax, assumed_align=16),
+                max_active_clusters,
+                current_stream,
+            )
+        else:  # use_no_dlpack
+            # Create cute pointers/tensors manually to avoid DLPack requirements
+            # amax is never fp4 or fp8 and is safe to use directly with dlpack
+            self._logger.debug("Compiling gemm_amax (no dlpack)")
+            a_ptr = make_ptr(
+                (
+                    cutlass.Float4E2M1FN
+                    if is_ab_fp4
+                    else _convert_to_cutlass_data_type(self.sample_a.dtype)
+                ),
+                self.sample_a.data_ptr(),
+                cute.AddressSpace.gmem,
+                assumed_align=32 if is_ab_fp4 else 16,
+            )
+            b_ptr = make_ptr(
+                (
+                    cutlass.Float4E2M1FN
+                    if is_ab_fp4
+                    else _convert_to_cutlass_data_type(self.sample_b.dtype)
+                ),
+                self.sample_b.data_ptr(),
+                cute.AddressSpace.gmem,
+                assumed_align=32 if is_ab_fp4 else 16,
+            )
+            c_ptr = make_ptr(
+                (
+                    cutlass.Float4E2M1FN
+                    if is_c_fp4
+                    else _convert_to_cutlass_data_type(self.sample_c.dtype)
+                ),
+                self.sample_c.data_ptr(),
+                cute.AddressSpace.gmem,
+                assumed_align=32 if is_c_fp4 else 16,
+            )
+            sfa_ptr = make_ptr(
+                (
+                    cutlass.Float8E8M0FNU
+                    if self.sample_sfa.dtype == torch.int8
+                    else _convert_to_cutlass_data_type(self.sample_sfa.dtype)
+                ),
+                self.sample_sfa.data_ptr(),
+                cute.AddressSpace.gmem,
+                assumed_align=16,
+            )
+            sfb_ptr = make_ptr(
+                (
+                    cutlass.Float8E8M0FNU
+                    if self.sample_sfb.dtype == torch.int8
+                    else _convert_to_cutlass_data_type(self.sample_sfb.dtype)
+                ),
+                self.sample_sfb.data_ptr(),
+                cute.AddressSpace.gmem,
+                assumed_align=16,
+            )
+            a_shape = (
+                tuple(
+                    dim * 2 if i == 1 else dim
+                    for i, dim in enumerate(self.sample_a.shape)
+                )
+                if is_ab_fp4
+                else tuple(self.sample_a.shape)
+            )
+            b_shape = (
+                tuple(
+                    dim * 2 if i == 1 else dim
+                    for i, dim in enumerate(self.sample_b.shape)
+                )
+                if is_ab_fp4
+                else tuple(self.sample_b.shape)
+            )
+            c_shape = (
+                tuple(
+                    dim * 2 if i == 1 else dim
+                    for i, dim in enumerate(self.sample_c.shape)
+                )
+                if is_c_fp4
+                else tuple(self.sample_c.shape)
+            )
+            sfa_shape = tuple(self.sample_sfa.shape)
+            sfb_shape = tuple(self.sample_sfb.shape)
+
+            a_order = (1, 0, 2) if self.a_major == "k" else (0, 1, 2)
+            b_order = (1, 0, 2) if self.b_major == "k" else (0, 1, 2)
+            c_order = (1, 0, 2) if self.c_major == "n" else (0, 1, 2)
+            _sfa_strides = self.sample_sfa.stride()
+            _sfb_strides = self.sample_sfb.stride()
+            sfa_order = tuple(
+                sorted(range(len(sfa_shape)), key=lambda i: _sfa_strides[i])
+            )
+            sfb_order = tuple(
+                sorted(range(len(sfb_shape)), key=lambda i: _sfb_strides[i])
+            )
+
+            self._compiled_kernel = cute.compile(
+                gemm_amax,
+                a_ptr,
+                a_shape,
+                a_order,
+                b_ptr,
+                b_shape,
+                b_order,
+                sfa_ptr,
+                sfa_shape,
+                sfa_order,
+                sfb_ptr,
+                sfb_shape,
+                sfb_order,
+                c_ptr,
+                c_shape,
+                c_order,
+                from_dlpack(self.sample_amax, assumed_align=16),
+                max_active_clusters,
+                current_stream,
+            )
         self._logger.debug("Kernel compiled successfully")
 
     def execute(
@@ -288,66 +534,216 @@ class GemmAmax(APIBase):
             for _ in range(3 - amax_tensor.dim()):
                 amax_tensor = amax_tensor.unsqueeze(-1)
 
-        a_tensor_cute = from_dlpack(
-            a_tensor, assumed_align=16
-        ).mark_compact_shape_dynamic(
-            mode=1 if self.a_major == "k" else 0,
-            stride_order=(2, 0, 1) if self.a_major == "k" else (2, 1, 0),
-            divisibility=32 if self.sample_a.dtype == torch.float4_e2m1fn_x2 else 16,
-        )
-        b_tensor_cute = from_dlpack(
-            b_tensor, assumed_align=16
-        ).mark_compact_shape_dynamic(
-            mode=1 if self.b_major == "k" else 0,
-            stride_order=(2, 0, 1) if self.b_major == "k" else (2, 1, 0),
-            divisibility=32 if self.sample_b.dtype == torch.float4_e2m1fn_x2 else 16,
-        )
-        c_tensor_cute = from_dlpack(
-            c_tensor, assumed_align=16
-        ).mark_compact_shape_dynamic(
-            mode=1 if self.c_major == "n" else 0,
-            stride_order=(2, 0, 1) if self.c_major == "n" else (2, 1, 0),
-            divisibility=32 if self.sample_c.dtype == torch.float4_e2m1fn_x2 else 16,
-        )
-        if not skip_compile:
-            assert self._compiled_kernel is not None, "GemmAmax not compiled"
-            self._logger.debug("Executing with compiled kernel")
-            self._compiled_kernel(
-                a_tensor_cute,
-                b_tensor_cute,
-                from_dlpack(sfa_tensor, assumed_align=16),
-                from_dlpack(sfb_tensor, assumed_align=16),
-                c_tensor_cute,
-                from_dlpack(amax_tensor, assumed_align=16),
-                current_stream,
+        is_ab_fp4 = self.ab_dtype in {torch.float4_e2m1fn_x2, torch.uint8}
+        is_c_fp4 = self.c_dtype in {torch.float4_e2m1fn_x2, torch.uint8}
+        torch_version = version.parse(torch.__version__)
+        _fp8_dlpack_supported = version.parse(
+            torch_version.base_version
+        ) >= version.parse("2.10.0")
+        use_no_dlpack_kernel = is_ab_fp4 or is_c_fp4 or not _fp8_dlpack_supported
+
+        if not use_no_dlpack_kernel:
+            a_tensor_cute = from_dlpack(
+                a_tensor, assumed_align=16
+            ).mark_compact_shape_dynamic(
+                mode=1 if self.a_major == "k" else 0,
+                stride_order=(2, 0, 1) if self.a_major == "k" else (2, 1, 0),
+                divisibility=(16),
             )
-            self._logger.debug("Executed with compiled kernel successfully")
-        else:
-            self._logger.debug("Executing without compiled kernel (JIT)")
-            gemm_amax = self._kernel(
-                self.sf_vec_size,
-                self.mma_tiler_mn,
-                self.cluster_shape_mn,
+            b_tensor_cute = from_dlpack(
+                b_tensor, assumed_align=16
+            ).mark_compact_shape_dynamic(
+                mode=1 if self.b_major == "k" else 0,
+                stride_order=(2, 0, 1) if self.b_major == "k" else (2, 1, 0),
+                divisibility=(16),
             )
-            gemm_amax(
-                a_tensor_cute,
-                b_tensor_cute,
-                from_dlpack(sfa_tensor, assumed_align=16),
-                from_dlpack(sfb_tensor, assumed_align=16),
-                c_tensor_cute,
-                from_dlpack(amax_tensor, assumed_align=16),
-                current_stream,
+            c_tensor_cute = from_dlpack(
+                c_tensor, assumed_align=16
+            ).mark_compact_shape_dynamic(
+                mode=1 if self.c_major == "n" else 0,
+                stride_order=(2, 0, 1) if self.c_major == "n" else (2, 1, 0),
+                divisibility=16,
             )
-            self._logger.debug("Executed successfully")
+
+            if not skip_compile:
+                if self._compiled_kernel is None:
+                    raise RuntimeError(
+                        "GemmAmaxSm100 kernel not compiled; call compile() first or use execute(skip_compile=True)"
+                    )
+                self._logger.debug("Executing with compiled kernel")
+                self._compiled_kernel(
+                    a_tensor_cute,
+                    b_tensor_cute,
+                    from_dlpack(sfa_tensor, assumed_align=16),
+                    from_dlpack(sfb_tensor, assumed_align=16),
+                    c_tensor_cute,
+                    from_dlpack(amax_tensor, assumed_align=16),
+                    current_stream,
+                )
+                self._logger.debug("Executed with compiled kernel successfully")
+            else:
+                self._logger.debug("Executing without compiled kernel (JIT)")
+                gemm_amax = self._kernel(
+                    self.sf_vec_size,
+                    self.mma_tiler_mn,
+                    self.cluster_shape_mn,
+                )
+                gemm_amax(
+                    a_tensor_cute,
+                    b_tensor_cute,
+                    from_dlpack(sfa_tensor, assumed_align=16),
+                    from_dlpack(sfb_tensor, assumed_align=16),
+                    c_tensor_cute,
+                    from_dlpack(amax_tensor, assumed_align=16),
+                    current_stream,
+                )
+        else:  # use_no_dlpack
+            a_ptr = make_ptr(
+                (
+                    cutlass.Float4E2M1FN
+                    if is_ab_fp4
+                    else _convert_to_cutlass_data_type(a_tensor.dtype)
+                ),
+                a_tensor.data_ptr(),
+                cute.AddressSpace.gmem,
+                assumed_align=32 if is_ab_fp4 else 16,
+            )
+            b_ptr = make_ptr(
+                (
+                    cutlass.Float4E2M1FN
+                    if is_ab_fp4
+                    else _convert_to_cutlass_data_type(b_tensor.dtype)
+                ),
+                b_tensor.data_ptr(),
+                cute.AddressSpace.gmem,
+                assumed_align=32 if is_ab_fp4 else 16,
+            )
+            c_ptr = make_ptr(
+                (
+                    cutlass.Float4E2M1FN
+                    if is_c_fp4
+                    else _convert_to_cutlass_data_type(c_tensor.dtype)
+                ),
+                c_tensor.data_ptr(),
+                cute.AddressSpace.gmem,
+                assumed_align=32 if is_c_fp4 else 16,
+            )
+            sfa_ptr = make_ptr(
+                (
+                    cutlass.Float8E8M0FNU
+                    if sfa_tensor.dtype == torch.int8
+                    else _convert_to_cutlass_data_type(sfa_tensor.dtype)
+                ),
+                sfa_tensor.data_ptr(),
+                cute.AddressSpace.gmem,
+                assumed_align=16,
+            )
+            sfb_ptr = make_ptr(
+                (
+                    cutlass.Float8E8M0FNU
+                    if sfb_tensor.dtype == torch.int8
+                    else _convert_to_cutlass_data_type(sfb_tensor.dtype)
+                ),
+                sfb_tensor.data_ptr(),
+                cute.AddressSpace.gmem,
+                assumed_align=16,
+            )
+
+            if not skip_compile:
+                if self._compiled_kernel is None:
+                    raise RuntimeError(
+                        "GemmAmaxSm100 kernel not compiled; call compile() first or use execute(skip_compile=True)"
+                    )
+                self._logger.debug("Executing with compiled kernel")
+                self._compiled_kernel(
+                    a_ptr,
+                    b_ptr,
+                    sfa_ptr,
+                    sfb_ptr,
+                    c_ptr,
+                    from_dlpack(amax_tensor, assumed_align=16),
+                    current_stream,
+                )
+                self._logger.debug("Executed with compiled kernel successfully")
+            else:
+                self._logger.debug("Executing without compiled kernel (JIT)")
+                gemm_amax = self._kernel(
+                    self.sf_vec_size,
+                    self.mma_tiler_mn,
+                    self.cluster_shape_mn,
+                )
+
+                a_shape = (
+                    tuple(
+                        dim * 2 if i == 1 else dim
+                        for i, dim in enumerate(self.sample_a.shape)
+                    )
+                    if is_ab_fp4
+                    else tuple(self.sample_a.shape)
+                )
+                b_shape = (
+                    tuple(
+                        dim * 2 if i == 1 else dim
+                        for i, dim in enumerate(self.sample_b.shape)
+                    )
+                    if is_ab_fp4
+                    else tuple(self.sample_b.shape)
+                )
+                c_shape = (
+                    tuple(
+                        dim * 2 if i == 1 else dim
+                        for i, dim in enumerate(self.sample_c.shape)
+                    )
+                    if is_c_fp4
+                    else tuple(self.sample_c.shape)
+                )
+                sfa_shape = tuple(sfa_tensor.shape)
+                sfb_shape = tuple(sfb_tensor.shape)
+                a_order = (1, 0, 2) if self.a_major == "k" else (0, 1, 2)
+                b_order = (1, 0, 2) if self.b_major == "k" else (0, 1, 2)
+                c_order = (1, 0, 2) if self.c_major == "n" else (0, 1, 2)
+                _sfa_strides = sfa_tensor.stride()
+                _sfb_strides = sfb_tensor.stride()
+                sfa_order = tuple(
+                    sorted(range(len(sfa_shape)), key=lambda i: _sfa_strides[i])
+                )
+                sfb_order = tuple(
+                    sorted(range(len(sfb_shape)), key=lambda i: _sfb_strides[i])
+                )
+                hardware_info = cutlass.utils.HardwareInfo()
+
+                gemm_amax(
+                    a_ptr,
+                    a_shape,
+                    a_order,
+                    b_ptr,
+                    b_shape,
+                    b_order,
+                    sfa_ptr,
+                    sfa_shape,
+                    sfa_order,
+                    sfb_ptr,
+                    sfb_shape,
+                    sfb_order,
+                    c_ptr,
+                    c_shape,
+                    c_order,
+                    from_dlpack(amax_tensor, assumed_align=16),
+                    cutlass.utils.HardwareInfo().get_max_active_clusters(
+                        self.cluster_shape_mn[0] * self.cluster_shape_mn[1]
+                    ),
+                    current_stream,
+                )
+        self._logger.debug("Executed successfully")
 
 
 import logging
 
 _logger = logging.getLogger(__name__)
-_cache_of_GemmAmaxObjects = {}
+_cache_of_GemmAmaxSm100Objects = {}
 
 
-def gemm_amax_wrapper(
+def gemm_amax_wrapper_sm100(
     a_tensor: torch.Tensor,
     b_tensor: torch.Tensor,
     sfa_tensor: torch.Tensor,
@@ -361,7 +757,7 @@ def gemm_amax_wrapper(
     stream: Optional[cuda.CUstream] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
 
-    _logger.debug("gemm_amax_wrapper: Creating empty output tensors c and amax")
+    _logger.debug("gemm_amax_wrapper_sm100: Creating empty output tensors c and amax")
 
     m, _, l = a_tensor.shape
     n, _, l = b_tensor.shape
@@ -400,9 +796,11 @@ def gemm_amax_wrapper(
         cluster_shape_mn,
         sf_vec_size,
     )
-    if cache_key in _cache_of_GemmAmaxObjects:
-        _logger.debug("gemm_amax_wrapper: Using previously cached GemmAmax object")
-        gemm_amax = _cache_of_GemmAmaxObjects[cache_key]
+    if cache_key in _cache_of_GemmAmaxSm100Objects:
+        _logger.debug(
+            "gemm_amax_wrapper_sm100: Using previously cached GemmAmaxSm100 object"
+        )
+        gemm_amax = _cache_of_GemmAmaxSm100Objects[cache_key]
         gemm_amax.execute(
             a_tensor=a_tensor,
             b_tensor=b_tensor,
@@ -414,9 +812,9 @@ def gemm_amax_wrapper(
         )
     else:
         _logger.debug(
-            "gemm_amax_wrapper: No previously cached GemmAmax object found, creating new GemmAmax object"
+            "gemm_amax_wrapper_sm100: No previously cached GemmAmaxSm100 object found, creating new GemmAmaxSm100 object"
         )
-        gemm_amax = GemmAmax(
+        gemm_amax = GemmAmaxSm100(
             sample_a=a_tensor,
             sample_b=b_tensor,
             sample_sfa=sfa_tensor,
@@ -439,6 +837,6 @@ def gemm_amax_wrapper(
             amax_tensor=amax_tensor,
             current_stream=stream,
         )
-        _cache_of_GemmAmaxObjects[cache_key] = gemm_amax
+        _cache_of_GemmAmaxSm100Objects[cache_key] = gemm_amax
 
     return c_tensor, amax_tensor

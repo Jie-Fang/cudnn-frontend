@@ -4,15 +4,15 @@ import cudnn
 import pytest
 from test_utils import torch_fork_set_rng
 
-from oss.nsa.nsa_fixtures import test_config
-from oss.nsa.nsa_utils import (
+from fe_api.nsa.nsa_fixtures import test_config
+from fe_api.nsa.nsa_utils import (
     _env_supported,
     init_input_tensors,
     allocate_output_tensors,
     _generate_ragged_offset,
 )
 
-from oss.nsa.nsa_reference import check_ref_nsa_swa
+from fe_api.nsa.nsa_reference import check_ref_nsa_swa
 
 
 @pytest.mark.L0
