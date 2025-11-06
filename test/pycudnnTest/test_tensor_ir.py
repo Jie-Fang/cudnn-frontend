@@ -1068,7 +1068,7 @@ class test_tensor_ir:
         stride_div = []
 
         for s, d in zip(ori_stride, ori_shape):
-            if idx > 0 and d == 1:
+            if d == 1:
                 # Use concrete dimension 'd' if static_shapes_only is True, otherwise use -1
                 shape.append(d if self.static_shapes_only else -1)
                 # row broadcast need to set broadcast dim to `?`
