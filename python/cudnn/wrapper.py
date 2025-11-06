@@ -509,7 +509,6 @@ class Graph:
             else:
                 kwargs["workspace"] = self.__workspace
         self.__graph.execute(variant_pack, **kwargs)
-        torch.cuda.synchronize()
         # return the output as a single tensor or a tuple
         if len(output_tuple) == 1:
             return output_tuple[0]
@@ -592,7 +591,6 @@ class Graph:
             else:
                 kwargs["workspace"] = self.__workspace
         self.__graph.execute(variant_pack, **kwargs)
-        torch.cuda.synchronize()
         return tensor_dict  # by this time, the output tensors are updated
 
     def set_io_tuples(
