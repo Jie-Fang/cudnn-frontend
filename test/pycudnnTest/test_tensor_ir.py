@@ -40,6 +40,42 @@ def get_element_bits(data_type):
         raise ValueError(f"Unsupported data type: {data_type}")
 
 
+def parse_int_list(value):
+    """Parse comma-separated string into list of integers.
+
+    Args:
+        value: Comma-separated string (e.g., "1,2,3")
+
+    Returns:
+        List of integers
+
+    Raises:
+        ValueError: If parsing fails
+    """
+    try:
+        return list(map(int, value.split(",")))
+    except (ValueError, AttributeError) as e:
+        raise ValueError(f"Failed to parse integer list from '{value}': {e}")
+
+
+def get_optional_arg(args, attr_name, parser=None, default=None):
+    """Safely retrieve and optionally parse an argument attribute.
+
+    Args:
+        args: Arguments object
+        attr_name: Name of the attribute to retrieve
+        parser: Optional function to parse the value (e.g., int, bool, parse_int_list)
+        default: Default value if attribute is None or doesn't exist
+
+    Returns:
+        Parsed value or default
+    """
+    value = getattr(args, attr_name, None)
+    if value is None:
+        return default
+    return parser(value) if parser else value
+
+
 def generate_tensorir_compilation_configs(m, n, k, matmul_element_bits, tensorir_args):
     # Set the default values for the config sweep lists
     stream_k = False
@@ -71,45 +107,65 @@ def generate_tensorir_compilation_configs(m, n, k, matmul_element_bits, tensorir
 
     cta_counts = [1, 2]
 
-    # Override the default values with the user provided values
-    if (
-        hasattr(tensorir_args, "cluster_shape")
-        and tensorir_args.cluster_shape is not None
-    ):
-        cluster_shapes = [list(map(int, tensorir_args.cluster_shape.split(",")))]
+    # Parse user-provided arguments for shape configuration
+    # If user specifies tile_size, mma_shape, or cluster_shape, all three must be provided together
+    input_tile_size = get_optional_arg(tensorir_args, "tile_size", parse_int_list)
+    input_mma_shape = get_optional_arg(tensorir_args, "mma_shape", parse_int_list)
+    input_cluster_shape = get_optional_arg(
+        tensorir_args, "cluster_shape", parse_int_list
+    )
 
-    if hasattr(tensorir_args, "mma_shape") and tensorir_args.mma_shape is not None:
-        mma_shapes = [list(map(int, tensorir_args.mma_shape.split(",")))]
+    # Validate shape parameters: either all three or none must be specified
+    shape_params = [input_tile_size, input_mma_shape, input_cluster_shape]
+    if any(param is not None for param in shape_params):
+        if not all(param is not None for param in shape_params):
+            raise ValueError(
+                "When specifying shapes, all three parameters must be provided: "
+                "tile_size, mma_shape, and cluster_shape"
+            )
+        # Use user-provided shapes (single configuration)
+        mma_shapes = [input_mma_shape]
+        cluster_shapes = [input_cluster_shape]
 
-    if hasattr(tensorir_args, "cta_count") and tensorir_args.cta_count is not None:
-        cta_counts = list(map(int, tensorir_args.cta_count.split(",")))
+    # Override other default parameters
+    cta_counts = get_optional_arg(
+        tensorir_args, "cta_count", parse_int_list, cta_counts
+    )
 
-    if hasattr(tensorir_args, "stream_k") and tensorir_args.stream_k is not None:
-        stream_k = bool(tensorir_args.stream_k)
+    stream_k = get_optional_arg(tensorir_args, "stream_k", bool, stream_k)
+    cubin_chip = get_optional_arg(tensorir_args, "cubin_chip", default=cubin_chip)
 
-    if hasattr(tensorir_args, "cubin_chip") and tensorir_args.cubin_chip is not None:
-        cubin_chip = tensorir_args.cubin_chip
-
+    # Generate all configuration combinations
     configs = []
 
     for cta_count in cta_counts:
         kcta_count = [cta_count, 1, 1]
         for mma_shape in mma_shapes:
-            mma_shape = [k * m for k, m in zip(kcta_count, mma_shape)]
+            # Scale mma_shape by cta_count
+            scaled_mma_shape = [k * m for k, m in zip(kcta_count, mma_shape)]
+
             for cluster_shape in cluster_shapes:
+                # Skip invalid configurations where cluster size is less than cta_count
                 if cluster_shape[0] < cta_count:
                     continue
 
-                tile_size = [
-                    int(m * c * k / cta)
-                    for m, c, k, cta in zip(
-                        mma_shape, cluster_shape, kphase, kcta_count
-                    )
-                ]
+                # Calculate or use user-provided tile_size
+                if input_tile_size is not None:
+                    tile_size = input_tile_size
+                else:
+                    # Calculate tile_size based on mma_shape, cluster_shape, and kphase
+                    tile_size = [
+                        int(m * c * k / cta)
+                        for m, c, k, cta in zip(
+                            scaled_mma_shape, cluster_shape, kphase, kcta_count
+                        )
+                    ]
+
+                # Append configuration tuple
                 configs.append(
                     [
                         tile_size,
-                        mma_shape,
+                        scaled_mma_shape,
                         cluster_shape,
                         cta_count,
                         stream_k,
@@ -121,57 +177,65 @@ def generate_tensorir_compilation_configs(m, n, k, matmul_element_bits, tensorir
     return configs
 
 
-def get_tensorir_compilation_config(
-    m, n, k, matmul_element_bits, tensorir_args, concrete_test_dict
-):
+def get_tensorir_compilation_config(m, n, k, matmul_element_bits, tensorir_args):
+    """Get a single tensor IR compilation configuration.
 
+    Args:
+        m, n, k: Matrix dimensions
+        matmul_element_bits: Element size in bits
+        tensorir_args: User-provided arguments to override defaults
+
+    Returns:
+        List of configuration parameters
+    """
+    # Get recommended configuration based on problem size
     config = nv_tensor_ir.recommend_compilation_config_by_problem_size(
         nv_tensor_ir.MmaShape(m, n, k), matmul_element_bits
     )
 
     kphase = 4
-    tile_size = [128, 128, kphase * config.mmaShape.k]
-    mma_shape = [128, 128, config.mmaShape.k]
-    cluster_shape = [1, 1, 1]
-    cta_count = 1
-    stream_k = False
-    cubin_chip = "sm_100a"
 
-    if hasattr(tensorir_args, "tile_size") and tensorir_args.tile_size is not None:
-        tile_size = list(map(int, tensorir_args.tile_size.split(",")))
+    # Initialize default configuration values
+    defaults = {
+        "tile_size": [128, 128, kphase * config.mmaShape.k],
+        "mma_shape": [128, 128, config.mmaShape.k],
+        "cluster_shape": [1, 1, 1],
+        "cta_count": 1,
+        "stream_k": False,
+        "cubin_chip": "sm_100a",
+    }
 
-    if (
-        hasattr(tensorir_args, "cluster_shape")
-        and tensorir_args.cluster_shape is not None
-    ):
-        cluster_shape = list(map(int, tensorir_args.cluster_shape.split(",")))
+    # Override defaults with user-provided arguments
+    # Example: -tile_size 128,128,64 -mma_shape 64,128,16 -cluster_shape 1,2,1 -cta_count 2 -stream_k false -cubin_chip sm_100a
+    config_values = {
+        "tile_size": get_optional_arg(
+            tensorir_args, "tile_size", parse_int_list, defaults["tile_size"]
+        ),
+        "mma_shape": get_optional_arg(
+            tensorir_args, "mma_shape", parse_int_list, defaults["mma_shape"]
+        ),
+        "cluster_shape": get_optional_arg(
+            tensorir_args, "cluster_shape", parse_int_list, defaults["cluster_shape"]
+        ),
+        "cta_count": get_optional_arg(
+            tensorir_args, "cta_count", int, defaults["cta_count"]
+        ),
+        "stream_k": get_optional_arg(
+            tensorir_args, "stream_k", bool, defaults["stream_k"]
+        ),
+        "cubin_chip": get_optional_arg(
+            tensorir_args, "cubin_chip", default=defaults["cubin_chip"]
+        ),
+    }
 
-    if hasattr(tensorir_args, "mma_shape") and tensorir_args.mma_shape is not None:
-        mma_shape = list(map(int, tensorir_args.mma_shape.split(",")))
-
-    if hasattr(tensorir_args, "cta_count") and tensorir_args.cta_count is not None:
-        cta_count = int(tensorir_args.cta_count)
-
-    if hasattr(tensorir_args, "stream_k") and tensorir_args.stream_k is not None:
-        stream_k = bool(tensorir_args.stream_k)
-
-    if hasattr(tensorir_args, "cubin_chip") and tensorir_args.cubin_chip is not None:
-        cubin_chip = tensorir_args.cubin_chip
-
-    concrete_test_dict["tile_size"] = tile_size
-    concrete_test_dict["cluster_shape"] = cluster_shape
-    concrete_test_dict["mma_shape"] = mma_shape
-    concrete_test_dict["cta_count"] = cta_count
-    concrete_test_dict["stream_k"] = stream_k
-    concrete_test_dict["cubin_chip"] = cubin_chip
-
+    # Return configuration as list for backward compatibility
     return [
-        tile_size,
-        mma_shape,
-        cluster_shape,
-        cta_count,
-        stream_k,
-        cubin_chip,
+        config_values["tile_size"],
+        config_values["mma_shape"],
+        config_values["cluster_shape"],
+        config_values["cta_count"],
+        config_values["stream_k"],
+        config_values["cubin_chip"],
         matmul_element_bits,
     ]
 
