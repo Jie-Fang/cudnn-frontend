@@ -186,9 +186,7 @@ def run_tensor_ir_from_legacy_args(parent_args, unknown_args):
         )
     else:
         kernel_config = [
-            get_tensorir_compilation_config(
-                m, n, k, matmul_element_bits, tensorir_args, concrete_test_dict
-            )
+            get_tensorir_compilation_config(m, n, k, matmul_element_bits, tensorir_args)
         ]
 
     run_tensor_ir_test_from_json_definition(
