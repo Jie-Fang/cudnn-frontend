@@ -10,7 +10,7 @@ import requests
 # matches
 # <a*>x.y.w.z/</a> DD-month-YYYY HH:MM
 pattern = re.compile(
-    r"<a.*?>(\d+\.\d+\.\d+\.\d+)/</a>\s+(\d{2}-[A-Za-z]+-\d{4} \d{2}:\d{2})\s"
+    r"<a.*?>v(\d+\.\d+\.\d+\.\d+)/</a>\s+(\d{2}-[A-Za-z]+-\d{4} \d{2}:\d{2})\s"
 )
 
 
@@ -31,7 +31,7 @@ def download_url(url, path):
             os.remove(temp_path)
 
 
-def fetch_cudnn(base_url):
+def fetch_cudnn(base_url, cuda_version):
     response = requests.get(base_url).text
     matches = pattern.findall(response)
     matches = [{"version": a, "last_modified": b} for a, b in matches]
@@ -52,7 +52,7 @@ def fetch_cudnn(base_url):
     for match in top_three:
         version = match["version"]
         path = f"downloads/cudnn-{version}.tar.gz"
-        url = f"{base_url}/{version}/debug_cudnn-linux-x86_64-{version}.tar.gz"
+        url = f"{base_url}/v{version}/{cuda_version}/cudnn_debug-linux-x86_64-{version}.tar.gz"
 
         if os.path.exists(path):
             print(f"Fetch skipped for {version}: File already exists at {path}")
@@ -90,11 +90,28 @@ def fetch_cudnn(base_url):
         stdout=subprocess.DEVNULL,
         stderr=subprocess.STDOUT,
     )
+
+    print(f"Copying /cudnn to /debug_cudnn")
+
+    subprocess.run(
+        ["cp", "-r", "/cudnn", "/debug_cudnn"],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.STDOUT,
+    )
+
+    subprocess.run(
+        ["cp", "-r", "/debug_cudnn/lib", "/debug_cudnn/lib64"],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.STDOUT,
+    )
     print(f"Extraction complete")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("base_url")
+    parser.add_argument("cuda_version")
     args = parser.parse_args()
-    fetch_cudnn(args.base_url)
+    fetch_cudnn(args.base_url, args.cuda_version)
