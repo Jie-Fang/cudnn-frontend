@@ -1,6 +1,6 @@
 # GEMM + SwiGLU (SM100)
 
-#### **This is an experimental API and subject to change.**
+**This is an experimental API and subject to change.**
 
 ## Overview
 
@@ -15,7 +15,7 @@
   - `C`: shape `(M, N, L)` — full GEMM result
   - `Glu`: shape `(M, N/2, L)` — SwiGLU-projected result
 
-`L` is the batch dimension.
+    `L` is the batch dimension.
 
 ### Equations
 
@@ -43,18 +43,18 @@ Notes:
 ### Diagram
 
 ```
- A (M×K×L)     B (N×K×L)
-      │              │
-      └── GEMM (per L): C = alpha * A @ B  ─────────────────────────┐
-                            C (M×N×L)                               │
-                            │                                       │
-                            │  Pair 32-col blocks along N:          │
-                            │   [X0 | G0 | X1 | G1 | …]             │
-                            │    │     │    │     │                 │
-                            │    └─swish(G_b)◄────┘                 │
-                            │           │                           │
-                            └─── Glu[:, b*32:(b+1)*32, :] = X_b * swish(G_b)
-                                              Glu (M×N/2×L)
+ A (MxKxL)     B (NxKxL)
+      |              |
+      \__ GEMM (per L): C = alpha * A @ B  _________________________
+                            C (MxNxL)                               \
+                            |                                        \
+                            |  Pair 32-col blocks along N:           |
+                            |   [X0 | G0 | X1 | G1 | ...]           |
+                            |    |     |    |     |                  |
+                            |    \_swish(G_b)<____/                  |
+                            |           |                            |
+                            \___ Glu[:, b*32:(b+1)*32, :] = X_b * swish(G_b)
+                                              Glu (MxN/2xL)
 ```
 
 ---
