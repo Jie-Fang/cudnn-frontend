@@ -1,12 +1,12 @@
 # FE-OSS APIs Overview 
 
-#### **FE-OSS APIs are experimental and subject to change.**
+**FE-OSS APIs are experimental and subject to change.**
 
 This folder documents the Python FE APIs implemented under `python/cudnn`. For details on currently implemented operations, see:
 - [GEMM + Amax](gemm_fusions/gemm_amax.md)
 - [GEMM + SwiGLU](gemm_fusions/gemm_swiglu.md)
 
-### Installation and setup
+## Installation and setup
 
 All Frontend OSS APIs come installed with the `nvidia-cudnn-frontend` package. However, each API may require additional optional dependencies defined in the `pyproject.toml` file. For instance, GEMM + Amax and GEMM + SwiGLU require the `cute-dsl` optional dependency, which can be installed via:
 ```bash
@@ -15,11 +15,11 @@ pip install nvidia-cudnn-frontend[cutedsl]
 
 After installation, you can import the APIs directly from the `cudnn` package, i.e. `from cudnn import {your_operation}`
 
-### API Usage
+## API Usage
 
 Each operation exposes two APIs:
 
-#### 1. High-level wrapper
+### 1. High-level wrapper
 
 - Single pythonic function call
 - Allocates and returns output tensors
@@ -40,7 +40,7 @@ outputs = {your_operation}_wrapper(
 )
 ```
 
-#### 2. Class API
+### 2. Class API
 
 - Explicit lifecycle with compile and execute steps
 - Reusable object with underlying compiled kernel for multiple executions

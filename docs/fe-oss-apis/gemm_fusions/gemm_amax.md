@@ -1,6 +1,6 @@
 # GEMM + Amax (SM100)
 
-#### **This is an experimental API and subject to change.**
+**This is an experimental API and subject to change.**
 
 ## Overview
 
@@ -28,29 +28,38 @@
 Let block size along `K` be `sf_vec_size ∈ {16, 32}`. Dequantization is performed using the provided scale factors for groups of `sf_vec_size` along `K` (per `M`/`N` blocks defined by the atom tiling):
 
 $$
-\hat{A}[m, k, l] = \operatorname{dequantize}(A[m, k, l], \text{SFA}, \text{sf\_vec\_size})\\
-\hat{B}[n, k, l] = \operatorname{dequantize}(B[n, k, l], \text{SFB}, \text{sf\_vec\_size})\\
+\hat{A}[m, k, l] = \operatorname{dequantize}(A[m, k, l], \text{SFA}, \text{sf_vec_size})
+$$
 
-C[m, n, l] = \sum_{k} \hat{A}[m, k, l] \, \hat{B}[n, k, l]\\
+$$
+\hat{B}[n, k, l] = \operatorname{dequantize}(B[n, k, l], \text{SFB}, \text{sf_vec_size})
+$$
+
+$$
+C[m, n, l] = \sum_{k} \hat{A}[m, k, l] \, \hat{B}[n, k, l]
+$$
+
+$$
 \mathrm{Amax} = \max_{m, n, l} |C[m, n, l]|
 $$
+
 
 ### Diagram
 
 ```
-A (M×K×L), SFA                   B (N×K×L), SFB
-     │  dequantize(·; SFA)            │  dequantize(·; SFB)
-     ▼                                 ▼
-   Â (M×K×L)                         B̂ (N×K×L)
-          └── GEMM over K ─────────────────────────┐
-                                C (M×N×L or packed)
-                                      │
-                                      ├── reduce: Amax = max |C|
-                                      ▼
-                               Amax (1×1×1)
+A (MxKxL), SFA                   B (NxKxL), SFB
+     |  dequantize(.; SFA)            |  dequantize(.; SFB)
+     v                                v
+   A_hat (MxKxL)                   B_hat (NxKxL)
+          \__ GEMM over K ______________________
+                                                  \
+                                                   C (MxNxL or packed)
+                                                   |
+                                                   +-- reduce: Amax = max |C|
+                                                   |
+                                                   v
+                                              Amax (1x1x1)
 ```
-
----
 
 ## API Usage
 
