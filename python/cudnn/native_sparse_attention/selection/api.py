@@ -83,73 +83,81 @@ class SelectionAttention(APIBase):
             # T, H_q, D  format
             self.input_layout = "T,H,D"
 
-            t, h_q, d = self.sample_q.shape
-            assert (
-                self.sample_k.ndim == 3
-                and self.sample_k.shape[0] == t
-                and self.sample_k.shape[2] == d
-            ), "K must be (T, H_kv, D)"
-            h_kv = self.sample_k.shape[1]
+            t, h_q, d_qk = self.sample_q.shape
+            t, h_kv, d_qk = self.sample_k.shape
+            t, h_kv, d_v = self.sample_v.shape
+            t, h_q, d_v = self.sample_o.shape
 
-            assert (
-                self.sample_v.ndim == 3
-                and self.sample_v.shape[0] == t
-                and self.sample_v.shape[1] == h_kv
-            ), "V must be (T, H_kv, D_v)"
-            d_v = self.sample_v.shape[2]
+            if self.sample_q.shape != (t, h_q, d_qk):
+                raise ValueError(
+                    f"Input shape mismatch: expected Q tensor shape {t, h_q, d_qk}, got {self.sample_q.shape}"
+                )
+            if self.sample_k.shape != (t, h_kv, d_qk):
+                raise ValueError(
+                    f"Input shape mismatch: expected K tensor shape {t, h_kv, d_qk}, got {self.sample_k.shape}"
+                )
+            if self.sample_v.shape != (t, h_kv, d_v):
+                raise ValueError(
+                    f"Input shape mismatch: expected V tensor shape {t, h_kv, d_v}, got {self.sample_v.shape}"
+                )
+            if self.sample_o.shape != (t, h_q, d_v):
+                raise ValueError(
+                    f"Output shape mismatch: expected O tensor shape {t, h_q, d_v}, got {self.sample_o.shape}"
+                )
+            self.sample_l = self._unpad_tensor_to_ndim(self.sample_l, 2, "sample_l")
+            if self.sample_l.shape != (t, h_q):
+                raise ValueError(
+                    f"Output shape mismatch: expected L tensor shape {t, h_q}, got {self.sample_l.shape}"
+                )
+            self.sample_m = self._unpad_tensor_to_ndim(self.sample_m, 2, "sample_m")
+            if self.sample_m.shape != (t, h_q):
+                raise ValueError(
+                    f"Output shape mismatch: expected M tensor shape {t, h_q}, got {self.sample_m.shape}"
+                )
 
-            assert (
-                self.sample_o.ndim == 3
-                and self.sample_o.shape[0] == t
-                and self.sample_o.shape[1] == h_q
-                and self.sample_o.shape[2] == d_v
-            ), "O must be (T, H_q, D_v)"
-            assert self.sample_l.ndim == 3 and self.sample_l.shape == (
-                t,
-                h_q,
-                1,
-            ), "L must be (T, H_q, 1)"
-            assert self.sample_m.ndim == 3 and self.sample_m.shape == (
-                t,
-                h_q,
-                1,
-            ), "M must be (T, H_q, 1)"
-
-            assert self.sample_seq_offsets is not None and isinstance(
-                self.sample_seq_offsets, torch.Tensor
-            ), "seq_offsets (torch.Tensor) is required when using (T, H, D) format"
+            if self.sample_seq_offsets is None:
+                raise ValueError(
+                    f"sample_seq_offsets must be provided for T,H,D format, got {self.sample_seq_offsets}"
+                )
             self.batch_size = len(self.sample_seq_offsets) - 1
-            assert self.batch_size > 0, "batch_size must be greater than 0"
-            assert self.sample_seq_offsets.dtype in (
-                torch.int32,
-                torch.int64,
-            ), "seq_offsets must be int32 or int64"
+            if self.batch_size <= 0:
+                raise ValueError(
+                    f"batch_size (len(sample_seq_offsets) - 1) must be greater than 0, got {self.batch_size}"
+                )
+            if self.sample_seq_offsets.dtype not in (torch.int32, torch.int64):
+                raise ValueError(
+                    f"sample_seq_offsets must be int32 or int64, got {self.sample_seq_offsets.dtype}"
+                )
         else:
-            raise AssertionError("sample_q must be rank-3 (T,H,D) or rank-4 (B,H,S,D)")
+            raise ValueError(
+                f"sample_q must be rank-3 (T,H,D) or rank-4 (B,H,S,D), got {self.sample_q.ndim}"
+            )
 
         # Shared derived attributes
-        assert h_q % h_kv == 0, "H_q must be a multiple of H_kv (GQA/MQA constraint)"
+        if h_q % h_kv != 0:
+            raise ValueError("H_q must be a multiple of H_kv (GQA/MQA constraint)")
         self.h_q = h_q
         self.h_kv = h_kv
         self.gqa_group_size = h_q // h_kv
-        self.head_dim = d
+        self.head_dim = d_qk
         self.value_dim = d_v
 
         # Validate dtypes and config
         self._logger.debug("Checking dtypes and config")
         self.dtype = self.sample_q.dtype
-        assert (
+        if not (
             self.dtype
             == self.sample_k.dtype
             == self.sample_v.dtype
             == self.sample_o.dtype
-        ), "All input/output tensors must have the same dtype"
-        assert self.dtype in {
-            torch.float16,
-            torch.bfloat16,
-        }, "dtype must be Float16 or BFloat16"
-        assert self.acc_dtype in {torch.float32}, "acc_dtype must be Float32"
-        assert self.block_size in {16, 32, 64}, "block_size must be 16, 32, or 64"
+        ):
+            raise ValueError("All input/output tensors must have the same dtype")
+        if self.dtype not in {torch.float16, torch.bfloat16}:
+            raise ValueError("dtype must be Float16 or BFloat16")
+        if self.acc_dtype not in {torch.float32}:
+            raise ValueError("acc_dtype must be Float32")
+        if self.block_size not in {16, 32, 64}:
+            raise ValueError("block_size must be 16, 32, or 64")
 
         # Compute default scale_softmax if needed
         if self.scale_softmax is None:
@@ -157,7 +165,7 @@ class SelectionAttention(APIBase):
 
         if not torch.cuda.is_available():
             self._logger.error("CUDA is not available")
-            raise AssertionError("CUDA is not available")
+            raise RuntimeError("CUDA is not available")
 
         device = torch.cuda.current_device()
         major, minor = torch.cuda.get_device_capability(device)
@@ -167,7 +175,7 @@ class SelectionAttention(APIBase):
             self._logger.error(
                 f"Requires SM90+ compute capability, but found SM{compute_capability} on device {device}"
             )
-            raise AssertionError(
+            raise RuntimeError(
                 f"Requires SM90+ compute capability, but found SM{compute_capability} on device {device}"
             )
 
@@ -208,14 +216,10 @@ class SelectionAttention(APIBase):
             v_reshaped = v.permute(0, 2, 1)
             # Reshape O: (T, H_q, D_v) -> (gqa_group_size, D_v, T, H_kv)
             o_reshaped = o.view(T, h_kv, self.gqa_group_size, d_v).permute(2, 3, 0, 1)
-            # Reshape L: (T, H_q, 1) -> (T, H_q) -> (gqa_group_size, T, H_kv)
-            l_reshaped = (
-                l.squeeze(-1).view(T, h_kv, self.gqa_group_size).permute(2, 0, 1)
-            )
-            # Reshape M: (T, H_q, 1) -> (T, H_q) -> (gqa_group_size, T, H_kv)
-            m_reshaped = (
-                m.squeeze(-1).view(T, h_kv, self.gqa_group_size).permute(2, 0, 1)
-            )
+            # Reshape L: (T, H_q) -> (gqa_group_size, T, H_kv)
+            l_reshaped = l.view(T, h_kv, self.gqa_group_size).permute(2, 0, 1)
+            # Reshape M: (T, H_q) -> (gqa_group_size, T, H_kv)
+            m_reshaped = m.view(T, h_kv, self.gqa_group_size).permute(2, 0, 1)
         else:
             raise ValueError(f"Invalid input layout: {self.input_layout}")
 
@@ -224,24 +228,30 @@ class SelectionAttention(APIBase):
         def shares_memory(original, reshaped):
             return original.data_ptr() == reshaped.data_ptr()
 
-        assert shares_memory(
-            q, q_reshaped
-        ), "Q tensor memory changed during reshape - expected view operation"
-        assert shares_memory(
-            k, k_reshaped
-        ), "K tensor memory changed during reshape - expected view operation"
-        assert shares_memory(
-            v, v_reshaped
-        ), "V tensor memory changed during reshape - expected view operation"
-        assert shares_memory(
-            o, o_reshaped
-        ), "O tensor memory changed during reshape - expected view operation"
-        assert shares_memory(
-            l, l_reshaped
-        ), "L tensor memory changed during reshape - expected view operation"
-        assert shares_memory(
-            m, m_reshaped
-        ), "M tensor memory changed during reshape - expected view operation"
+        if not shares_memory(q, q_reshaped):
+            raise ValueError(
+                "Q tensor memory changed during reshape - expected view operation"
+            )
+        if not shares_memory(k, k_reshaped):
+            raise ValueError(
+                "K tensor memory changed during reshape - expected view operation"
+            )
+        if not shares_memory(v, v_reshaped):
+            raise ValueError(
+                "V tensor memory changed during reshape - expected view operation"
+            )
+        if not shares_memory(o, o_reshaped):
+            raise ValueError(
+                "O tensor memory changed during reshape - expected view operation"
+            )
+        if not shares_memory(l, l_reshaped):
+            raise ValueError(
+                "L tensor memory changed during reshape - expected view operation"
+            )
+        if not shares_memory(m, m_reshaped):
+            raise ValueError(
+                "M tensor memory changed during reshape - expected view operation"
+            )
 
         return q_reshaped, k_reshaped, v_reshaped, o_reshaped, l_reshaped, m_reshaped
 
@@ -318,6 +328,8 @@ class SelectionAttention(APIBase):
         current_stream = self._get_default_stream(current_stream)
 
         self._logger.debug("Reshaping tensors to kernel expected format")
+        l_tensor = self._unpad_tensor_to_ndim(l_tensor, 2, "l_tensor")
+        m_tensor = self._unpad_tensor_to_ndim(m_tensor, 2, "m_tensor")
         q_reshaped, k_reshaped, v_reshaped, o_reshaped, l_reshaped, m_reshaped = (
             self._reshape_tensors(
                 q_tensor, k_tensor, v_tensor, o_tensor, l_tensor, m_tensor
@@ -337,9 +349,8 @@ class SelectionAttention(APIBase):
         scale_softmax = self.scale_softmax if scale_softmax is None else scale_softmax
 
         if not skip_compile:
-            assert (
-                self._compiled_kernel is not None
-            ), "SelectionAttention kernel not compiled"
+            if self._compiled_kernel is None:
+                raise RuntimeError("SelectionAttention kernel not compiled")
             self._logger.debug("Executing with compiled kernel")
             self._compiled_kernel(
                 mQ,

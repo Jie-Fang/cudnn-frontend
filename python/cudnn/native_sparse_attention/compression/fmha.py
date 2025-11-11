@@ -1687,15 +1687,49 @@ class BlackwellFusedMultiHeadAttentionForward:
         tTMEM_LOADrS = cute.make_fragment(tTMEM_LOADcS.shape, self.qk_acc_dtype)
         cute.copy(tiled_tmem_load, tTMEM_LOADtS, tTMEM_LOADrS)
         if need_apply_mask:
-            fmha_utils.FusedMask.apply_mask(
-                self.mask_type,
-                tTMEM_LOADrS,
-                tTMEM_LOADcS,
-                seqlen_q,
-                seqlen_k,
-                window_size_left,
-                window_size_right,
-            )
+            if self.mask_type != fmha_utils.MaskType.COMPRESSED_CAUSAL_MASK:
+                fmha_utils.FusedMask.apply_mask(
+                    self.mask_type,
+                    tTMEM_LOADrS,
+                    tTMEM_LOADcS,
+                    seqlen_q,
+                    seqlen_k,
+                    window_size_left,
+                    window_size_right,
+                )
+
+            else:
+                compression_factor = seqlen_q // seqlen_k
+                index_q = tTMEM_LOADcS[0][0]
+                index_k0 = tTMEM_LOADcS[0][1]
+
+                largestUnmaskedK = min(
+                    seqlen_k - 1,
+                    (index_q + 1) // compression_factor - 1,
+                    index_k0 + cute.size(tTMEM_LOADcS),
+                )
+
+                smallestUnmaskedKInWarp = min(
+                    seqlen_k - 1,
+                    (index_q - (cute.arch.thread_idx()[0] % 32)) // compression_factor
+                    - 1,
+                )
+
+                largestUnmaskedKInWarp = min(
+                    seqlen_k - 1,
+                    (index_q + 32 - (cute.arch.thread_idx()[0] % 32))
+                    // compression_factor
+                    - 1,
+                )
+
+                if smallestUnmaskedKInWarp - tScS[0][1] < 64:
+                    for i in cutlass.range(0, 64):
+                        if i + index_k0 > largestUnmaskedK:
+                            tTMEM_LOADrS[i] = -Float32.inf
+
+                for i in cutlass.range(64, cute.size(tTMEM_LOADrS)):
+                    if i + index_k0 > largestUnmaskedK:
+                        tTMEM_LOADrS[i] = -Float32.inf
 
         old_row_max = row_max
         row_max = tTMEM_LOADrS.load().reduce(cute.ReductionOp.MAX, row_max, 0)
@@ -1734,8 +1768,8 @@ class BlackwellFusedMultiHeadAttentionForward:
         tTMEM_STORErS_x4_e_frg = cute.logical_divide(
             tTMEM_STORErS_x4_e, cute.make_layout(frg_tile)
         )
-        for j in range(frg_cnt):
-            for k in range(0, cute.size(tTMEM_LOADrS_frg, mode=[0]), 2):
+        for j in cutlass.range(frg_cnt):
+            for k in cutlass.range(0, cute.size(tTMEM_LOADrS_frg, mode=[0]), 2):
 
                 tTMEM_LOADrS_frg[k, j], tTMEM_LOADrS_frg[k + 1, j] = (
                     cute.arch.fma_packed_f32x2(
@@ -2213,7 +2247,7 @@ class BlackwellFusedMultiHeadAttentionForward:
         tTMrO = cute.make_fragment(
             (tTMEM_LOADcO.shape, 128 // corr_tile_size), self.pv_acc_dtype
         )
-        for i in range(self.cta_tiler[2] // corr_tile_size):
+        for i in cutlass.range(self.cta_tiler[2] // corr_tile_size):
             tTMrO_i_ = tTMrO[None, i]
             tTMrO_i_layout = cute.composition(
                 tTMrO_i_.layout, cute.make_layout(tTMrO.shape[0])
@@ -2227,7 +2261,7 @@ class BlackwellFusedMultiHeadAttentionForward:
             )
 
             cute.copy(tiled_tmem_load, tTMEM_LOADtO_i, tTMrO_i)
-            for j in range(0, cute.size(tTMrO_i), 2):
+            for j in cutlass.range(0, cute.size(tTMrO_i), 2):
                 tTMrO_i[j], tTMrO_i[j + 1] = cute.arch.mul_packed_f32x2(
                     (tTMrO_i[j], tTMrO_i[j + 1]),
                     (scale, scale),
@@ -2326,14 +2360,14 @@ class BlackwellFusedMultiHeadAttentionForward:
         tTMEM_LOADsO = thr_tmem_load.partition_D(tOsO_i[(None, None), None])
         tTMEM_LOADoO = thr_tmem_load.partition_D(tOcO_i[(None, None), None])
 
-        for i in range(self.cta_tiler[2] // corr_tile_size):
+        for i in cutlass.range(self.cta_tiler[2] // corr_tile_size):
             tTMEM_LOADtO_i = tTMEM_LOADtO[None, 0, 0, i]
             tTMEM_LOADsO_i = tTMEM_LOADsO[None, 0, 0, i]
             tTMrO = cute.make_fragment(
                 tTMEM_LOADoO[None, 0, 0, i].shape, self.pv_acc_dtype
             )
             cute.copy(tiled_tmem_load, tTMEM_LOADtO_i, tTMrO)
-            for j in range(0, cute.size(tTMrO), 2):
+            for j in cutlass.range(0, cute.size(tTMrO), 2):
 
                 tTMrO[j], tTMrO[j + 1] = cute.arch.mul_packed_f32x2(
                     (tTMrO[j], tTMrO[j + 1]),

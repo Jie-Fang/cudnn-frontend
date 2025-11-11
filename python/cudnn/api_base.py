@@ -13,6 +13,7 @@ from typing import Any, Optional
 import logging
 import cuda.bindings.driver as cuda
 import cutlass
+import torch
 
 
 class APIBase(ABC):
@@ -236,3 +237,53 @@ class APIBase(ABC):
             )
             return cutlass.cuda.default_stream()
         return stream
+
+    def _pad_tensor_to_ndim(
+        self,
+        tensor: Optional[torch.Tensor],
+        ndim: int,
+        name: str,
+    ) -> Optional[torch.Tensor]:
+        """Pad a tensor by unsqueezing at dim -1 until it reaches ndim rank.
+
+        - If tensor is None, returns None.
+        - Unsqueezes at dim -1 until tensor.ndim == ndim.
+        - Logs final reshape for traceability.
+
+        :param tensor: The tensor to pad (or None)
+        :param ndim: Target rank (pad trailing dims until reached)
+        :param name: Logical tensor name for logging
+        :return: The padded tensor (or None)
+        """
+        if (tensor is not None) and (tensor.ndim < ndim):
+            self._logger.info(f"Padding {name} to {ndim}D from {tensor.shape}")
+            for _ in range(ndim - tensor.ndim):
+                tensor = tensor.unsqueeze(-1)
+        return tensor
+
+    def _unpad_tensor_to_ndim(
+        self,
+        tensor: Optional[torch.Tensor],
+        ndim: int,
+        name: str,
+    ) -> Optional[torch.Tensor]:
+        """Unpad a tensor by squeezing at dim -1 until it reaches ndim rank.
+
+        - If tensor is None, returns None.
+        - Squeezes at dim -1 until tensor.ndim == ndim.
+        - Logs final reshape for traceability.
+
+        :param tensor: The tensor to unpad (or None)
+        :param ndim: Target rank (squeeze trailing dims until reached)
+        :param name: Logical tensor name for logging
+        :return: The unpadded tensor (or None)
+        """
+        if (tensor is not None) and (tensor.ndim > ndim):
+            self._logger.info(f"Unpadding {name} from {tensor.shape} to {ndim}D")
+            for _ in range(tensor.ndim - ndim):
+                tensor = tensor.squeeze(-1)
+            if tensor.ndim != ndim:
+                self._logger.critical(
+                    f"Unpadding {name} resulted in shape {tensor.shape}, expected {ndim}D"
+                )
+        return tensor

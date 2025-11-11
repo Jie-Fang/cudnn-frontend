@@ -92,12 +92,7 @@ class SlidingWindowAttention(APIBase):
             f"__init__ completed with args: sample_q {tuple(sample_q.shape)}, sample_k {tuple(sample_k.shape)}, sample_v {tuple(sample_v.shape)}, sample_o {tuple(sample_o.shape)}, sample_stats {None if sample_stats is None else tuple(sample_stats.shape)}, left_bound {left_bound}, right_bound {right_bound}, sample_seq_len_q {None if sample_seq_len_q is None else tuple(sample_seq_len_q.shape)}, sample_seq_len_kv {None if sample_seq_len_kv is None else tuple(sample_seq_len_kv.shape)}, max_seq_len_q {max_seq_len_q}, max_seq_len_kv {max_seq_len_kv}, is_infer {is_infer}, attn_scale {attn_scale}, intermediate_data_type {intermediate_data_type}, compute_data_type {compute_data_type}"
         )
 
-    def _pad_tensor_to_ndim(self, tensor: torch.Tensor, ndim: int, name: str):
-        if (tensor is not None) and (tensor.ndim < ndim):
-            self._logger.info(f"Reshaping {name} to {ndim}D from {tensor.shape}")
-            for _ in range(ndim - tensor.dim()):
-                tensor = tensor.unsqueeze(-1)
-        return tensor
+    # _pad_tensor_to_ndim is provided by APIBase
 
     def check_support(self) -> bool:
         self._logger.debug("Entering check_support")
@@ -116,9 +111,8 @@ class SlidingWindowAttention(APIBase):
         else:
             raise ValueError(f"Invalid input layout: {self.sample_q.ndim}")
         if not self.is_infer:
-            assert (
-                self.sample_stats is not None
-            ), "sample_stats output must be provided for training"
+            if self.sample_stats is None:
+                raise ValueError("sample_stats output must be provided for training")
 
         swa_graph = cudnn.pygraph(
             io_data_type=_torch_to_cudnn_data_type(self.dtype),
@@ -148,64 +142,48 @@ class SlidingWindowAttention(APIBase):
             b, h_kv, s_kv, d_v = self.sample_v.shape
             b, h_q, s_q, d_v = self.sample_o.shape
 
-            assert self.sample_q.shape == (
-                b,
-                h_q,
-                s_q,
-                d_qk,
-            ), "Input/Output shape mismatch"
-            assert self.sample_k.shape == (
-                b,
-                h_kv,
-                s_kv,
-                d_qk,
-            ), "Input/Output shape mismatch"
-            assert self.sample_v.shape == (
-                b,
-                h_kv,
-                s_kv,
-                d_v,
-            ), "Input/Output shape mismatch"
-            assert self.sample_o.shape == (
-                b,
-                h_q,
-                s_q,
-                d_v,
-            ), "Input/Output shape mismatch"
+            if self.sample_q.shape != (b, h_q, s_q, d_qk):
+                raise ValueError(
+                    f"Input shape mismatch: expected Q tensor shape {b, h_q, s_q, d_qk}, got {self.sample_q.shape}"
+                )
+            if self.sample_k.shape != (b, h_kv, s_kv, d_qk):
+                raise ValueError(
+                    f"Input shape mismatch: expected K tensor shape {b, h_kv, s_kv, d_qk}, got {self.sample_k.shape}"
+                )
+            if self.sample_v.shape != (b, h_kv, s_kv, d_v):
+                raise ValueError(
+                    f"Input shape mismatch: expected V tensor shape {b, h_kv, s_kv, d_v}, got {self.sample_v.shape}"
+                )
+            if self.sample_o.shape != (b, h_q, s_q, d_v):
+                raise ValueError(
+                    f"Output shape mismatch: expected O tensor shape {b, h_q, s_q, d_v}, got {self.sample_o.shape}"
+                )
             if not self.is_infer:
-                assert self.sample_stats.shape == (
-                    b,
-                    h_q,
-                    s_q,
-                    1,
-                ), "Input/Output shape mismatch"
-            assert (
-                self.sample_seq_len_q is None
-            ), "sample_seq_len_q should be None for bshd layout"
-            assert (
-                self.sample_seq_len_kv is None
-            ), "sample_seq_len_kv should be None for bshd layout"
-            assert (
-                self.max_seq_len_q is None
-            ), "max_seq_len_q should be None for bshd layout"
-            assert (
-                self.max_seq_len_kv is None
-            ), "max_seq_len_kv should be None for bshd layout"
-            assert (
-                self.sample_q_ragged_offset is None
-            ), "q_ragged_offset should be None for bshd layout"
-            assert (
-                self.sample_k_ragged_offset is None
-            ), "k_ragged_offset should be None for bshd layout"
-            assert (
-                self.sample_v_ragged_offset is None
-            ), "v_ragged_offset should be None for bshd layout"
-            assert (
-                self.sample_o_ragged_offset is None
-            ), "o_ragged_offset should be None for bshd layout"
-            assert (
-                self.sample_stats_ragged_offset is None
-            ), "stats_ragged_offset should be None for bshd layout"
+                self.sample_stats = self._pad_tensor_to_ndim(
+                    self.sample_stats, 4, "sample_stats"
+                )
+                if self.sample_stats.shape != (b, h_q, s_q, 1):
+                    raise ValueError(
+                        f"Output shape mismatch: expected Stats tensor shape {b, h_q, s_q, 1}, got {self.sample_stats.shape}"
+                    )
+            if self.sample_seq_len_q is not None or self.sample_seq_len_kv is not None:
+                raise ValueError(
+                    f"sample_seq_len_q and sample_seq_len_kv should be None for bshd layout, got {self.sample_seq_len_q} and {self.sample_seq_len_kv}"
+                )
+            if self.max_seq_len_q is not None or self.max_seq_len_kv is not None:
+                raise ValueError(
+                    f"max_seq_len_q and max_seq_len_kv should be None for bshd layout, got {self.max_seq_len_q} and {self.max_seq_len_kv}"
+                )
+            if (
+                self.sample_q_ragged_offset is not None
+                or self.sample_k_ragged_offset is not None
+                or self.sample_v_ragged_offset is not None
+                or self.sample_o_ragged_offset is not None
+                or self.sample_stats_ragged_offset is not None
+            ):
+                raise ValueError(
+                    f"sample_q_ragged_offset, sample_k_ragged_offset, sample_v_ragged_offset, sample_o_ragged_offset, and sample_stats_ragged_offset should be None for bshd layout, got {self.sample_q_ragged_offset}, {self.sample_k_ragged_offset}, {self.sample_v_ragged_offset}, {self.sample_o_ragged_offset}, and {self.sample_stats_ragged_offset}"
+                )
 
             self.q_cudnn = swa_graph.tensor_like(self.sample_q)
             self.k_cudnn = swa_graph.tensor_like(self.sample_k)
@@ -216,45 +194,49 @@ class SlidingWindowAttention(APIBase):
             t, h_kv, d_v = self.sample_v.shape
             t, h_q, d_v = self.sample_o.shape
 
-            assert self.sample_q.shape == (t, h_q, d_qk), "Input/Output shape mismatch"
-            assert self.sample_k.shape == (t, h_kv, d_qk), "Input/Output shape mismatch"
-            assert self.sample_v.shape == (t, h_kv, d_v), "Input/Output shape mismatch"
-            assert self.sample_o.shape == (t, h_q, d_v), "Input/Output shape mismatch"
+            if self.sample_q.shape != (t, h_q, d_qk):
+                raise ValueError(
+                    f"Input shape mismatch: expected Q tensor shape {t, h_q, d_qk}, got {self.sample_q.shape}"
+                )
+            if self.sample_k.shape != (t, h_kv, d_qk):
+                raise ValueError(
+                    f"Input shape mismatch: expected K tensor shape {t, h_kv, d_qk}, got {self.sample_k.shape}"
+                )
+            if self.sample_v.shape != (t, h_kv, d_v):
+                raise ValueError(
+                    f"Input shape mismatch: expected V tensor shape {t, h_kv, d_v}, got {self.sample_v.shape}"
+                )
+            if self.sample_o.shape != (t, h_q, d_v):
+                raise ValueError(
+                    f"Output shape mismatch: expected O tensor shape {t, h_q, d_v}, got {self.sample_o.shape}"
+                )
             if not self.is_infer:
-                assert self.sample_stats.shape == (
-                    t,
-                    h_q,
-                    1,
-                ), "Input/Output shape mismatch"
+                self.sample_stats = self._pad_tensor_to_ndim(
+                    self.sample_stats, 3, "sample_stats"
+                )
+                if self.sample_stats.shape != (t, h_q, 1):
+                    raise ValueError(
+                        f"Output shape mismatch: expected Stats tensor shape {t, h_q, 1}, got {self.sample_stats.shape}"
+                    )
 
-            assert (
-                self.sample_seq_len_q is not None
-            ), "sample_seq_len_q must be provided for thd layout"
-            assert (
-                self.sample_seq_len_kv is not None
-            ), "sample_seq_len_kv must be provided for thd layout"
-            assert (
-                self.max_seq_len_q is not None
-            ), "max_seq_len_q must be provided for thd layout"
-            assert (
-                self.max_seq_len_kv is not None
-            ), "max_seq_len_kv must be provided for thd layout"
-            assert (
-                self.sample_q_ragged_offset is not None
-            ), "q_ragged_offset must be provided for thd layout"
-            assert (
-                self.sample_k_ragged_offset is not None
-            ), "k_ragged_offset must be provided for thd layout"
-            assert (
-                self.sample_v_ragged_offset is not None
-            ), "v_ragged_offset must be provided for thd layout"
-            assert (
-                self.sample_o_ragged_offset is not None
-            ), "o_ragged_offset must be provided for thd layout"
-            if not self.is_infer:
-                assert (
-                    self.sample_stats_ragged_offset is not None
-                ), "stats_ragged_offset must be provided for thd layout"
+            if self.sample_seq_len_q is None or self.sample_seq_len_kv is None:
+                raise ValueError(
+                    f"sample_seq_len_q and sample_seq_len_kv must be provided for thd layout, got {self.sample_seq_len_q} and {self.sample_seq_len_kv}"
+                )
+            if self.max_seq_len_q is None or self.max_seq_len_kv is None:
+                raise ValueError(
+                    f"max_seq_len_q and max_seq_len_kv must be provided for thd layout, got {self.max_seq_len_q} and {self.max_seq_len_kv}"
+                )
+            if (
+                self.sample_q_ragged_offset is None
+                or self.sample_k_ragged_offset is None
+                or self.sample_v_ragged_offset is None
+                or self.sample_o_ragged_offset is None
+                or self.sample_stats_ragged_offset is None
+            ):
+                raise ValueError(
+                    f"sample_q_ragged_offset, sample_k_ragged_offset, sample_v_ragged_offset, sample_o_ragged_offset, and sample_stats_ragged_offset must be provided for thd layout, got {self.sample_q_ragged_offset}, {self.sample_k_ragged_offset}, {self.sample_v_ragged_offset}, {self.sample_o_ragged_offset}, and {self.sample_stats_ragged_offset}"
+                )
 
             b = len(self.sample_seq_len_q)
             self.q_cudnn = swa_graph.tensor(
@@ -396,12 +378,12 @@ class SlidingWindowAttention(APIBase):
             )
             cudnn.set_stream(cudnn_handle, current_stream)
 
-        assert (
-            not skip_compile
-        ), "cudnn sliding window attention kernel does not support skip_compile"
-        assert (
-            self._cudnn_swa_graph is not None and self._cudnn_compiled
-        ), "SlidingWindowAttention kernel not compiled"
+        if skip_compile:
+            raise NotImplementedError(
+                "cudnn sliding window attention kernel does not support skip_compile"
+            )
+        if self._cudnn_swa_graph is None or not self._cudnn_compiled:
+            raise ValueError("SlidingWindowAttention kernel not compiled")
         self._logger.debug("Executing with compiled kernel")
 
         self._logger.debug("Reshaping tensors to kernel expected format")
@@ -431,28 +413,24 @@ class SlidingWindowAttention(APIBase):
         )
 
         if self.input_layout == "thd":
-            assert (
-                seq_len_q_tensor is not None
-            ), "seq_len_q_tensor must be provided for thd layout"
-            assert (
-                seq_len_kv_tensor is not None
-            ), "seq_len_kv_tensor must be provided for thd layout"
-            assert (
-                q_ragged_offset_tensor is not None
-            ), "q_ragged_offset_tensor must be provided for thd layout"
-            assert (
-                k_ragged_offset_tensor is not None
-            ), "k_ragged_offset_tensor must be provided for thd layout"
-            assert (
-                v_ragged_offset_tensor is not None
-            ), "v_ragged_offset_tensor must be provided for thd layout"
-            assert (
-                o_ragged_offset_tensor is not None
-            ), "o_ragged_offset_tensor must be provided for thd layout"
+            if seq_len_q_tensor is None or seq_len_kv_tensor is None:
+                raise ValueError(
+                    f"seq_len_q_tensor and seq_len_kv_tensor must be provided for thd layout, got {seq_len_q_tensor} and {seq_len_kv_tensor}"
+                )
+            if (
+                q_ragged_offset_tensor is None
+                or k_ragged_offset_tensor is None
+                or v_ragged_offset_tensor is None
+                or o_ragged_offset_tensor is None
+            ):
+                raise ValueError(
+                    f"q_ragged_offset_tensor, k_ragged_offset_tensor, v_ragged_offset_tensor, and o_ragged_offset_tensor must be provided for thd layout, got {q_ragged_offset_tensor}, {k_ragged_offset_tensor}, {v_ragged_offset_tensor}, and {o_ragged_offset_tensor}"
+                )
             if not self.is_infer:
-                assert (
-                    stats_ragged_offset_tensor is not None
-                ), "stats_ragged_offset_tensor must be provided for thd layout"
+                if stats_ragged_offset_tensor is None:
+                    raise ValueError(
+                        f"stats_ragged_offset_tensor must be provided for thd layout, got {stats_ragged_offset_tensor}"
+                    )
 
         variant_pack = {
             self.q_cudnn: q_tensor,

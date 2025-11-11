@@ -74,7 +74,7 @@ before_script:
     stage: oss_tests
     allow_failure: true
     script:
-        - pip install -v nvidia-cutlass-dsl
+        - pip install -v .[cutedsl]
         - ci/run_test_oss.sh
 
 .python_tests:template:

@@ -863,7 +863,7 @@ class FusedMask:
         offset = 0
         if cutlass.const_expr(mask_type == MaskType.WINDOW_MASK_INFERENCE):
             offset = seqlen_k - seqlen_q
-        for i in range(cute.size(acc_qk)):
+        for i in cutlass.range(cute.size(acc_qk)):
             index_q, index_k = index_qk[i]
             if cutlass.const_expr(
                 window_size_left is not None or window_size_right is not None

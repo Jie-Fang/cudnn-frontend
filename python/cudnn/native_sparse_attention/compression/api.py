@@ -92,55 +92,37 @@ class CompressionAttention(APIBase):
             b, h_kv, s_kv, d_v = self.sample_v.shape
             b, h_q, s_qo, d_v = self.sample_o.shape
 
-            assert self.sample_q.shape == (
-                b,
-                h_qo,
-                s_qo,
-                d,
-            ), "Input/Output shape mismatch"
-            assert self.sample_k.shape == (
-                b,
-                h_kv,
-                s_kv,
-                d,
-            ), "Input/Output shape mismatch"
-            assert self.sample_v.shape == (
-                b,
-                h_kv,
-                s_kv,
-                d_v,
-            ), "Input/Output shape mismatch"
-            assert self.sample_o.shape == (
-                b,
-                h_q,
-                s_qo,
-                d_v,
-            ), "Input/Output shape mismatch"
+            if self.sample_q.shape != (b, h_qo, s_qo, d):
+                raise ValueError(
+                    f"Input shape mismatch: expected Q tensor shape {b, h_qo, s_qo, d}, got {self.sample_q.shape}"
+                )
+            if self.sample_k.shape != (b, h_kv, s_kv, d):
+                raise ValueError(
+                    f"Input shape mismatch: expected K tensor shape {b, h_kv, s_kv, d}, got {self.sample_k.shape}"
+                )
+            if self.sample_v.shape != (b, h_kv, s_kv, d_v):
+                raise ValueError(
+                    f"Input shape mismatch: expected V tensor shape {b, h_kv, s_kv, d_v}, got {self.sample_v.shape}"
+                )
+            if self.sample_o.shape != (b, h_q, s_qo, d_v):
+                raise ValueError(
+                    f"Output shape mismatch: expected O tensor shape {b, h_q, s_qo, d_v}, got {self.sample_o.shape}"
+                )
             if self.enable_lse:
-                assert (
-                    self.sample_lse is not None
-                ), "sample_lse is required when enable_lse=True"
-                assert self.sample_lse.shape == (
-                    b,
-                    h_q,
-                    s_qo,
-                ) or self.sample_lse.shape == (
-                    b,
-                    h_q,
-                    s_qo,
-                    1,
-                ), "Input/Output shape mismatch"
-                if self.sample_lse.shape == (b, h_q, s_qo, 1):
-                    self._logger.info(
-                        "reshaping lse_tensor from (b, h_q, s_qo, 1) to (b, h_q, s_qo)"
+                self.sample_lse = self._unpad_tensor_to_ndim(
+                    self.sample_lse, 3, "sample_lse"
+                )
+                if self.sample_lse.shape != (b, h_q, s_qo):
+                    raise ValueError(
+                        f"Output shape mismatch: expected LSE tensor shape {b, h_q, s_qo}, got {self.sample_lse.shape}"
                     )
-                    self.sample_lse = self.sample_lse.squeeze(-1)
-                assert self.sample_lse.is_contiguous(), "sample_lse must be contiguous"
+                if not self.sample_lse.is_contiguous():
+                    raise ValueError("LSE tensor must be contiguous")
             if (
                 self.sample_cum_seqlen_q is not None
                 or self.sample_cum_seqlen_k is not None
             ):
-                self._logger.warn(
+                self._logger.warning(
                     "sample_cum_seqlen_q and sample_cum_seqlen_k are ignored for B,H,S,D layout"
                 )
 
@@ -160,44 +142,56 @@ class CompressionAttention(APIBase):
             t, h_kv, d_v = self.sample_v.shape
             t, h_q, d_v = self.sample_o.shape
 
-            assert self.sample_q.shape == (t, h_q, d), "Input/Output shape mismatch"
-            assert self.sample_k.shape == (t, h_kv, d_qk), "Input/Output shape mismatch"
-            assert self.sample_v.shape == (t, h_kv, d_v), "Input/Output shape mismatch"
-            assert self.sample_o.shape == (t, h_q, d_v), "Input/Output shape mismatch"
+            if self.sample_q.shape != (t, h_q, d):
+                raise ValueError(
+                    f"Input shape mismatch: expected Q tensor shape {t, h_q, d}, got {self.sample_q.shape}"
+                )
+            if self.sample_k.shape != (t, h_kv, d_qk):
+                raise ValueError(
+                    f"Input shape mismatch: expected K tensor shape {t, h_kv, d_qk}, got {self.sample_k.shape}"
+                )
+            if self.sample_v.shape != (t, h_kv, d_v):
+                raise ValueError(
+                    f"Input shape mismatch: expected V tensor shape {t, h_kv, d_v}, got {self.sample_v.shape}"
+                )
+            if self.sample_o.shape != (t, h_q, d_v):
+                raise ValueError(
+                    f"Output shape mismatch: expected O tensor shape {t, h_q, d_v}, got {self.sample_o.shape}"
+                )
             if self.enable_lse:
-                assert (
-                    self.sample_lse is not None
-                ), "sample_lse is required when enable_lse=True"
-                assert self.sample_lse.shape == (
-                    t,
-                    h_q,
-                    1,
-                ) or self.sample_lse.shape == (t, h_q), "Input/Output shape mismatch"
-                if self.sample_lse.shape == (t, h_q, 1):
-                    self._logger.info(
-                        "reshaping lse_tensor from (t, h_q, 1) to (t, h_q)"
+                self.sample_lse = self._unpad_tensor_to_ndim(
+                    self.sample_lse, 2, "sample_lse"
+                )
+                if self.sample_lse.shape != (t, h_q):
+                    raise ValueError(
+                        f"Output shape mismatch: expected LSE tensor shape {t, h_q}, got {self.sample_lse.shape}"
                     )
-                    self.sample_lse = self.sample_lse.squeeze(-1)
 
-            assert (
-                self.sample_cum_seqlen_q is not None
-                and self.sample_cum_seqlen_k is not None
-            ), "sample_cum_seqlen_q and sample_cum_seqlen_k are required when using T,H,D layout"
-            assert (
-                self.sample_cum_seqlen_q.ndim == 1
-                and self.sample_cum_seqlen_k.ndim == 1
-            ), "sample_cum_seqlen_q and sample_cum_seqlen_k must be 1D tensors"
-            assert self.sample_cum_seqlen_q.dtype in {
+            if self.sample_cum_seqlen_q is None or self.sample_cum_seqlen_k is None:
+                raise ValueError(
+                    f"sample_cum_seqlen_q and sample_cum_seqlen_k must be provided for T,H,D layout, got {self.sample_cum_seqlen_q} and {self.sample_cum_seqlen_k}"
+                )
+            self.sample_cum_seqlen_q = self._unpad_tensor_to_ndim(
+                self.sample_cum_seqlen_q, 1, "sample_cum_seqlen_q"
+            )
+            self.sample_cum_seqlen_k = self._unpad_tensor_to_ndim(
+                self.sample_cum_seqlen_k, 1, "sample_cum_seqlen_k"
+            )
+            if self.sample_cum_seqlen_q.ndim != 1 or self.sample_cum_seqlen_k.ndim != 1:
+                raise ValueError(
+                    f"sample_cum_seqlen_q and sample_cum_seqlen_k must be 1D tensors, got {self.sample_cum_seqlen_q.ndim}D and {self.sample_cum_seqlen_k.ndim}D"
+                )
+            if self.sample_cum_seqlen_q.dtype not in {
                 torch.int32,
                 torch.int64,
-            }, "sample_cum_seqlen_q must be int32 or int64"
-            assert self.sample_cum_seqlen_k.dtype in {
-                torch.int32,
-                torch.int64,
-            }, "sample_cum_seqlen_k must be int32 or int64"
-            assert len(self.sample_cum_seqlen_q) == len(
-                self.sample_cum_seqlen_k
-            ), "sample_cum_seqlen_q and sample_cum_seqlen_k must have the same length"
+            } or self.sample_cum_seqlen_k.dtype not in {torch.int32, torch.int64}:
+                raise ValueError(
+                    f"sample_cum_seqlen_q and sample_cum_seqlen_k must be int32 or int64, got {self.sample_cum_seqlen_q.dtype} and {self.sample_cum_seqlen_k.dtype}"
+                )
+            if len(self.sample_cum_seqlen_q) != len(self.sample_cum_seqlen_k):
+                raise ValueError(
+                    f"sample_cum_seqlen_q and sample_cum_seqlen_k must have the same length, got {len(self.sample_cum_seqlen_q)} and {len(self.sample_cum_seqlen_k)}"
+                )
 
             self.batch_size = len(self.sample_cum_seqlen_q) - 1
             self.s_q = None
@@ -211,29 +205,34 @@ class CompressionAttention(APIBase):
             raise ValueError(
                 f"Invalid input layout: sample_q must be rank-3 (T,H,D) or rank-4 (B,H,S,D), got {self.sample_q.ndim}"
             )
-        assert d == d_v, "D must match D_v"
-        assert d in {32, 64, 128}, "Head dimension D must be 32, 64, or 128"
-        assert h_q % h_kv == 0, "H_q must be divisible by H_k (GQA/MQA constraint)"
+        if d != d_v:
+            raise ValueError("D must match D_v")
+        if d not in {32, 64, 128}:
+            raise ValueError("Head dimension D must be 32, 64, or 128")
+        if h_q % h_kv != 0:
+            raise ValueError("H_q must be divisible by H_k (GQA/MQA constraint)")
 
         self._logger.debug("Checking dtypes")
         in_dtype = self.sample_q.dtype
         out_dtype = self.sample_o.dtype
-        assert self.sample_k.dtype == in_dtype, "Inputs must have the same dtype"
-        assert self.sample_v.dtype == in_dtype, "Inputs must have the same dtype"
-        assert in_dtype in {
-            torch.float16,
-            torch.float8_e4m3fn,
-        }, "Inputs must be Float16 or Float8E4M3FN"
-        assert out_dtype in {
-            torch.float16,
-            torch.float8_e4m3fn,
-        }, "Outputs must be Float16 or Float8E4M3FN"
-        assert self.qk_acc_dtype_torch in {
-            torch.float32
-        }, "qk_acc_dtype must be Float32"
-        assert self.pv_acc_dtype_torch in {
-            torch.float32
-        }, "pv_acc_dtype must be Float32"
+        if self.sample_k.dtype != in_dtype or self.sample_v.dtype != in_dtype:
+            raise ValueError(
+                f"Inputs must have the same dtype, got K {self.sample_k.dtype}, V {self.sample_v.dtype} for Q {in_dtype}"
+            )
+        if in_dtype not in {torch.float16, torch.float8_e4m3fn}:
+            raise ValueError(f"Inputs must be Float16 or Float8E4M3FN, got {in_dtype}")
+        if out_dtype not in {torch.float16, torch.float8_e4m3fn}:
+            raise ValueError(
+                f"Outputs must be Float16 or Float8E4M3FN, got {out_dtype}"
+            )
+        if self.qk_acc_dtype_torch not in {torch.float32}:
+            raise ValueError(
+                f"qk_acc_dtype must be Float32, got {self.qk_acc_dtype_torch}"
+            )
+        if self.pv_acc_dtype_torch not in {torch.float32}:
+            raise ValueError(
+                f"pv_acc_dtype must be Float32, got {self.pv_acc_dtype_torch}"
+            )
 
         # Scale defaults
         if self.scale_softmax is None:
@@ -242,13 +241,15 @@ class CompressionAttention(APIBase):
 
         # Environment checks
         self._logger.debug("Checking environment")
-        assert torch.cuda.is_available(), "CUDA is not available"
+        if not torch.cuda.is_available():
+            raise RuntimeError("CUDA is not available")
         device = torch.cuda.current_device()
         major, minor = torch.cuda.get_device_capability(device)
         compute_capability = major * 10 + minor
-        assert (
-            compute_capability >= 100
-        ), f"CompressionAttention requires SM100+ compute capability, but found SM{compute_capability} on device {device}"
+        if compute_capability < 100:
+            raise RuntimeError(
+                f"CompressionAttention requires SM100+ compute capability, but found SM{compute_capability} on device {device}"
+            )
 
         self._is_supported = True
         self._logger.debug("check_support completed successfully")
@@ -374,16 +375,24 @@ class CompressionAttention(APIBase):
         current_stream = self._get_default_stream(current_stream)
 
         if self.enable_lse:
-            assert (
-                lse_tensor is not None
-            ), "kernel was compiled with lse_tensor provided, but lse_tensor was not provided during execute"
-            if (lse_tensor.ndim == o_tensor.ndim) and (lse_tensor.shape[-1] == 1):
-                self._logger.info("reshaping lse_tensor to remove trailing dimension")
-                lse_tensor = lse_tensor.squeeze(-1)
+            if lse_tensor is None:
+                raise ValueError(
+                    "kernel was compiled with lse_tensor provided, but lse_tensor was not provided during execute"
+                )
+            lse_tensor = self._unpad_tensor_to_ndim(
+                lse_tensor, o_tensor.ndim - 1, "lse_tensor"
+            )
         if self.input_layout == "T,H,D":
-            assert (
-                cum_seqlen_q_tensor is not None and cum_seqlen_k_tensor is not None
-            ), "cum_seqlen_q_tensor and cum_seqlen_k_tensor are required when using T,H,D layout"
+            if cum_seqlen_q_tensor is None or cum_seqlen_k_tensor is None:
+                raise ValueError(
+                    f"cum_seqlen_q_tensor and cum_seqlen_k_tensor must be provided for T,H,D layout, got {cum_seqlen_q_tensor} and {cum_seqlen_k_tensor}"
+                )
+            cum_seqlen_q_tensor = self._unpad_tensor_to_ndim(
+                cum_seqlen_q_tensor, 1, "cum_seqlen_q_tensor"
+            )
+            cum_seqlen_k_tensor = self._unpad_tensor_to_ndim(
+                cum_seqlen_k_tensor, 1, "cum_seqlen_k_tensor"
+            )
 
         # Scale values
         scale_q = self.scale_q if scale_q is None else scale_q
@@ -397,9 +406,8 @@ class CompressionAttention(APIBase):
         scale_output_val = scale_v * inv_scale_o
 
         if not skip_compile:
-            assert (
-                self._compiled_kernel is not None
-            ), "CompressionAttention kernel not compiled"
+            if self._compiled_kernel is None:
+                raise ValueError("CompressionAttention kernel not compiled")
             self._logger.debug("Executing with compiled kernel")
             self._compiled_kernel(
                 from_dlpack(

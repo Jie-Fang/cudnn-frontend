@@ -1,36 +1,384 @@
 """
 Utilities for NSA (Native Sparse Attention) tests.
-Contains helper functions for environment checking and data generation.
 """
 
 import torch
-import traceback
+import pytest
+from typing import Optional, Tuple
+import math
+
+# Common parameterization marks for all NSA tests
+NSA_PARAM_MARKS = [
+    pytest.mark.parametrize("layout", ["bshd", "thd"]),
+    pytest.mark.parametrize("dtype", [torch.float16]),
+    pytest.mark.parametrize("acc_dtype", [torch.float32]),
+]
+
+# Parameterization marks for NSA Top-K Reduction tests
+NSA_TOPK_REDUCTION_PARAM_MARKS = [
+    pytest.mark.parametrize("selection_block_size", [64]),
+    pytest.mark.parametrize("compress_stride", [32]),
+    pytest.mark.parametrize("k_value", [16]),
+    pytest.mark.parametrize("is_causal", [True]),
+    pytest.mark.parametrize("mma_tiler_mn", [(128, 128)]),
+]
+
+# Parameterization marks for NSA Compression Attention tests
+NSA_COMPRESSION_ATTENTION_PARAM_MARKS = [
+    pytest.mark.parametrize("mma_tiler_mn", [(128, 128)]),
+    pytest.mark.parametrize("is_persistent", [False]),
+    pytest.mark.parametrize("scale_q", [1.0]),
+    pytest.mark.parametrize("scale_k", [1.0]),
+    pytest.mark.parametrize("scale_v", [1.0]),
+    pytest.mark.parametrize("inv_scale_o", [1.0]),
+    pytest.mark.parametrize("scale_softmax", [None]),
+]
+
+# Parameterization marks for NSA Sliding Window Attention tests
+NSA_SWA_PARAM_MARKS = [
+    pytest.mark.parametrize("window_size", [64]),
+    pytest.mark.parametrize("scale_softmax", [None]),
+]
+
+# Parameterization marks for NSA Selection Attention tests
+NSA_SELECTION_ATTENTION_PARAM_MARKS = [
+    pytest.mark.parametrize("topk_size", [16]),
+    pytest.mark.parametrize("block_size", [64]),
+]
 
 
-def _env_supported(target_major=9.0):
-    """Check if the environment supports NSA tests."""
-    try:
-        import cutlass
-    except ImportError:
-        print("cutlass is not available")
-        return False
+def with_nsa_topk_reduction_params(func):
+    for mark in reversed(NSA_PARAM_MARKS + NSA_TOPK_REDUCTION_PARAM_MARKS):
+        func = mark(func)
+    return func
 
-    if not torch.cuda.is_available():
-        print("CUDA is not available")
-        return False
 
+def with_nsa_compression_attention_params(func):
+    for mark in reversed(NSA_PARAM_MARKS + NSA_COMPRESSION_ATTENTION_PARAM_MARKS):
+        func = mark(func)
+    return func
+
+
+def with_nsa_swa_params(func):
+    for mark in reversed(NSA_PARAM_MARKS + NSA_SWA_PARAM_MARKS):
+        func = mark(func)
+    return func
+
+
+def with_nsa_selection_attention_params(func):
+    for mark in reversed(NSA_PARAM_MARKS + NSA_SELECTION_ATTENTION_PARAM_MARKS):
+        func = mark(func)
+    return func
+
+
+def nsa_init(
+    request: pytest.FixtureRequest,
+    layout: str = "bshd",
+    dtype: Optional[torch.dtype] = None,
+    acc_dtype: Optional[torch.dtype] = None,
+    selection_block_size: Optional[int] = None,
+    compress_stride: Optional[int] = None,
+    k_value: Optional[int] = None,
+    is_causal: Optional[bool] = None,
+    mma_tiler_mn: Optional[Tuple[int, int]] = None,
+    is_persistent: Optional[bool] = None,
+    scale_q: Optional[float] = None,
+    scale_k: Optional[float] = None,
+    scale_v: Optional[float] = None,
+    inv_scale_o: Optional[float] = None,
+    scale_softmax: Optional[float] = None,
+    window_size: Optional[int] = None,
+    topk_size: Optional[int] = None,
+    block_size: Optional[int] = None,
+):
     major, _ = torch.cuda.get_device_capability()
-    if major < target_major:
-        print(f"NSA requires compute capability >= {target_major}, found {major}.x")
-        return False
+    if major < 10:
+        pytest.skip(
+            f"Environment not supported: requires compute capability >= 10, found {major}"
+        )
 
-    try:
-        from cudnn import NSA
-    except ImportError as e:
-        traceback.print_exc()
-        return False
+    b = (
+        int(request.config.getoption("--nsa-b"))
+        if request.config.getoption("--nsa-b") is not None
+        else 2
+    )
+    s_q = (
+        int(request.config.getoption("--nsa-s_q"))
+        if request.config.getoption("--nsa-s_q") is not None
+        else 1024
+    )
+    s_kv = (
+        int(request.config.getoption("--nsa-s_kv"))
+        if request.config.getoption("--nsa-s_kv") is not None
+        else 1024
+    )
+    d_qk = (
+        int(request.config.getoption("--nsa-d_qk"))
+        if request.config.getoption("--nsa-d_qk") is not None
+        else 128
+    )
+    d_v = (
+        int(request.config.getoption("--nsa-d_v"))
+        if request.config.getoption("--nsa-d_v") is not None
+        else 128
+    )
+    h_q = (
+        int(request.config.getoption("--nsa-h_q"))
+        if request.config.getoption("--nsa-h_q") is not None
+        else 4
+    )
+    h_k = (
+        int(request.config.getoption("--nsa-h_k"))
+        if request.config.getoption("--nsa-h_k") is not None
+        else 1
+    )
+    h_v = (
+        int(request.config.getoption("--nsa-h_v"))
+        if request.config.getoption("--nsa-h_v") is not None
+        else 1
+    )
 
-    return True
+    actual_s_q = (
+        torch.tensor([s_q] * b, dtype=torch.int32).cuda() if layout == "thd" else None
+    )
+    actual_s_kv = (
+        torch.tensor([s_kv] * b, dtype=torch.int32).cuda() if layout == "thd" else None
+    )
+    topk_sizes = (
+        torch.tensor([topk_size] * b, dtype=torch.int32).cuda()
+        if (layout == "thd" and topk_size is not None)
+        else None
+    )
+
+    scale_softmax = 1.0 / math.sqrt(d_qk) if scale_softmax is None else scale_softmax
+
+    skip_ref = request.config.getoption("--nsa-skip-ref", default=False)
+
+    return {
+        "b": b,
+        "s_q": s_q,
+        "s_kv": s_kv,
+        "d_qk": d_qk,
+        "d_v": d_v,
+        "h_q": h_q,
+        "h_k": h_k,
+        "h_v": h_v,
+        "actual_s_q": actual_s_q,
+        "actual_s_kv": actual_s_kv,
+        "layout": layout,
+        "dtype": dtype,
+        "acc_dtype": acc_dtype,
+        "selection_block_size": selection_block_size,
+        "compress_stride": compress_stride,
+        "k_value": k_value,
+        "is_causal": is_causal,
+        "mma_tiler_mn": mma_tiler_mn,
+        "is_persistent": is_persistent,
+        "scale_q": scale_q,
+        "scale_k": scale_k,
+        "scale_v": scale_v,
+        "inv_scale_o": inv_scale_o,
+        "scale_softmax": scale_softmax,
+        "skip_ref": skip_ref,
+        "window_size": window_size,
+        "topk_size": topk_size,
+        "topk_sizes": topk_sizes,
+        "block_size": block_size,
+    }
+
+
+def allocate_input_tensors(cfg):
+    layout = cfg["layout"]
+
+    b = cfg["b"]
+    s_q = cfg["s_q"]
+    s_kv = cfg["s_kv"]
+    d_qk = cfg["d_qk"]
+    d_v = cfg["d_v"]
+    h_q = cfg["h_q"]
+    h_k = cfg["h_k"]
+    h_v = cfg["h_v"]
+    actual_s_q = cfg["actual_s_q"]
+    actual_s_kv = cfg["actual_s_kv"]
+
+    dtype = cfg["dtype"]
+    acc_dtype = cfg["acc_dtype"]
+    selection_block_size = cfg["selection_block_size"]
+    compress_stride = cfg["compress_stride"]
+    k_value = cfg["k_value"]
+
+    (
+        Q,
+        K,
+        V,
+        LSE,
+        cum_seqlen_q,
+        cum_seqlen_kv,
+        max_s_q,
+        max_s_kv,
+    ) = (None, None, None, None, None, None, None, None)
+    if layout == "bshd":
+        Q = torch.randn(b, s_q, h_q, d_qk, dtype=dtype).transpose(1, 2).cuda()
+        K = torch.randn(b, s_kv, h_k, d_qk, dtype=dtype).transpose(1, 2).cuda()
+        V = torch.randn(b, s_kv, h_k, d_v, dtype=dtype).transpose(1, 2).cuda()
+        LSE = (
+            -1.0
+            * torch.randn(b, s_q, h_q, dtype=torch.float32)
+            .transpose(1, 2)
+            .contiguous()
+            .cuda()
+        )
+
+        block_counts, block_indices = None, None  # TODO
+    elif layout == "thd":
+        cum_seqlen_q = (
+            torch.cat([torch.tensor([0]).cuda(), torch.cumsum(actual_s_q, dim=0)])
+            .to(torch.int32)
+            .cuda()
+        )
+        cum_seqlen_kv = (
+            torch.cat([torch.tensor([0]).cuda(), torch.cumsum(actual_s_kv, dim=0)])
+            .to(torch.int32)
+            .cuda()
+        )
+        max_s_q = max(actual_s_q).item()
+        max_s_kv = max(actual_s_kv).item()
+
+        total_seq_len = max(actual_s_q.sum().item(), actual_s_kv.sum().item())
+        # Q: (T, H_q, D_qk)
+        Q = torch.randn((total_seq_len, h_q, d_qk), dtype=dtype).cuda()
+        # K: (T, H_kv, D_qk)
+        K = torch.randn((total_seq_len, h_k, d_qk), dtype=dtype).cuda()
+        # V: (T, H_kv, D_v)
+        V = torch.randn((total_seq_len, h_k, d_v), dtype=dtype).cuda()
+        # LSE: (T, H_q, 1)
+        LSE = (
+            -1.0
+            * torch.randn((1, h_q, total_seq_len), dtype=torch.float32)
+            .transpose(0, 2)
+            .cuda()
+        )
+
+        # block_counts: (T, H_kv), block_indices: (T, H_kv, max(topk_sizes))
+        block_counts, block_indices = None, None  # TODO
+
+    return (
+        Q,
+        K,
+        V,
+        LSE,
+        actual_s_q,
+        actual_s_kv,
+        cum_seqlen_q,
+        cum_seqlen_kv,
+        max_s_q,
+        max_s_kv,
+    )
+
+
+def allocate_output_tensors(cfg):
+    layout = cfg["layout"]
+    b = cfg["b"]
+    s_q = cfg["s_q"]
+    actual_s_q = cfg["actual_s_q"]
+    h_q = cfg["h_q"]
+    d_v = cfg["d_v"]
+    h_k = cfg["h_k"]
+    k_value = cfg["k_value"]
+    acc_dtype = cfg["acc_dtype"]
+    dtype = cfg["dtype"]
+
+    O, L, M = None, None, None
+    topk_scores, topk_indices = None, None
+    if layout == "bshd":
+        O = torch.empty(b, s_q, h_q, d_v, dtype=dtype).transpose(1, 2).cuda()
+        L = torch.empty(b, s_q, h_q, 1, dtype=torch.float32).transpose(1, 2).cuda()
+        M = torch.empty(b, s_q, h_q, 1, dtype=torch.float32).transpose(1, 2).cuda()
+
+        if k_value is not None:
+            topk_scores = (
+                torch.empty(b, s_q, h_k, k_value, dtype=acc_dtype)
+                .transpose(1, 2)
+                .cuda()
+            )
+            topk_indices = (
+                torch.empty(b, s_q, h_k, k_value, dtype=torch.int32)
+                .transpose(1, 2)
+                .cuda()
+            )
+    elif layout == "thd":
+        total_seq_len = actual_s_q.sum().item()
+
+        O = torch.empty(total_seq_len, h_q, d_v, dtype=dtype).cuda()
+        L = torch.empty(total_seq_len, h_q, 1, dtype=torch.float32).cuda()
+        M = torch.empty(total_seq_len, h_q, 1, dtype=torch.float32).cuda()
+
+        if k_value is not None:
+            topk_scores = torch.empty(
+                total_seq_len, h_k, k_value, dtype=acc_dtype
+            ).cuda()
+            topk_indices = torch.empty(
+                total_seq_len, h_k, k_value, dtype=torch.int32
+            ).cuda()
+
+    return (
+        O,
+        L,
+        M,
+        topk_scores,
+        topk_indices,
+    )
+
+
+def _compute_exclusive_prefix_sum(tensor):
+    assert list(tensor.size())[1:] == [1, 1, 1]
+    # We need to provide a tuple of two tensors to torch.cat().
+    return torch.cat(
+        (
+            torch.zeros(1, 1, 1, 1, dtype=tensor.dtype, device=tensor.device),
+            torch.cumsum(tensor, dim=0),
+        )
+    )
+
+
+def generate_ragged_offset(cfg):
+    if cfg["layout"] != "thd":
+        return None, None, None, None, None
+
+    h_q = cfg["h_q"]
+    h_k = cfg["h_k"]
+    h_v = cfg["h_v"]
+    d_qk = cfg["d_qk"]
+    d_v = cfg["d_v"]
+    seq_len_q = cfg["actual_s_q"]
+    seq_len_kv = cfg["actual_s_kv"]
+
+    # Only for thd_thd_thd
+    if seq_len_q.ndim == 1:
+        seq_len_q = seq_len_q.view(-1, 1, 1, 1)
+    if seq_len_kv.ndim == 1:
+        seq_len_kv = seq_len_kv.view(-1, 1, 1, 1)
+
+    q_ragged_offset = _compute_exclusive_prefix_sum(seq_len_q) * h_q * d_qk
+    k_ragged_offset = _compute_exclusive_prefix_sum(seq_len_kv) * h_k * d_qk
+    v_ragged_offset = _compute_exclusive_prefix_sum(seq_len_kv) * h_v * d_v
+    o_ragged_offset = _compute_exclusive_prefix_sum(seq_len_q) * h_q * d_v
+    stats_ragged_offset = _compute_exclusive_prefix_sum(seq_len_q) * h_q
+
+    # Convert to int64 for cuDNN 9.6.0
+    q_ragged_offset = q_ragged_offset.to(dtype=torch.int64).cuda()
+    k_ragged_offset = k_ragged_offset.to(dtype=torch.int64).cuda()
+    v_ragged_offset = v_ragged_offset.to(dtype=torch.int64).cuda()
+    o_ragged_offset = o_ragged_offset.to(dtype=torch.int64).cuda()
+    stats_ragged_offset = stats_ragged_offset.to(dtype=torch.int64).cuda()
+
+    return (
+        q_ragged_offset,
+        k_ragged_offset,
+        v_ragged_offset,
+        o_ragged_offset,
+        stats_ragged_offset,
+    )
 
 
 def generate_block_indices(
@@ -60,6 +408,9 @@ def generate_block_indices(
         seq_len = seq_lens[i]
         topk_size = topk_sizes[i]
         max_index = seq_len // block_size
+        assert (
+            topk_size <= max_index
+        ), "topk_size must be less than or equal to the number of blocks"
         for t in range(seq_len):
             for h in range(num_kv_heads):
                 block_indices[seq_len_offset + t, h, :topk_size] = (
@@ -69,206 +420,3 @@ def generate_block_indices(
         seq_len_offset += seq_len
 
     return block_counts.cuda(), block_indices.cuda()
-
-
-def init_input_tensors(test_config):
-    b = test_config["b"]
-    s_q = test_config["s_q"]
-    actual_s_q = test_config["actual_s_q"]
-    h_q = test_config["h_q"]
-    h_kv = test_config["h_kv"]
-    d = test_config["d"]
-    d_v = test_config["d_v"]
-    block_size = test_config["block_size"]
-    topk_sizes = test_config["topk_sizes"]
-    dtype = test_config["dtype"]
-    acc_dtype = test_config["acc_dtype"]
-    softmax_scale = test_config["softmax_scale"]
-    skip_ref = test_config["skip_ref"]
-    layout = test_config["layout"]
-
-    Q, K, V, block_counts, block_indices, seq_offsets, max_length = (
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-    )  # TODO: remove seq_offsets
-    if layout == "bshd":
-        # bhsd logical layout, bshd stride
-        Q = torch.randn(b, s_q, h_q, d, dtype=dtype).transpose(1, 2).cuda()
-        K = torch.randn(b, s_q, h_kv, d, dtype=dtype).transpose(1, 2).cuda()
-        V = torch.randn(b, s_q, h_kv, d_v, dtype=dtype).transpose(1, 2).cuda()
-
-        block_counts, block_indices = None, None  # TODO
-    elif layout == "thd":
-        seq_total_len = actual_s_q.sum().item()
-
-        # Q: (T, H_q, D)
-        Q = torch.randn((seq_total_len, h_q, d), dtype=dtype).cuda()
-        # K: (T, H_kv, D)
-        K = torch.randn((seq_total_len, h_kv, d), dtype=dtype).cuda()
-        # V: (T, H_kv, D_v)
-        V = torch.randn((seq_total_len, h_kv, d_v), dtype=dtype).cuda()
-
-        # block_counts: (T, H_kv), block_indices: (T, H_kv, max(topk_sizes))
-        block_counts, block_indices = generate_block_indices(
-            actual_s_q, h_kv, topk_sizes, block_size
-        )
-
-        # seq_offsets: (B + 1)
-        seq_offsets = torch.zeros(b + 1, dtype=torch.int32).cuda()
-        for i in range(b):
-            seq_offsets[i] = actual_s_q[:i].sum().item()
-        seq_offsets[len(actual_s_q)] = seq_total_len
-        max_length = max(actual_s_q).item()
-
-    actual_s_q = actual_s_q.cuda() if actual_s_q is not None else None
-    seq_offsets = seq_offsets.cuda() if seq_offsets is not None else None
-    return (
-        Q,
-        K,
-        V,
-        block_counts,
-        block_indices,
-        actual_s_q,
-        seq_offsets,
-        max_length,
-    )
-
-
-def allocate_output_tensors(test_config):
-    b = test_config["b"]
-    s_q = test_config["s_q"]
-    actual_s_q = test_config["actual_s_q"]
-    h_q = test_config["h_q"]
-    h_kv = test_config["h_kv"]
-    d = test_config["d"]
-    d_v = test_config["d_v"]
-    block_size = test_config["block_size"]
-    topk_sizes = test_config["topk_sizes"]
-    dtype = test_config["dtype"]
-    acc_dtype = test_config["acc_dtype"]
-    skip_ref = test_config["skip_ref"]
-    layout = test_config["layout"]
-
-    O, L, M = None, None, None
-    if layout == "bshd":
-        O = torch.empty(b, s_q, h_q, d_v, dtype=dtype).transpose(1, 2).cuda()
-        L = torch.empty(b, s_q, h_q, 1, dtype=torch.float32).transpose(1, 2).cuda()
-        M = torch.empty(b, s_q, h_q, 1, dtype=torch.float32).transpose(1, 2).cuda()
-    elif layout == "thd":
-        seq_total_len = actual_s_q.sum().item()
-
-        # O: (T, H_q, D_v)
-        O = torch.empty(seq_total_len, h_q, d_v, dtype=dtype).cuda()
-        # L: (T, H_q, 1)
-        L = torch.empty(seq_total_len, h_q, 1, dtype=torch.float32).cuda()
-        # M: (T, H_q, 1)
-        M = torch.empty(seq_total_len, h_q, 1, dtype=torch.float32).cuda()
-
-    return O, L, M
-
-
-def convert_thd_to_bshd(thd_tensor, seq_len: torch.Tensor, s: int):
-    assert thd_tensor.dim() == 3
-    t, h, d = thd_tensor.size()
-
-    if seq_len.dim() == 1:
-        seq_len = seq_len.view(-1, 1, 1, 1)
-    assert seq_len.dim() == 4
-    assert seq_len.size(1) == seq_len.size(2) == seq_len.size(3) == 1
-    b = seq_len.size(0)
-    seq_len = seq_len.flatten()
-
-    bshd_tensor = torch.zeros(
-        (b, s, h, d), dtype=thd_tensor.dtype, device=thd_tensor.device
-    )
-
-    cumulative_seq_len = torch.cumsum(seq_len, dim=0) - seq_len
-    for bi in range(b):
-        t_beg = cumulative_seq_len[bi]
-        t_end = t_beg + seq_len[bi]
-        bshd_tensor[bi, : seq_len[bi], :, :] = thd_tensor[t_beg:t_end, :, :]
-
-    # Return a view with layout (b, h, s, d) while keeping strides as if (b, s, h, d)
-    return bshd_tensor.permute(0, 2, 1, 3)
-
-
-def convert_bshd_to_thd(bshd_tensor, seq_len: torch.Tensor, maxT: int):
-    assert bshd_tensor.dim() == 4
-    b, h, s, d = bshd_tensor.size()
-
-    if seq_len.dim() == 1:
-        seq_len = seq_len.view(-1, 1, 1, 1)
-    assert seq_len.dim() == 4
-    assert seq_len.size(1) == seq_len.size(2) == seq_len.size(3) == 1
-    seq_len = seq_len.flatten()
-
-    thd_tensor = torch.zeros(
-        (maxT, h, d), dtype=bshd_tensor.dtype, device=bshd_tensor.device
-    )
-
-    # Interpret input as (b, s, h, d) in memory while keeping the (b, h, s, d) layout
-    bshd_base = bshd_tensor.permute(0, 2, 1, 3)
-
-    cumulative_seq_len = torch.cumsum(seq_len, dim=0) - seq_len
-    for bi in range(b):
-        t_beg = cumulative_seq_len[bi]
-        t_end = t_beg + seq_len[bi]
-        thd_tensor[t_beg:t_end, :, :] = bshd_base[bi, : seq_len[bi], :, :]
-
-    return thd_tensor
-
-
-def compute_exclusive_prefix_sum(tensor):
-    assert list(tensor.size())[1:] == [1, 1, 1]
-    # We need to provide a tuple of two tensors to torch.cat().
-    return torch.cat(
-        (
-            torch.zeros(1, 1, 1, 1, dtype=tensor.dtype, device=tensor.device),
-            torch.cumsum(tensor, dim=0),
-        )
-    )
-
-
-def _generate_ragged_offset(test_config):
-    if test_config["layout"] != "thd":
-        return None, None, None, None, None
-
-    h_q = test_config["h_q"]
-    h_k = test_config["h_kv"]
-    h_v = test_config["h_kv"]
-    d_qk = test_config["d"]
-    d_v = test_config["d_v"]
-    seq_len_q = test_config["actual_s_q"]
-    seq_len_kv = test_config["actual_s_q"]
-
-    # Only for thd_thd_thd
-    if seq_len_q.ndim == 1:
-        seq_len_q = seq_len_q.view(-1, 1, 1, 1)
-    if seq_len_kv.ndim == 1:
-        seq_len_kv = seq_len_kv.view(-1, 1, 1, 1)
-
-    q_ragged_offset = compute_exclusive_prefix_sum(seq_len_q) * h_q * d_qk
-    k_ragged_offset = compute_exclusive_prefix_sum(seq_len_kv) * h_k * d_qk
-    v_ragged_offset = compute_exclusive_prefix_sum(seq_len_kv) * h_v * d_v
-    o_ragged_offset = compute_exclusive_prefix_sum(seq_len_q) * h_q * d_v
-    stats_ragged_offset = compute_exclusive_prefix_sum(seq_len_q) * h_q
-
-    # Convert to int64 for cuDNN 9.6.0
-    q_ragged_offset = q_ragged_offset.to(dtype=torch.int64).cuda()
-    k_ragged_offset = k_ragged_offset.to(dtype=torch.int64).cuda()
-    v_ragged_offset = v_ragged_offset.to(dtype=torch.int64).cuda()
-    o_ragged_offset = o_ragged_offset.to(dtype=torch.int64).cuda()
-    stats_ragged_offset = stats_ragged_offset.to(dtype=torch.int64).cuda()
-
-    return (
-        q_ragged_offset,
-        k_ragged_offset,
-        v_ragged_offset,
-        o_ragged_offset,
-        stats_ragged_offset,
-    )

@@ -3,10 +3,11 @@ import torch
 import pytest
 from test_utils import torch_fork_set_rng
 
-from fe_api.nsa.nsa_fixtures import test_config
 from fe_api.nsa.nsa_utils import (
-    _env_supported,
-    init_input_tensors,
+    with_nsa_selection_attention_params,
+    nsa_init,
+    generate_block_indices,
+    allocate_input_tensors,
     allocate_output_tensors,
 )
 from fe_api.nsa.nsa_reference import check_ref_nsa_selection_attention
@@ -19,20 +20,47 @@ Use this method when running one static configuration for each FmhaCute object.
 
 @pytest.mark.L0
 @torch_fork_set_rng(seed=0)
-def test_nsa_selection_compile_execute(test_config):
-    if not _env_supported():
-        pytest.skip("Environment not supported")
-    from cudnn import NSA
+@with_nsa_selection_attention_params
+def test_nsa_selection_compile_execute(
+    layout,
+    dtype,
+    acc_dtype,
+    topk_size,
+    block_size,
+    request,
+):
+    try:
+        from cudnn import NSA
+        from cuda.bindings import driver as cuda
+    except ImportError as e:
+        pytest.skip(
+            "Environment not supported: cudnn optional dependencies not installed"
+        )
+    if layout != "thd":
+        pytest.skip(
+            "Only THD layout supported for selection attention, bshd layout not yet implemented"
+        )
 
-    assert (
-        test_config["layout"] == "thd"
-    ), "bshd layout for selection attention not yet implemented"
-
-    Q, K, V, block_counts, block_indices, _, seq_offsets, max_length = (
-        init_input_tensors(test_config)
+    cfg = nsa_init(
+        request=request,
+        layout=layout,
+        dtype=dtype,
+        acc_dtype=acc_dtype,
+        topk_size=topk_size,
+        block_size=block_size,
     )
 
-    O, L, M = allocate_output_tensors(test_config)
+    Q, K, V, _, actual_s_q, _, cum_seqlen_q, cum_seqlen_kv, max_s_q, max_s_kv = (
+        allocate_input_tensors(cfg)
+    )
+    block_counts, block_indices = generate_block_indices(
+        cfg["actual_s_q"],
+        cfg["h_k"],
+        cfg["topk_sizes"],
+        cfg["block_size"],
+    )
+    O, L, M, _, _ = allocate_output_tensors(cfg)
+    stream = cuda.CUstream(torch.cuda.current_stream().cuda_stream)
 
     selection_attention = NSA.SelectionAttention(
         sample_q=Q,
@@ -43,17 +71,14 @@ def test_nsa_selection_compile_execute(test_config):
         sample_m=M,
         sample_block_indices=block_indices,
         sample_block_counts=block_counts,
-        sample_seq_offsets=seq_offsets,
-        acc_dtype=test_config["acc_dtype"],
-        max_s=max_length,
-        block_size=test_config["block_size"],
-        scale_softmax=test_config["softmax_scale"],
+        sample_seq_offsets=cum_seqlen_q,
+        acc_dtype=cfg["acc_dtype"],
+        max_s=max_s_q,
+        block_size=cfg["block_size"],
+        scale_softmax=cfg["scale_softmax"],
     )
-
-    assert selection_attention.check_support() is True
-
-    selection_attention.compile()
-
+    assert selection_attention.check_support()
+    selection_attention.compile(current_stream=stream)
     selection_attention.execute(
         q_tensor=Q,
         k_tensor=K,
@@ -63,10 +88,10 @@ def test_nsa_selection_compile_execute(test_config):
         m_tensor=M,
         block_indices_tensor=block_indices,
         block_counts_tensor=block_counts,
-        seq_offsets_tensor=seq_offsets,
-        scale_softmax=test_config["softmax_scale"],
+        seq_offsets_tensor=cum_seqlen_q,
+        scale_softmax=cfg["scale_softmax"],
+        current_stream=stream,
     )
-
     check_ref_nsa_selection_attention(
         Q,
         K,
@@ -76,7 +101,7 @@ def test_nsa_selection_compile_execute(test_config):
         M,
         block_indices,
         block_counts,
-        test_config,
+        cfg,
     )
 
 
@@ -88,17 +113,45 @@ Use the wrapper to directly call SelectionAttention without explicit setup and c
 
 @pytest.mark.L0
 @torch_fork_set_rng(seed=0)
-def test_nsa_selection_wrapper(test_config):
-    if not _env_supported():
-        pytest.skip("Environment not supported")
-    from cudnn import NSA
+@with_nsa_selection_attention_params
+def test_nsa_selection_wrapper(
+    layout,
+    dtype,
+    acc_dtype,
+    topk_size,
+    block_size,
+    request,
+):
+    try:
+        from cudnn import NSA
+        from cuda.bindings import driver as cuda
+    except ImportError as e:
+        pytest.skip(
+            "Environment not supported: cudnn optional dependencies not installed"
+        )
 
-    assert (
-        test_config["layout"] == "thd"
-    ), "bshd layout for selection attention not yet implemented"
+    if layout != "thd":
+        pytest.skip(
+            "Only THD layout supported for selection attention, bshd layout not yet implemented"
+        )
 
-    Q, K, V, block_counts, block_indices, _, seq_offsets, max_length = (
-        init_input_tensors(test_config)
+    cfg = nsa_init(
+        request=request,
+        layout=layout,
+        dtype=dtype,
+        acc_dtype=acc_dtype,
+        topk_size=topk_size,
+        block_size=block_size,
+    )
+
+    Q, K, V, _, actual_s_q, _, cum_seqlen_q, cum_seqlen_kv, max_s_q, max_s_kv = (
+        allocate_input_tensors(cfg)
+    )
+    block_counts, block_indices = generate_block_indices(
+        cfg["actual_s_q"],
+        cfg["h_k"],
+        cfg["topk_sizes"],
+        cfg["block_size"],
     )
 
     O, L, M = NSA.selection_attention_wrapper(
@@ -107,10 +160,10 @@ def test_nsa_selection_wrapper(test_config):
         v_tensor=V,
         block_indices_tensor=block_indices,
         block_counts_tensor=block_counts,
-        seq_offsets_tensor=seq_offsets,
-        block_size=test_config["block_size"],
-        scale_softmax=test_config["softmax_scale"],
-        acc_dtype=test_config["acc_dtype"],
+        seq_offsets_tensor=cum_seqlen_q,
+        block_size=cfg["block_size"],
+        scale_softmax=cfg["scale_softmax"],
+        acc_dtype=cfg["acc_dtype"],
     )
 
     check_ref_nsa_selection_attention(
@@ -122,5 +175,5 @@ def test_nsa_selection_wrapper(test_config):
         M,
         block_indices,
         block_counts,
-        test_config,
+        cfg,
     )

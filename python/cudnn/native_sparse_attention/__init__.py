@@ -4,6 +4,7 @@ from .sliding_window_attention import (
     SlidingWindowAttention,
     sliding_window_attention_wrapper,
 )
+from .top_k import TopKReduction, topk_reduction_wrapper
 
 
 class NSANamespace:
@@ -15,6 +16,9 @@ class NSANamespace:
 
     CompressionAttention = staticmethod(CompressionAttention)
     compression_attention_wrapper = staticmethod(compression_attention_wrapper)
+
+    TopKReduction = staticmethod(TopKReduction)
+    topk_reduction_wrapper = staticmethod(topk_reduction_wrapper)
 
 
 NSA = NSANamespace()
