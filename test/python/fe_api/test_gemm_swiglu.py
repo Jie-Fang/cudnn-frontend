@@ -9,7 +9,6 @@ from fe_api.test_gemm_swiglu_utils import (
     with_gemm_swiglu_params,
     gemm_swiglu_init,
 )
-from cuda.bindings import driver as cuda
 
 
 """
@@ -36,6 +35,7 @@ def test_gemm_swiglu_compile_execute(
 ):
     try:
         from cudnn import GemmSwigluSm100
+        from cuda.bindings import driver as cuda
     except ImportError as e:
         pytest.skip(
             "Environment not supported: cudnn optional dependencies not installed"
@@ -127,6 +127,7 @@ def test_gemm_swiglu_wrapper(
 ):
     try:
         from cudnn import gemm_swiglu_wrapper_sm100
+        from cuda.bindings import driver as cuda
     except ImportError as e:
         print(f"ImportError: {e}")
         pytest.skip(

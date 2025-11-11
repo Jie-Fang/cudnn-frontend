@@ -3,7 +3,6 @@ import torch
 import pytest
 
 from test_utils import torch_fork_set_rng
-from cuda.bindings import driver as cuda
 from fe_api.test_gemm_amax_utils import (
     with_gemm_amax_params,
 )
@@ -32,6 +31,7 @@ def test_gemm_amax_compile_execute(
 ):
     try:
         from cudnn import GemmAmaxSm100
+        from cuda.bindings import driver as cuda
         from fe_api.test_gemm_amax_utils import (
             allocate_input_tensors,
             allocate_output_tensors,
@@ -72,9 +72,6 @@ def test_gemm_amax_compile_execute(
     c_torch, amax_torch = allocate_output_tensors(
         cfg["m"], cfg["n"], cfg["l"], cfg["c_dtype"], cfg["c_major"]
     )
-
-    import os
-    import errno
 
     gemm = GemmAmaxSm100(
         sample_a=a_torch,
@@ -132,6 +129,7 @@ def test_gemm_amax_wrapper(
 ):
     try:
         from cudnn import gemm_amax_wrapper_sm100
+        from cuda.bindings import driver as cuda
         from fe_api.test_gemm_amax_utils import (
             allocate_input_tensors,
             allocate_output_tensors,

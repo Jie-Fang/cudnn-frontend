@@ -4,8 +4,59 @@ Contains CPU/GPU reference implementations for verification.
 """
 
 import torch
-from nsa_utils import convert_thd_to_bshd, convert_bshd_to_thd
 import cudnn
+import math
+
+
+def convert_thd_to_bshd(thd_tensor, seq_len: torch.Tensor, s: int):
+    assert thd_tensor.dim() == 3
+    t, h, d = thd_tensor.size()
+
+    if seq_len.dim() == 1:
+        seq_len = seq_len.view(-1, 1, 1, 1)
+    assert seq_len.dim() == 4
+    assert seq_len.size(1) == seq_len.size(2) == seq_len.size(3) == 1
+    b = seq_len.size(0)
+    seq_len = seq_len.flatten()
+
+    bshd_tensor = torch.zeros(
+        (b, s, h, d), dtype=thd_tensor.dtype, device=thd_tensor.device
+    )
+
+    cumulative_seq_len = torch.cumsum(seq_len, dim=0) - seq_len
+    for bi in range(b):
+        t_beg = cumulative_seq_len[bi]
+        t_end = t_beg + seq_len[bi]
+        bshd_tensor[bi, : seq_len[bi], :, :] = thd_tensor[t_beg:t_end, :, :]
+
+    # Return a view with layout (b, h, s, d) while keeping strides as if (b, s, h, d)
+    return bshd_tensor.permute(0, 2, 1, 3)
+
+
+def convert_bshd_to_thd(bshd_tensor, seq_len: torch.Tensor, maxT: int):
+    assert bshd_tensor.dim() == 4
+    b, h, s, d = bshd_tensor.size()
+
+    if seq_len.dim() == 1:
+        seq_len = seq_len.view(-1, 1, 1, 1)
+    assert seq_len.dim() == 4
+    assert seq_len.size(1) == seq_len.size(2) == seq_len.size(3) == 1
+    seq_len = seq_len.flatten()
+
+    thd_tensor = torch.zeros(
+        (maxT, h, d), dtype=bshd_tensor.dtype, device=bshd_tensor.device
+    )
+
+    # Interpret input as (b, s, h, d) in memory while keeping the (b, h, s, d) layout
+    bshd_base = bshd_tensor.permute(0, 2, 1, 3)
+
+    cumulative_seq_len = torch.cumsum(seq_len, dim=0) - seq_len
+    for bi in range(b):
+        t_beg = cumulative_seq_len[bi]
+        t_end = t_beg + seq_len[bi]
+        thd_tensor[t_beg:t_end, :, :] = bshd_base[bi, : seq_len[bi], :, :]
+
+    return thd_tensor
 
 
 def run_ref_nsa_selection_attention(
@@ -391,7 +442,7 @@ def check_ref_nsa_selection_attention(
         block_indices,
         block_counts,
         test_config["block_size"],
-        test_config["softmax_scale"],
+        test_config["scale_softmax"],
         dtype=test_config["dtype"],
     )
 
@@ -407,21 +458,24 @@ def check_ref_nsa_compression_attention(
     O,
     LSE=None,
     scale_output=1.0,
+    scale_softmax=None,
     atol=0.01,
     rtol=1e-05,
     test_config=None,
-    scale_softmax=None,
 ):
     if test_config["skip_ref"]:
         print(
             f'Skipped reference computation for compression attention with config: b={test_config["b"]}, seq_len={test_config["s_q"]}, h_q={test_config["h_q"]}, h_k={test_config["h_k"]}, d={test_config["d"]}'
         )
         return
-
-    used_scale_softmax = (
+    scale_softmax = (
         scale_softmax
         if scale_softmax is not None
-        else (test_config["softmax_scale"] if test_config is not None else 1.0)
+        else (
+            test_config["scale_softmax"]
+            if test_config is not None
+            else 1.0 / math.sqrt(test_config["d_qk"])
+        )
     )
 
     if test_config["layout"] == "thd":
@@ -440,7 +494,7 @@ def check_ref_nsa_compression_attention(
             q_bshd,
             k_bshd,
             v_bshd,
-            scale_softmax=used_scale_softmax,
+            scale_softmax=scale_softmax,
             scale_output=scale_output,
             lse_calculation=LSE is not None,
         )
@@ -461,7 +515,7 @@ def check_ref_nsa_compression_attention(
             Q,
             K,
             V,
-            scale_softmax=used_scale_softmax,
+            scale_softmax=scale_softmax,
             scale_output=scale_output,
             lse_calculation=LSE is not None,
         )
@@ -506,7 +560,7 @@ def check_ref_nsa_swa(
         q_ref,
         k_ref,
         v_ref,
-        attn_scale=test_config["softmax_scale"],
+        attn_scale=test_config["scale_softmax"],
         padding=(seq_len_q, seq_len_kv) if test_config["layout"] == "thd" else None,
         left_bound=test_config["window_size"],
         right_bound=0,
