@@ -101,7 +101,6 @@ TEST_CONFIGS_BWD = {
 }
 
 BLOCKED_CONFIGS_FWD = [
-    "d128_f8e4m3_paged",
     "sq1_skv1024_f8e5m2", # fails on prefill as well
 ]
 
@@ -215,8 +214,8 @@ def generate_graph_fwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d
         num_blocks = table_size * b
 
         q = graph_fwd.tensor(uid=GraphFwdUid.q, dim=(b, h_q, s_qo, d_qk), stride=(s_qo * h_q * d_qk, d_qk, h_q * d_qk, 1), data_type=cudnn_itype)
-        k = graph_fwd.tensor(uid=GraphFwdUid.k, dim=(num_blocks, h_k, block_size, d_qk), stride=(block_size * h_k * d_qk, d_qk, h_k * d_qk, 1), data_type=cudnn_itype)
-        v = graph_fwd.tensor(uid=GraphFwdUid.v, dim=(num_blocks, h_v, block_size, d_vo), stride=(block_size * h_v * d_vo, d_vo, h_v * d_vo, 1), data_type=cudnn_itype)
+        k = graph_fwd.tensor(uid=GraphFwdUid.k, dim=(num_blocks, h_k, block_size, d_qk), stride=(block_size * h_k * d_qk, block_size * d_qk, d_qk, 1), data_type=cudnn_itype)
+        v = graph_fwd.tensor(uid=GraphFwdUid.v, dim=(num_blocks, h_v, block_size, d_vo), stride=(block_size * h_v * d_vo, block_size * d_vo, d_vo, 1), data_type=cudnn_itype)
 
         use_padding_mask = True
         kv_seq_len = graph_fwd.tensor(uid=GraphFwdUid.kv_seq_len, dim=(b, 1, 1, 1), stride=(1, 1, 1, 1), data_type=cudnn.data_type.INT32)
@@ -319,37 +318,22 @@ def generate_graph_bwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d
 
 def create_paged_container_and_block_table(tensor, block_size):
     B, H, S, D = tensor.shape
-    # num_blocks = math.ceil(S/block_size) * B
     blocks_per_batch = math.ceil(S / block_size)
 
-    # Only needed if S is not a multiple of block_size
-    padding_seq = (blocks_per_batch * block_size) - S
+    padding_seq = blocks_per_batch * block_size - S
     if padding_seq > 0:
         zeros = torch.zeros(B, H, padding_seq, D, device="cuda", dtype=tensor.dtype)
-        cat_tensor = torch.cat((tensor, zeros), axis=2)
+        cat_tensor = torch.cat((tensor, zeros), dim=2)
     else:
         cat_tensor = tensor
 
-    # Create a container by splitting on the S dimension and concatenating at the block dimension
-    # Its dimensions are [num_blocks, H, block_size, D] with num_blocks = B * blocks_per_batch
-    container = torch.cat((cat_tensor.clone()).chunk(blocks_per_batch, dim=2), dim=0)
+    container = torch.cat(cat_tensor.chunk(blocks_per_batch, dim=2), dim=0)
 
-    # Create the block table
     table_size = math.ceil(S / block_size)
-    block_table_temp = torch.linspace(
-        0, B * table_size - 1, B * table_size, device="cuda", dtype=torch.int32
-    ).reshape(table_size, 1, B, 1)
+    block_table_temp = torch.linspace(0, B * table_size - 1, B * table_size, device="cuda", dtype=torch.int32).reshape(table_size, 1, B, 1)
     block_table_temp = torch.transpose(block_table_temp, 0, 2)
 
-    # Make batch size outer dimension (cuDNN backend preference)
-    block_table = (
-        torch.zeros(blocks_per_batch * B)
-        .int()
-        .cuda()
-        .as_strided(
-            (B, 1, blocks_per_batch, 1), (blocks_per_batch, blocks_per_batch, 1, 1)
-        )
-    )
+    block_table = (torch.zeros(blocks_per_batch * B, device="cuda", dtype=torch.int32).as_strided((B, 1, blocks_per_batch, 1), (blocks_per_batch, blocks_per_batch, 1, 1)))
     block_table.copy_(block_table_temp)
 
     return (container, block_table)
@@ -448,12 +432,13 @@ def test_sdpa_fwd_fp8(name):
     v_gpu = (v_gen * get_fp8_scale_factor(v_amax, torch_itype)).to(torch_itype)
 
     if is_paged_attention:
-        # Create non contiguous containers with block tables for K and V from the contiguous k_gpu and v_gpu
-        container_k_gpu, k_block_table_gpu = create_paged_container_and_block_table(k_gpu, block_size)
-        container_v_gpu, v_block_table_gpu = create_paged_container_and_block_table(v_gpu, block_size)
+        k_gpu_bhsd = torch.einsum('bshd->bhsd', k_gpu).contiguous()
+        v_gpu_bhsd = torch.einsum('bshd->bhsd', v_gpu).contiguous()
+        container_k_gpu, k_block_table_gpu = create_paged_container_and_block_table(k_gpu_bhsd, block_size)
+        container_v_gpu, v_block_table_gpu = create_paged_container_and_block_table(v_gpu_bhsd, block_size)
 
-    kv_seq_len_gpu = torch.full((b, 1, 1, 1), s_kv, device="cuda")
-    q_seq_len_gpu = torch.full((b, 1, 1, 1), s_qo, device="cuda")
+    kv_seq_len_gpu = torch.full((b, 1, 1, 1), s_kv, device="cuda", dtype=torch.int32)
+    q_seq_len_gpu = torch.full((b, 1, 1, 1), s_qo, device="cuda", dtype=torch.int32)
     o_gpu = torch.nans(b, s_qo, h_q, d_vo, dtype=torch_otype, device="cuda")
     stats_gpu = torch.nans(b, h_q, s_qo, 1, dtype=torch.float, device="cuda")
 
@@ -491,7 +476,7 @@ def test_sdpa_fwd_fp8(name):
 
     if is_paged_attention:
         variant_pack[int(GraphFwdUid.k)] = container_k_gpu
-        variant_pack[int(GraphFwdUid.v)] = container_v_gpu 
+        variant_pack[int(GraphFwdUid.v)] = container_v_gpu
         variant_pack[int(GraphFwdUid.kv_seq_len)] = kv_seq_len_gpu
         variant_pack[int(GraphFwdUid.q_seq_len)] = q_seq_len_gpu
         variant_pack[int(GraphFwdUid.k_block_table)] = k_block_table_gpu
