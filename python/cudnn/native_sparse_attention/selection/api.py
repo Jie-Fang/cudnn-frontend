@@ -167,10 +167,10 @@ class SelectionAttention(APIBase):
             self._logger.error("CUDA is not available")
             raise RuntimeError("CUDA is not available")
 
+        self._logger.debug("Checking environment")
         device = torch.cuda.current_device()
         major, minor = torch.cuda.get_device_capability(device)
         compute_capability = major * 10 + minor
-
         if compute_capability < 90:
             self._logger.error(
                 f"Requires SM90+ compute capability, but found SM{compute_capability} on device {device}"
@@ -178,6 +178,8 @@ class SelectionAttention(APIBase):
             raise RuntimeError(
                 f"Requires SM90+ compute capability, but found SM{compute_capability} on device {device}"
             )
+        if compute_capability == 103:
+            raise RuntimeError("cuteDSL SelectionAttention is not supported on SM103")
 
         self._is_supported = True
         self._logger.debug("check_support completed successfully")

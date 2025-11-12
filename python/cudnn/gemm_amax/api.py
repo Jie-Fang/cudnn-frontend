@@ -325,6 +325,8 @@ class GemmAmaxSm100(APIBase):
             raise RuntimeError(
                 f"GemmAmax requires SM100+ compute capability, but found SM{compute_capability} on device {device}"
             )
+        if compute_capability == 103:
+            raise RuntimeError("cuteDSL GemmAmax is not supported on SM103")
 
         self._is_supported = True
         self._logger.debug("check_support completed successfully")
