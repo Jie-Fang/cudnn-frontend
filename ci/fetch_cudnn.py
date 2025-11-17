@@ -91,15 +91,16 @@ def fetch_cudnn(base_url, cuda_version):
         stderr=subprocess.STDOUT,
     )
 
-    print(f"Copying /cudnn to /debug_cudnn")
+    print(f"Moving /cudnn to /debug_cudnn")
 
     subprocess.run(
-        ["cp", "-r", "/cudnn", "/debug_cudnn"],
+        ["mv", "/cudnn", "/debug_cudnn"],
         check=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.STDOUT,
     )
 
+    print(f"Copying /cudnn to /debug_cudnn")
     subprocess.run(
         ["cp", "-r", "/debug_cudnn/lib", "/debug_cudnn/lib64"],
         check=True,
