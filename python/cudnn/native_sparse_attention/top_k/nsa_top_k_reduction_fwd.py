@@ -136,9 +136,13 @@ class FineGrainedReductionQK:
             cute.make_layout(
                 (s_q, head_dim, (h_r, h_k, b)),
                 stride=(
-                    head_dim,
+                    head_dim * h_r * h_k,
                     1,
-                    (s_q * head_dim * h_k, s_q * head_dim, stride_b_q),
+                    (
+                        head_dim * h_k,
+                        head_dim,
+                        stride_b_q,
+                    ),  # TODO: head ordering is diff?
                 ),
             ),
         )
@@ -148,9 +152,9 @@ class FineGrainedReductionQK:
             cute.make_layout(
                 (s_k, head_dim, (1, h_k, b)),
                 stride=(
-                    head_dim,
+                    head_dim * h_k,
                     1,
-                    (0, s_k * head_dim, stride_b_k),
+                    (0, head_dim, stride_b_k),
                 ),
             ),
         )
@@ -168,7 +172,7 @@ class FineGrainedReductionQK:
             Topk_scores.iterator,
             cute.make_layout(
                 (s_q, self.k_value, (1, h_k, b)),
-                stride=(self.k_value, 1, (0, s_q * self.k_value, stride_b_topk_scores)),
+                stride=(self.k_value * h_k, 1, (0, self.k_value, stride_b_topk_scores)),
             ),
         )
 
@@ -177,9 +181,9 @@ class FineGrainedReductionQK:
             cute.make_layout(
                 (s_q, self.k_value, (1, h_k, b)),  # (s_q, k, h_k, b)
                 stride=(
-                    self.k_value,
+                    self.k_value * h_k,
                     1,
-                    (0, s_q * self.k_value, stride_b_topk_indices),
+                    (0, self.k_value, stride_b_topk_indices),
                 ),
             ),
         )
@@ -1096,273 +1100,3 @@ class FineGrainedReductionQK:
                 if is_larger_score or is_tie_better:
                     scores_heap_rf[0] = score
                     idx_heap_rf[0] = gmem_idx
-
-
-def run(
-    element_dtype: Type[cutlass.Numeric],
-    acc_dtype: Type[cutlass.Numeric],
-    batch: int,
-    s_q: int | Tuple[int, ...],
-    s_k: int | Tuple[int, ...],
-    h_q: int,
-    h_k: int,
-    head_dim: int,
-    selection_block_size: int,
-    compress_stride: int,
-    k_value: int,
-    mma_tiler_mn: Tuple[int, int],
-    is_causal: bool,
-    skip_ref_check: bool,
-    do_profile: bool,
-):
-    print("Running Blackwell Fine Grained Reduction QK new opt test with:")
-    print(f"  element_dtype: {element_dtype}")
-    print(f"  acc_dtype: {acc_dtype}")
-    print(f"  batch: {batch}")
-    print(f"  s_q: {s_q}")
-    print(f"  s_k: {s_k}")
-    print(f"  h_q: {h_q}")
-    print(f"  h_k: {h_k}")
-    print(f"  head_dim: {head_dim}")
-    print(f"  selection_block_size: {selection_block_size}")
-    print(f"  compress_stride: {compress_stride}")
-    print(f"  k_value: {k_value}")
-    print(f"  mma_tiler_mn: {mma_tiler_mn}")
-    print(f"  is_causal: {is_causal}")
-    print(f"  skip_ref_check: {skip_ref_check}")
-    print(f"  do_profile: {do_profile}")
-
-    torch.manual_seed(42)
-
-    d = selection_block_size // compress_stride
-
-    h_r = h_q // h_k
-
-    orig_batch = batch
-    cumulative_s_q = [0]
-    cumulative_s_k = [0]
-    varlen = False
-    if isinstance(s_q, tuple):
-        varlen = True
-        for i in range(batch):
-            cumulative_s_q.append(cumulative_s_q[-1] + s_q[i])
-            cumulative_s_k.append(cumulative_s_k[-1] + s_k[i])
-        s_q_max = max(s_q)
-        s_k_max = max(s_k)
-        s_q = sum(s_q)
-        s_k = sum(s_k)
-        batch = 1
-    else:
-        s_q_max = s_q
-        s_k_max = s_k
-
-    q_torch = torch.rand(batch, h_q, s_q, head_dim, device="cuda").to(
-        cutlass_torch.dtype(element_dtype)
-    )
-    k_torch = torch.rand(batch, h_k, s_k, head_dim, device="cuda").to(
-        cutlass_torch.dtype(element_dtype)
-    )
-    lse_torch = torch.rand(batch, h_q, s_q, device="cuda").to(
-        cutlass_torch.dtype(acc_dtype)
-    )
-    lse_torch = -1.0 * lse_torch  # assume LSE is -orig_lse * log2(e)
-
-    cumulative_s_q_torch_tensor = (
-        torch.tensor(cumulative_s_q, dtype=torch.int32).cuda() if varlen else None
-    )
-    cumulative_s_k_torch_tensor = (
-        torch.tensor(cumulative_s_k, dtype=torch.int32).cuda() if varlen else None
-    )
-    cumulative_s_q_cute_tensor = (
-        from_dlpack(cumulative_s_q_torch_tensor).mark_layout_dynamic()
-        if varlen
-        else None
-    )
-    cumulative_s_k_cute_tensor = (
-        from_dlpack(cumulative_s_k_torch_tensor).mark_layout_dynamic()
-        if varlen
-        else None
-    )
-
-    q_cute = (
-        from_dlpack(q_torch, assumed_align=16)
-        .mark_layout_dynamic(leading_dim=3)
-        .mark_compact_shape_dynamic(
-            mode=3, stride_order=q_torch.dim_order(), divisibility=64
-        )
-    )
-    k_cute = (
-        from_dlpack(k_torch, assumed_align=16)
-        .mark_layout_dynamic(leading_dim=3)
-        .mark_compact_shape_dynamic(
-            mode=3, stride_order=k_torch.dim_order(), divisibility=64
-        )
-    )
-    lse_cute = from_dlpack(lse_torch, assumed_align=16).mark_layout_dynamic(
-        leading_dim=2
-    )
-
-    topk_scores_torch = (
-        torch.zeros(batch, h_k, s_q, k_value, device="cuda")
-        .fill_(float("-inf"))
-        .to(cutlass_torch.dtype(acc_dtype))
-    )
-    topk_indices_torch = torch.zeros(batch, h_k, s_q, k_value, device="cuda").to(
-        cutlass_torch.dtype(cutlass.Int32)
-    )
-    topk_scores_cute = (
-        from_dlpack(topk_scores_torch, assumed_align=16)
-        .mark_layout_dynamic(leading_dim=3)
-        .mark_compact_shape_dynamic(
-            mode=3, stride_order=topk_scores_torch.dim_order(), divisibility=k_value
-        )
-    )
-    topk_indices_cute = (
-        from_dlpack(topk_indices_torch, assumed_align=16)
-        .mark_layout_dynamic(leading_dim=3)
-        .mark_compact_shape_dynamic(
-            mode=3, stride_order=topk_indices_torch.dim_order(), divisibility=k_value
-        )
-    )
-
-    mma_tiler = (*mma_tiler_mn, head_dim)
-
-    scale_softmax = 1.0 / math.sqrt(head_dim)
-    log2_e = math.log2(math.e)
-    softmax_scale_log2_e = scale_softmax * log2_e
-
-    fine_grained_reduction_qk = FineGrainedReductionQK(
-        element_dtype,
-        acc_dtype,
-        k_value,
-        selection_block_size,
-        compress_stride,
-        mma_tiler,
-        is_causal,
-    )
-
-    current_stream = cutlass_torch.default_stream()
-    problem_size = (orig_batch, s_q_max, s_k_max, h_q, h_k, head_dim)
-
-    start_time = time.time()
-
-    compiled_fine_grained_reduction_qk = cute.compile(
-        fine_grained_reduction_qk,
-        problem_size,
-        q_cute,
-        k_cute,
-        lse_cute,
-        topk_scores_cute,
-        topk_indices_cute,
-        softmax_scale_log2_e,
-        cumulative_s_q_cute_tensor,
-        cumulative_s_k_cute_tensor,
-        current_stream,
-    )
-    end_time = time.time()
-    print(f"Compilation time: {end_time - start_time} seconds")
-
-    for i in range(20):
-        compiled_fine_grained_reduction_qk(
-            problem_size,
-            q_cute,
-            k_cute,
-            lse_cute,
-            topk_scores_cute,
-            topk_indices_cute,
-            softmax_scale_log2_e,
-            cumulative_s_q_cute_tensor,
-            cumulative_s_k_cute_tensor,
-            current_stream,
-        )
-
-    # ========== Profile the kernel ==========#
-    if do_profile:
-        start = torch.cuda.Event(enable_timing=True)
-        end = torch.cuda.Event(enable_timing=True)
-        # Warm-up
-        for _ in range(5):
-            compiled_fine_grained_reduction_qk(
-                problem_size,
-                q_cute,
-                k_cute,
-                lse_cute,
-                topk_scores_cute,
-                topk_indices_cute,
-                softmax_scale_log2_e,
-                cumulative_s_q_cute_tensor,
-                cumulative_s_k_cute_tensor,
-                current_stream,
-            )
-        torch.cuda.synchronize()
-
-        iters = 10
-        start.record()
-        for _ in range(iters):
-            compiled_fine_grained_reduction_qk(
-                problem_size,
-                q_cute,
-                k_cute,
-                lse_cute,
-                topk_scores_cute,
-                topk_indices_cute,
-                softmax_scale_log2_e,
-                cumulative_s_q_cute_tensor,
-                cumulative_s_k_cute_tensor,
-                current_stream,
-            )
-        end.record()
-        torch.cuda.synchronize()
-        print(f"CuTe Kernel time (ms): {start.elapsed_time(end) / iters:.3f}")
-
-
-if __name__ == "__main__":
-
-    def parse_comma_separated_ints(s: str):
-        try:
-            seqlen = tuple(int(x.strip()) for x in s.split(","))
-            if len(seqlen) == 1:
-                return seqlen[0]
-            return seqlen
-        except ValueError:
-            raise argparse.ArgumentTypeError(
-                "Invalid format. Expected comma-separated integers."
-            )
-
-    parser = argparse.ArgumentParser(description="Fine-grained reduction QK")
-    parser.add_argument("--element_dtype", type=cutlass.dtype, default=cutlass.Float16)
-    parser.add_argument("--acc_dtype", type=cutlass.dtype, default=cutlass.Float32)
-    parser.add_argument("--batch", type=int, default=1)
-    parser.add_argument("--s_q", type=parse_comma_separated_ints, default=8192)
-    parser.add_argument("--s_k", type=parse_comma_separated_ints, default=256)
-    parser.add_argument("--h_q", type=int, default=64)
-    parser.add_argument("--h_k", type=int, default=4)
-    parser.add_argument("--head_dim", type=int, default=128)
-    parser.add_argument("--selection_block_size", type=int, default=64)
-    parser.add_argument("--compress_stride", type=int, default=32)
-    parser.add_argument("--k_value", type=int, default=16)
-    parser.add_argument(
-        "--mma_tiler_mn", type=parse_comma_separated_ints, default=(128, 128)
-    )
-    parser.add_argument("--is_causal", action="store_true")
-    parser.add_argument("--skip_ref_check", action="store_true")
-    parser.add_argument("--do_profile", action="store_true")
-    args = parser.parse_args()
-
-    run(
-        args.element_dtype,
-        args.acc_dtype,
-        args.batch,
-        args.s_q,
-        args.s_k,
-        args.h_q,
-        args.h_k,
-        args.head_dim,
-        args.selection_block_size,
-        args.compress_stride,
-        args.k_value,
-        args.mma_tiler_mn,
-        args.is_causal,
-        args.skip_ref_check,
-        args.do_profile,
-    )

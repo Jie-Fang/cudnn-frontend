@@ -44,6 +44,8 @@ def test_nsa_topk_reduction_compile_execute(
         k_value=k_value,
         is_causal=is_causal,
         mma_tiler_mn=mma_tiler_mn,
+        s_q_default_override=4096,
+        s_kv_default_override=128,
     )
 
     Q, K, _, LSE, _, _, cum_seqlen_q, cum_seqlen_kv, max_s_q, max_s_kv = (
@@ -118,6 +120,8 @@ def test_nsa_topk_reduction_wrapper(
         k_value=k_value,
         is_causal=is_causal,
         mma_tiler_mn=mma_tiler_mn,
+        s_q_default_override=4096,
+        s_kv_default_override=128,
     )
 
     Q, K, _, LSE, _, _, cum_seqlen_q, cum_seqlen_kv, max_s_q, max_s_kv = (

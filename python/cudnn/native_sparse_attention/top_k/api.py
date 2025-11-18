@@ -1,6 +1,4 @@
 from .nsa_top_k_reduction_fwd import FineGrainedReductionQK
-from typing import Tuple
-import math
 
 from cuda.bindings import driver as cuda
 import torch
@@ -16,6 +14,17 @@ from cudnn.api_base import APIBase
 
 
 class TopKReduction(APIBase):
+    """
+    Top-K Reduction for Native Sparse Attention.
+
+    This class performs top-k reduction on attention scores to identify the most important
+    key-value pairs for each query position.
+
+    Note:
+        The returned values calculated by the kernel exclude the first block and neighboring blocks from the reduction.
+        As a result, it is expected to see rows of all -inf values and -1 values in the final topk_scores and topk_indices output tensors, respectively.
+    """
+
     def __init__(
         self,
         sample_q: torch.Tensor,
@@ -23,17 +32,17 @@ class TopKReduction(APIBase):
         sample_lse: torch.Tensor,
         sample_topk_scores: torch.Tensor,
         sample_topk_indices: torch.Tensor,
-        sample_cum_seqlen_q: torch.Tensor | None = None,
-        sample_cum_seqlen_k: torch.Tensor | None = None,
-        max_s_q: int | None = None,
-        max_s_k: int | None = None,
+        sample_cum_seqlen_q: Optional[torch.Tensor] = None,
+        sample_cum_seqlen_k: Optional[torch.Tensor] = None,
+        max_s_q: Optional[int] = None,
+        max_s_k: Optional[int] = None,
         acc_dtype: torch.dtype = torch.float32,
         k_value: int = 16,
         selection_block_size: int = 64,
         compress_stride: int = 32,
         is_causal: bool = True,
         mma_tiler_mn: Tuple[int, int] = (128, 128),
-        scale_softmax: float | None = None,
+        scale_softmax: Optional[float] = None,
     ):
         super().__init__()
         self._kernel = FineGrainedReductionQK
@@ -312,8 +321,8 @@ class TopKReduction(APIBase):
         lse_tensor: torch.Tensor,
         topk_scores_tensor: torch.Tensor,
         topk_indices_tensor: torch.Tensor,
-        cumulative_s_q_tensor: torch.Tensor | None = None,
-        cumulative_s_k_tensor: torch.Tensor | None = None,
+        cumulative_s_q_tensor: Optional[torch.Tensor] = None,
+        cumulative_s_k_tensor: Optional[torch.Tensor] = None,
         current_stream: Optional[cuda.CUstream] = None,
     ) -> None:
         self._logger.debug("Entering execute")
@@ -422,41 +431,43 @@ def topk_reduction_wrapper(
     q_tensor: torch.Tensor,
     k_tensor: torch.Tensor,
     lse_tensor: torch.Tensor,
-    cum_seqlen_q_tensor: torch.Tensor | None = None,
-    cum_seqlen_k_tensor: torch.Tensor | None = None,
-    max_s_q: int | None = None,
-    max_s_k: int | None = None,
+    cum_seqlen_q_tensor: Optional[torch.Tensor] = None,
+    cum_seqlen_k_tensor: Optional[torch.Tensor] = None,
+    max_s_q: Optional[int] = None,
+    max_s_k: Optional[int] = None,
     acc_dtype: torch.dtype = torch.float32,
     k_value: int = 16,
     selection_block_size: int = 64,
     compress_stride: int = 32,
     is_causal: bool = True,
     mma_tiler_mn: Tuple[int, int] = (128, 128),
-    scale_softmax: float | None = None,
+    scale_softmax: Optional[float] = None,
     current_stream: Optional[cuda.CUstream] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
 
     _logger.debug("topk_reduction_wrapper: Entering topk_reduction_wrapper")
     topk_scores_tensor, topk_indices_tensor = None, None
     if cum_seqlen_q_tensor is not None and cum_seqlen_k_tensor is not None:  # T,H,D
-        total_seq_len, h_k = k_tensor.shape[:2]
+        total_seq_len_q = cum_seqlen_q_tensor[-1].item()
+        h_k = k_tensor.shape[1]
         topk_scores_tensor = torch.empty(
-            total_seq_len, h_k, k_value, dtype=acc_dtype
-        ).cuda()
+            total_seq_len_q, h_k, k_value, dtype=acc_dtype, device=q_tensor.device
+        )
         topk_indices_tensor = torch.empty(
-            total_seq_len, h_k, k_value, dtype=torch.int32
-        ).cuda()
+            total_seq_len_q, h_k, k_value, dtype=torch.int32, device=q_tensor.device
+        )
     elif cum_seqlen_q_tensor is None and cum_seqlen_k_tensor is None:  # B,H,S,D
-        b, h_k, s_q, _ = k_tensor.shape
-        topk_scores_tensor = (
-            torch.empty(b, s_q, h_k, k_value, dtype=acc_dtype).transpose(1, 2).cuda()
-        )
-        topk_indices_tensor = (
-            torch.empty(b, s_q, h_k, k_value, dtype=torch.int32).transpose(1, 2).cuda()
-        )
+        b, _, s_q, _ = q_tensor.shape
+        _, h_k, _, _ = k_tensor.shape
+        topk_scores_tensor = torch.empty(
+            b, s_q, h_k, k_value, dtype=acc_dtype, device=q_tensor.device
+        ).transpose(1, 2)
+        topk_indices_tensor = torch.empty(
+            b, s_q, h_k, k_value, dtype=torch.int32, device=q_tensor.device
+        ).transpose(1, 2)
     else:
         raise ValueError(
-            "cum_seqlen_q_tensor and cum_seqlen_k_tensor must either both be None (B,H,S,D) or both not None (T,H,D), got {cum_seqlen_q_tensor} and {cum_seqlen_k_tensor}"
+            f"cum_seqlen_q_tensor and cum_seqlen_k_tensor must either both be None (B,H,S,D) or both not None (T,H,D), got {cum_seqlen_q_tensor} and {cum_seqlen_k_tensor}"
         )
 
     cache_key = (

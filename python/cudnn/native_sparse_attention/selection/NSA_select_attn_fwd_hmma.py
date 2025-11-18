@@ -18,43 +18,11 @@ from cutlass._mlir.dialects import llvm
 """
 A NSA(Native Sparse Attention) attention forward pass example for NVIDIA Ampere SM90 architecture using Cute DSL.
 
-To run this example:
-
-.. code-block:: bash
-
-    python examples/hopper/NSA_select_attn_fwd.py --seq_lens 1024 2048 3072 4096 --head_num_q 4 --head_num_kv 1 --topk_ratio 0.5 --head_dim 128 --block_size 64 --skip-check
-
-The above example tests the performance of NSA attention with batch 4, variable sequence lengths 1024, 2048, 3072, 4096, GQA group size 4(head_num_q/head_num_kv), head dimension 128, block size 64. The topk_ratio is 0.5, which means half of tokens are selected.
-
 There are some constraints for this example:
 * Only Float16 and BFloat16 are supported.
 * Accumulation type is Float32.
 * Supported block sizes(16, 32, 64) combined with GQA group sizes(1, 2, 4, 8, 32, 64) 
 """
-
-
-def parse_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--seq_lens", nargs="+", type=int, default=[8192, 8192, 8192, 8192]
-    )
-    parser.add_argument("--head_num_q", type=int, default=8)
-    parser.add_argument("--head_num_kv", type=int, default=2)
-    parser.add_argument("--head_dim", type=int, default=128)
-    parser.add_argument("--value_dim", type=int, default=128)
-    parser.add_argument("--block_size", type=int, default=64)
-    parser.add_argument("--topk_sizes", nargs="+", type=int, default=[16, 16, 16, 16])
-    parser.add_argument("--topk_ratio", type=float, default=-1.0)
-    parser.add_argument(
-        "--skip-check",
-        action="store_true",
-        default=False,
-        help="skip correctness check that compare output with pytorch",
-    )
-
-    parser.add_argument("--dtype", type=cutlass.dtype, default=cutlass.BFloat16)
-    parser.add_argument("--acc_dtype", type=cutlass.dtype, default=cutlass.Float32)
-    return parser.parse_args()
 
 
 class HopperSelectAttentionFwd:

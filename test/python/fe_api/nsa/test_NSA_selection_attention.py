@@ -71,9 +71,11 @@ def test_nsa_selection_compile_execute(
         sample_m=M,
         sample_block_indices=block_indices,
         sample_block_counts=block_counts,
-        sample_seq_offsets=cum_seqlen_q,
+        sample_cum_seqlen_q=cum_seqlen_q,
+        sample_cum_seqlen_k=cum_seqlen_kv,
+        max_s_q=max_s_q,
+        max_s_k=max_s_kv,
         acc_dtype=cfg["acc_dtype"],
-        max_s=max_s_q,
         block_size=cfg["block_size"],
         scale_softmax=cfg["scale_softmax"],
     )
@@ -88,7 +90,8 @@ def test_nsa_selection_compile_execute(
         m_tensor=M,
         block_indices_tensor=block_indices,
         block_counts_tensor=block_counts,
-        seq_offsets_tensor=cum_seqlen_q,
+        cum_seqlen_q_tensor=cum_seqlen_q,
+        cum_seqlen_k_tensor=cum_seqlen_kv,
         scale_softmax=cfg["scale_softmax"],
         current_stream=stream,
     )
@@ -160,9 +163,11 @@ def test_nsa_selection_wrapper(
         v_tensor=V,
         block_indices_tensor=block_indices,
         block_counts_tensor=block_counts,
-        seq_offsets_tensor=cum_seqlen_q,
+        cum_seqlen_q_tensor=cum_seqlen_q,
+        cum_seqlen_k_tensor=cum_seqlen_kv,
         block_size=cfg["block_size"],
         scale_softmax=cfg["scale_softmax"],
+        o_dtype=cfg["dtype"],
         acc_dtype=cfg["acc_dtype"],
     )
 

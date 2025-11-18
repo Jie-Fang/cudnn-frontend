@@ -53,13 +53,7 @@ def test_nsa_swa_compile_execute(
         max_s_q,
         max_s_kv,
     ) = allocate_input_tensors(cfg)
-    (
-        q_ragged_offset_tensor,
-        k_ragged_offset_tensor,
-        v_ragged_offset_tensor,
-        o_ragged_offset_tensor,
-        stats_ragged_offset_tensor,
-    ) = generate_ragged_offset(cfg)
+
     O, Stats, _, _, _ = allocate_output_tensors(cfg)
     cudnn_handle = cudnn.create_handle()
 
@@ -71,16 +65,10 @@ def test_nsa_swa_compile_execute(
         sample_stats=Stats,
         sample_seq_len_q=actual_s_q,
         sample_seq_len_kv=actual_s_kv,
-        sample_q_ragged_offset=q_ragged_offset_tensor,
-        sample_k_ragged_offset=k_ragged_offset_tensor,
-        sample_v_ragged_offset=v_ragged_offset_tensor,
-        sample_o_ragged_offset=o_ragged_offset_tensor,
-        sample_stats_ragged_offset=stats_ragged_offset_tensor,
         max_seq_len_q=max_s_q,
         max_seq_len_kv=max_s_kv,
         left_bound=cfg["window_size"],
         right_bound=0,
-        is_infer=False,
         attn_scale=cfg["scale_softmax"],
         intermediate_data_type=cfg["acc_dtype"],
         compute_data_type=cfg["acc_dtype"],
@@ -95,11 +83,6 @@ def test_nsa_swa_compile_execute(
         v_tensor=V,
         seq_len_q_tensor=actual_s_q,
         seq_len_kv_tensor=actual_s_kv,
-        q_ragged_offset_tensor=q_ragged_offset_tensor,
-        k_ragged_offset_tensor=k_ragged_offset_tensor,
-        v_ragged_offset_tensor=v_ragged_offset_tensor,
-        o_ragged_offset_tensor=o_ragged_offset_tensor,
-        stats_ragged_offset_tensor=stats_ragged_offset_tensor,
         o_tensor=O,
         stats_tensor=Stats,
     )
@@ -156,13 +139,6 @@ def test_nsa_swa_wrapper(
         max_s_q,
         max_s_kv,
     ) = allocate_input_tensors(cfg)
-    (
-        q_ragged_offset_tensor,
-        k_ragged_offset_tensor,
-        v_ragged_offset_tensor,
-        o_ragged_offset_tensor,
-        stats_ragged_offset_tensor,
-    ) = generate_ragged_offset(cfg)
     cudnn_handle = cudnn.create_handle()
 
     O, Stats = NSA.sliding_window_attention_wrapper(
@@ -171,15 +147,11 @@ def test_nsa_swa_wrapper(
         v_tensor=V,
         seq_len_q_tensor=actual_s_q,
         seq_len_kv_tensor=actual_s_kv,
-        q_ragged_offset_tensor=q_ragged_offset_tensor,
-        k_ragged_offset_tensor=k_ragged_offset_tensor,
-        v_ragged_offset_tensor=v_ragged_offset_tensor,
-        o_ragged_offset_tensor=o_ragged_offset_tensor,
-        stats_ragged_offset_tensor=stats_ragged_offset_tensor,
         left_bound=cfg["window_size"],
         right_bound=0,
         is_infer=False,
         attn_scale=cfg["scale_softmax"],
+        o_dtype=cfg["dtype"],
         intermediate_data_type=cfg["acc_dtype"],
         compute_data_type=cfg["acc_dtype"],
         cudnn_handle=cudnn_handle,
