@@ -554,17 +554,20 @@ def gemm_swiglu_wrapper_sm100(
     if c_major == "m":
 
         c_tensor = torch.empty_strided(
-            (m, n, l), (1, m, m * n), dtype=c_dtype, device="cuda"
+            (m, n, l), (1, m, m * n), dtype=c_dtype, device=a_tensor.device
         )
         glu_tensor = torch.empty_strided(
-            (m, n // 2, l), (1, m, m * n // 2), dtype=glu_dtype, device="cuda"
+            (m, n // 2, l), (1, m, m * n // 2), dtype=glu_dtype, device=a_tensor.device
         )
     elif c_major == "n":
         c_tensor = torch.empty_strided(
-            (m, n, l), (n, 1, m * n), dtype=c_dtype, device="cuda"
+            (m, n, l), (n, 1, m * n), dtype=c_dtype, device=a_tensor.device
         )
         glu_tensor = torch.empty_strided(
-            (m, n // 2, l), (n // 2, 1, m * n // 2), dtype=glu_dtype, device="cuda"
+            (m, n // 2, l),
+            (n // 2, 1, m * n // 2),
+            dtype=glu_dtype,
+            device=a_tensor.device,
         )
     else:
         raise ValueError(f"c_major must be either 'm' or 'n', got {c_major}")

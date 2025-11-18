@@ -90,6 +90,8 @@ def nsa_init(
     window_size: Optional[int] = None,
     topk_size: Optional[int] = None,
     block_size: Optional[int] = None,
+    s_q_default_override: Optional[int] = None,
+    s_kv_default_override: Optional[int] = None,
 ):
     major, _ = torch.cuda.get_device_capability()
     if major < 10:
@@ -105,12 +107,12 @@ def nsa_init(
     s_q = (
         int(request.config.getoption("--nsa-s_q"))
         if request.config.getoption("--nsa-s_q") is not None
-        else 1024
+        else 1024 if s_q_default_override is None else s_q_default_override
     )
     s_kv = (
         int(request.config.getoption("--nsa-s_kv"))
         if request.config.getoption("--nsa-s_kv") is not None
-        else 1024
+        else 1024 if s_kv_default_override is None else s_kv_default_override
     )
     d_qk = (
         int(request.config.getoption("--nsa-d_qk"))
@@ -245,10 +247,11 @@ def allocate_input_tensors(cfg):
         max_s_kv = max(actual_s_kv).item()
 
         total_seq_len = max(actual_s_q.sum().item(), actual_s_kv.sum().item())
+        total_seq_len_kv = actual_s_kv.sum().item()
         # Q: (T, H_q, D_qk)
         Q = torch.randn((total_seq_len, h_q, d_qk), dtype=dtype).cuda()
         # K: (T, H_kv, D_qk)
-        K = torch.randn((total_seq_len, h_k, d_qk), dtype=dtype).cuda()
+        K = torch.randn((total_seq_len_kv, h_k, d_qk), dtype=dtype).cuda()
         # V: (T, H_kv, D_v)
         V = torch.randn((total_seq_len, h_k, d_v), dtype=dtype).cuda()
         # LSE: (T, H_q, 1)

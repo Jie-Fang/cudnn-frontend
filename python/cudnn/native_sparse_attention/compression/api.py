@@ -87,18 +87,18 @@ class CompressionAttention(APIBase):
         if self.sample_q.ndim == 4:
             self.input_layout = "B,H,S,D"
 
-            b, h_qo, s_qo, d = self.sample_q.shape
-            b, h_kv, s_kv, d = self.sample_k.shape
+            b, h_qo, s_qo, d_qk = self.sample_q.shape
+            b, h_kv, s_kv, d_qk = self.sample_k.shape
             b, h_kv, s_kv, d_v = self.sample_v.shape
             b, h_q, s_qo, d_v = self.sample_o.shape
 
-            if self.sample_q.shape != (b, h_qo, s_qo, d):
+            if self.sample_q.shape != (b, h_qo, s_qo, d_qk):
                 raise ValueError(
-                    f"Input shape mismatch: expected Q tensor shape {b, h_qo, s_qo, d}, got {self.sample_q.shape}"
+                    f"Input shape mismatch: expected Q tensor shape {b, h_qo, s_qo, d_qk}, got {self.sample_q.shape}"
                 )
-            if self.sample_k.shape != (b, h_kv, s_kv, d):
+            if self.sample_k.shape != (b, h_kv, s_kv, d_qk):
                 raise ValueError(
-                    f"Input shape mismatch: expected K tensor shape {b, h_kv, s_kv, d}, got {self.sample_k.shape}"
+                    f"Input shape mismatch: expected K tensor shape {b, h_kv, s_kv, d_qk}, got {self.sample_k.shape}"
                 )
             if self.sample_v.shape != (b, h_kv, s_kv, d_v):
                 raise ValueError(
@@ -133,26 +133,26 @@ class CompressionAttention(APIBase):
             self.h_q = h_q
             self.h_kv = h_kv
             self.h_r = h_q // h_kv
-            self.head_dim = d
+            self.head_dim = d_qk
         elif self.sample_q.ndim == 3:
             self.input_layout = "T,H,D"
 
-            t, h_q, d = self.sample_q.shape
-            t, h_kv, d_qk = self.sample_k.shape
-            t, h_kv, d_v = self.sample_v.shape
+            t, h_q, d_qk = self.sample_q.shape
+            t_kv, h_kv, d_qk = self.sample_k.shape  # T has been compressed for K and V
+            t_kv, h_kv, d_v = self.sample_v.shape
             t, h_q, d_v = self.sample_o.shape
 
-            if self.sample_q.shape != (t, h_q, d):
+            if self.sample_q.shape != (t, h_q, d_qk):
                 raise ValueError(
-                    f"Input shape mismatch: expected Q tensor shape {t, h_q, d}, got {self.sample_q.shape}"
+                    f"Input shape mismatch: expected Q tensor shape {t, h_q, d_qk}, got {self.sample_q.shape}"
                 )
-            if self.sample_k.shape != (t, h_kv, d_qk):
+            if self.sample_k.shape != (t_kv, h_kv, d_qk):
                 raise ValueError(
-                    f"Input shape mismatch: expected K tensor shape {t, h_kv, d_qk}, got {self.sample_k.shape}"
+                    f"Input shape mismatch: expected K tensor shape {t_kv, h_kv, d_qk}, got {self.sample_k.shape}"
                 )
-            if self.sample_v.shape != (t, h_kv, d_v):
+            if self.sample_v.shape != (t_kv, h_kv, d_v):
                 raise ValueError(
-                    f"Input shape mismatch: expected V tensor shape {t, h_kv, d_v}, got {self.sample_v.shape}"
+                    f"Input shape mismatch: expected V tensor shape {t_kv, h_kv, d_v}, got {self.sample_v.shape}"
                 )
             if self.sample_o.shape != (t, h_q, d_v):
                 raise ValueError(
@@ -199,16 +199,16 @@ class CompressionAttention(APIBase):
             self.h_q = h_q
             self.h_kv = h_kv
             self.h_r = h_q // h_kv
-            self.head_dim = d
+            self.head_dim = d_qk
 
         else:
             raise ValueError(
                 f"Invalid input layout: sample_q must be rank-3 (T,H,D) or rank-4 (B,H,S,D), got {self.sample_q.ndim}"
             )
-        if d != d_v:
-            raise ValueError("D must match D_v")
-        if d not in {32, 64, 128}:
-            raise ValueError("Head dimension D must be 32, 64, or 128")
+        if d_qk != d_v:
+            raise ValueError("D_qk must match D_v")
+        if d_qk not in {32, 64, 128}:
+            raise ValueError("Head dimension D_qk must be 32, 64, or 128")
         if h_q % h_kv != 0:
             raise ValueError("H_q must be divisible by H_k (GQA/MQA constraint)")
 
@@ -219,11 +219,13 @@ class CompressionAttention(APIBase):
             raise ValueError(
                 f"Inputs must have the same dtype, got K {self.sample_k.dtype}, V {self.sample_v.dtype} for Q {in_dtype}"
             )
-        if in_dtype not in {torch.float16, torch.float8_e4m3fn}:
-            raise ValueError(f"Inputs must be Float16 or Float8E4M3FN, got {in_dtype}")
-        if out_dtype not in {torch.float16, torch.float8_e4m3fn}:
+        if in_dtype not in {torch.float16, torch.bfloat16, torch.float8_e4m3fn}:
             raise ValueError(
-                f"Outputs must be Float16 or Float8E4M3FN, got {out_dtype}"
+                f"Inputs must be Float16, BFloat16, or Float8E4M3FN, got {in_dtype}"
+            )
+        if out_dtype not in {torch.float16, torch.bfloat16, torch.float8_e4m3fn}:
+            raise ValueError(
+                f"Outputs must be Float16, BFloat16, or Float8E4M3FN, got {out_dtype}"
             )
         if self.qk_acc_dtype_torch not in {torch.float32}:
             raise ValueError(
@@ -575,7 +577,7 @@ def compression_attention_wrapper(
     cum_seqlen_q_tensor: Optional[torch.Tensor] = None,
     cum_seqlen_k_tensor: Optional[torch.Tensor] = None,
     enable_lse: bool = False,
-    o_dtype: torch.dtype = torch.float16,
+    o_dtype: Optional[torch.dtype] = None,
     qk_acc_dtype: torch.dtype = torch.float32,
     pv_acc_dtype: torch.dtype = torch.float32,
     mma_tiler_mn: Tuple[int, int] = (128, 128),
@@ -596,7 +598,9 @@ def compression_attention_wrapper(
     _logger.debug(
         "compression_attention_wrapper: Creating empty output tensor o and optional lse"
     )
+
     o_tensor, lse_tensor = None, None
+    o_dtype = o_dtype if o_dtype is not None else q_tensor.dtype
     if q_tensor.ndim == 4:  # bshd
         b, h_q, s_q, d = q_tensor.shape
         _, h_k, s_k, d_v = v_tensor.shape

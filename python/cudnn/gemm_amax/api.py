@@ -766,16 +766,16 @@ def gemm_amax_wrapper_sm100(
     c_tensor = None
     if c_major == "m":
         c_tensor = torch.empty_strided(
-            (m, n, l), (1, m, m * n), dtype=c_dtype, device="cuda"
+            (m, n, l), (1, m, m * n), dtype=c_dtype, device=a_tensor.device
         )
     elif c_major == "n":
         c_tensor = torch.empty_strided(
-            (m, n, l), (n, 1, m * n), dtype=c_dtype, device="cuda"
+            (m, n, l), (n, 1, m * n), dtype=c_dtype, device=a_tensor.device
         )
     else:
         raise ValueError(f"c_major must be either 'm' or 'n', got {c_major}")
     amax_tensor = torch.full(
-        (1, 1, 1), -float("inf"), device="cuda", dtype=torch.float32
+        (1, 1, 1), -float("inf"), device=a_tensor.device, dtype=torch.float32
     )
 
     cache_key = (

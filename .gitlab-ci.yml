@@ -302,6 +302,7 @@ oss_tests:
         - .cudnn_rel_image:template
         - .fetch_cudnn_rel:template
         - .oss_tests:template
+    needs: []
 
 python_tests:cudnn_rel_latest:
     extends:
