@@ -235,13 +235,18 @@ class BlackwellFusedMultiHeadAttentionForward:
     def __call__(
         self,
         q_iter: cute.Pointer,
+        q_stride: cutlass.Constexpr[[Tuple[int, int, int, int]]],
         k_iter: cute.Pointer,
+        k_stride: cutlass.Constexpr[Tuple[int, int, int, int]],
         v_iter: cute.Pointer,
+        v_stride: cutlass.Constexpr[Tuple[int, int, int, int]],
         o_iter: cute.Pointer,
+        o_stride: cutlass.Constexpr[Tuple[int, int, int, int]],
         problem_size: Tuple[Int32, Int32, Int32, Int32, Int32, Int32],
         cum_seqlen_q: Optional[cute.Tensor],
         cum_seqlen_k: Optional[cute.Tensor],
         lse_iter: Optional[cute.Pointer],
+        lse_stride: cutlass.Constexpr[Tuple[int, int, int]],
         scale_softmax_log2: Float32,
         scale_softmax: Float32,
         scale_output: Float32,
@@ -264,18 +269,28 @@ class BlackwellFusedMultiHeadAttentionForward:
 
         :param q_iter: The query tensor pointer
         :type q_iter: cute.Pointer
+        :param q_stride: The stride of the query tensor. (B, S, H, D) for bshd, (T, T, H, D) for thd (note that the T stride is duplicated)
+        :type q_stride: cutlass.Constexpr[Tuple[int, int, int, int]]
         :param k_iter: The key tensor pointer
         :type k_iter: cute.Pointer
+        :param k_stride: The stride of the key tensor. (B, S, H, D) for bshd, (T, T, H, D) for thd (note that the T stride is duplicated)
+        :type k_stride: cutlass.Constexpr[Tuple[int, int, int, int]]
         :param v_iter: The value tensor pointer
         :type v_iter: cute.Pointer
+        :param v_stride: The stride of the value tensor. (B, S, H, D) for bshd, (T, T, H, D) for thd (note that the T stride is duplicated)
+        :type v_stride: cutlass.Constexpr[Tuple[int, int, int, int]]
         :param o_iter: The output tensor pointer
         :type o_iter: cute.Pointer
+        :param o_stride: The stride of the output tensor. (B, S, H, D) for bshd, (T, T, H, D) for thd (note that the T stride is duplicated)
+        :type o_stride: cutlass.Constexpr[Tuple[int, int, int, int]]
         :param problem_size: The problem size with shape [b, s_q, s_lse, s_k, h_q, h_k, d]. If cum_seqlen_q or cum_seqlen_k is not None, s_q and s_k are the max of the cumulative sequence length respectively.
         :type problem_size: Tuple[Int32, Int32, Int32, Int32, Int32, Int32]
         :param cum_seqlen_q: The cumulative sequence length tensor for query
         :type cum_seqlen_q: Optional[cute.Tensor]
         :param cum_seqlen_k: The cumulative sequence length tensor for key
         :type cum_seqlen_k: Optional[cute.Tensor]
+        :param lse_stride: The stride of the log-sum-exp tensor. (B, S, H) for bshd, (0, T, H) for thd
+        :type lse_stride: cutlass.Constexpr[Tuple[int, int, int]]
         :param scale_softmax_log2: The log2 scale factor for softmax
         :type scale_softmax_log2: Float32
         :param scale_softmax: The scale factor for softmax
@@ -293,44 +308,54 @@ class BlackwellFusedMultiHeadAttentionForward:
         """
         b, s_q, s_lse, s_k, h_q, h_k, d = problem_size
         h_r = h_q // h_k
-        qo_offset = 0 if cum_seqlen_q is None else -s_q * d * h_r * h_k
-        kv_offset = 0 if cum_seqlen_k is None else -s_k * d * h_k
         b_qo = b if cum_seqlen_q is None else s_q * (1 + b)
         b_kv = b if cum_seqlen_k is None else s_k * (1 + b)
-        stride_b_qo = h_r * h_k * s_q * d if cum_seqlen_q is None else d * h_r * h_k
-        stride_b_kv = h_k * s_k * d if cum_seqlen_k is None else d * h_k
         b_lse = b if cum_seqlen_q is None else 1
-        stride_b_lse = h_r * h_k * s_lse if cum_seqlen_q is None else 0
 
         # (s, d, ((h_r, h_k), b))
         q_layout = cute.make_layout(
             (s_q, d, ((h_r, h_k), b_qo)),
-            stride=(d * h_r * h_k, 1, ((d, d * h_r), stride_b_qo)),
+            stride=(
+                q_stride[1],
+                q_stride[3],
+                ((q_stride[2], q_stride[2] * h_r), q_stride[0]),
+            ),
         )
-        q = cute.make_tensor(q_iter + qo_offset, q_layout)
+        q_offset = 0 if cum_seqlen_q is None else -s_q * q_stride[1]
+        q = cute.make_tensor(q_iter + q_offset, q_layout)
         # (s, d, ((h_r, h_k), b)), 0-stride for h_r to broadcast
         k_layout = cute.make_layout(
             (s_k, d, ((h_r, h_k), b_kv)),
-            stride=(d * h_k, 1, ((0, d), stride_b_kv)),
+            stride=(k_stride[1], k_stride[3], ((0, k_stride[2]), k_stride[0])),
         )
-        k = cute.make_tensor(k_iter + kv_offset, k_layout)
+        k_offset = 0 if cum_seqlen_k is None else -s_k * k_stride[1]
+        k = cute.make_tensor(k_iter + k_offset, k_layout)
         # (d, s, ((h_r, h_k), b)), 0-stride for h_r to broadcast
         v_layout = cute.make_layout(
             (d, s_k, ((h_r, h_k), b_kv)),
-            stride=(1, d * h_k, ((0, d), stride_b_kv)),
+            stride=(1, v_stride[1], ((0, v_stride[2]), v_stride[0])),
         )
-        v = cute.make_tensor(v_iter + kv_offset, v_layout)
+        v_offset = 0 if cum_seqlen_k is None else -s_k * v_stride[1]
+        v = cute.make_tensor(v_iter + v_offset, v_layout)
         # (s, d, ((h_r, h_k), b))
+        o_offset = 0 if cum_seqlen_q is None else -s_q * o_stride[1]
         o_layout = cute.make_layout(
             (s_q, d, ((h_r, h_k), b_qo)),
-            stride=(d * h_r * h_k, 1, ((d, d * h_r), stride_b_qo)),
+            stride=(
+                o_stride[1],
+                o_stride[3],
+                ((o_stride[2], o_stride[2] * h_r), o_stride[0]),
+            ),
         )
-        o = cute.make_tensor(o_iter + qo_offset, o_layout)
+        o = cute.make_tensor(o_iter + o_offset, o_layout)
         if cutlass.const_expr(lse_iter is not None):
             # (s, ((h_r, h_k), b))
             lse_layout = cute.make_layout(
                 (s_lse, ((h_r, h_k), b_lse)),
-                stride=(1, ((s_lse, h_r * s_lse), stride_b_lse)),
+                stride=(
+                    lse_stride[1],
+                    ((lse_stride[2], h_r * lse_stride[2]), lse_stride[0]),
+                ),
             )
             lse = cute.make_tensor(lse_iter, lse_layout)
         else:

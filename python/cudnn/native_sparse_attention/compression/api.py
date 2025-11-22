@@ -301,38 +301,30 @@ class CompressionAttention(APIBase):
         self._logger.debug("Compiling CompressionAttention kernel with cute.compile")
         self._compiled_kernel = cute.compile(
             fmha_kernel,
-            from_dlpack(
-                (
-                    self.sample_q.transpose(1, 2)
-                    if self.input_layout == "B,H,S,D"
-                    else self.sample_q
-                ),
-                assumed_align=16,
-            ).iterator,
-            from_dlpack(
-                (
-                    self.sample_k.transpose(1, 2)
-                    if self.input_layout == "B,H,S,D"
-                    else self.sample_k
-                ),
-                assumed_align=16,
-            ).iterator,
-            from_dlpack(
-                (
-                    self.sample_v.transpose(1, 2)
-                    if self.input_layout == "B,H,S,D"
-                    else self.sample_v
-                ),
-                assumed_align=16,
-            ).iterator,
-            from_dlpack(
-                (
-                    self.sample_o.transpose(1, 2)
-                    if self.input_layout == "B,H,S,D"
-                    else self.sample_o
-                ),
-                assumed_align=16,
-            ).iterator,
+            from_dlpack(self.sample_q, assumed_align=16).iterator,
+            (
+                self.sample_q.transpose(1, 2).stride()
+                if self.input_layout == "B,H,S,D"
+                else (self.sample_q.stride()[0], *self.sample_q.stride())
+            ),
+            from_dlpack(self.sample_k, assumed_align=16).iterator,
+            (
+                self.sample_k.transpose(1, 2).stride()
+                if self.input_layout == "B,H,S,D"
+                else (self.sample_k.stride()[0], *self.sample_k.stride())
+            ),
+            from_dlpack(self.sample_v, assumed_align=16).iterator,
+            (
+                self.sample_v.transpose(1, 2).stride()
+                if self.input_layout == "B,H,S,D"
+                else (self.sample_v.stride()[0], *self.sample_v.stride())
+            ),
+            from_dlpack(self.sample_o, assumed_align=16).iterator,
+            (
+                self.sample_o.transpose(1, 2).stride()
+                if self.input_layout == "B,H,S,D"
+                else (self.sample_o.stride()[0], *self.sample_o.stride())
+            ),
             self.problem_size,
             (
                 from_dlpack(self.sample_cum_seqlen_q, assumed_align=16)
@@ -348,6 +340,11 @@ class CompressionAttention(APIBase):
                 from_dlpack(self.sample_lse, assumed_align=16).iterator
                 if self.enable_lse
                 else None
+            ),
+            (
+                self.sample_lse.transpose(1, 2).stride()
+                if self.input_layout == "B,H,S,D"
+                else (0, *self.sample_lse.stride())
             ),
             scale_softmax_log2,
             scale_softmax,
