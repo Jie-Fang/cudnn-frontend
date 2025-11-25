@@ -1350,6 +1350,7 @@ class test_tensor_ir:
                     device_workspace_size = (
                         execution_plan.query_max_device_workspace_size()
                     )
+                    print(f"#### Device workspace size: {device_workspace_size}")
                     device_workspace_mem_cpu = torch.zeros(
                         device_workspace_size, dtype=torch.int8, device="cpu"
                     )
@@ -1419,6 +1420,7 @@ class test_tensor_ir:
                     device_workspace_size = (
                         execution_plan.query_max_device_workspace_size()
                     )
+                    print(f"#### Device workspace size: {device_workspace_size}")
                     device_workspace_mem_cpu = torch.zeros(
                         device_workspace_size, dtype=torch.int8, device="cpu"
                     )
