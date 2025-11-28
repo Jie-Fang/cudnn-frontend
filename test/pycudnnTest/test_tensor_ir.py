@@ -1326,7 +1326,7 @@ class test_tensor_ir:
                             (
                                 nv_tensor_ir.TileSchedulerType.kStreamK
                                 if stream_k
-                                else nv_tensor_ir.TileSchedulerType.kStatic
+                                else nv_tensor_ir.TileSchedulerType.kDefault
                             ),
                             cubin_chip,
                         ),
