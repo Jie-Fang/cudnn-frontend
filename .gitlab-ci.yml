@@ -60,6 +60,8 @@ before_script:
     stage: build
     script:
         - ci/build.sh
+    tags:
+        - Blackwell
     # keep the build directory so that later jobs can use it
     artifacts:
         paths:
