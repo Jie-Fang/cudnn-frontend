@@ -71,17 +71,6 @@ def fetch_cudnn(base_url, cuda_version):
     if not os.path.exists(path):
         raise Exception("ERROR: Failed to get any cuDNN build")
 
-    # cleanup downloads older than 7 days
-    current_time = time.time()
-    for filename in os.listdir("downloads"):
-        filepath = os.path.join("downloads", filename)
-        if (
-            os.path.isfile(filepath)
-            and current_time - os.path.getmtime(filepath) > 7 * 24 * 60 * 60
-        ):
-            print(f"Cleaning up: {filepath}")
-            os.remove(filepath)
-
     # extract
     print(f"Extracting {path}")
     subprocess.run(
@@ -109,6 +98,19 @@ def fetch_cudnn(base_url, cuda_version):
     )
     print(f"Extraction complete")
 
+    # cleanup downloads older than 7 days
+    try:
+        current_time = time.time()
+        for filename in os.listdir("downloads"):
+            filepath = os.path.join("downloads", filename)
+            if (
+                os.path.isfile(filepath)
+                and current_time - os.path.getmtime(filepath) > 7 * 24 * 60 * 60
+            ):
+                print(f"Cleaning up: {filepath}")
+                os.remove(filepath)
+    except Exception as e:
+        print(f"WARNING: Cleanup failed: {e}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
