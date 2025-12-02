@@ -36,7 +36,7 @@ NSA_COMPRESSION_ATTENTION_PARAM_MARKS = [
 
 # Parameterization marks for NSA Sliding Window Attention tests
 NSA_SWA_PARAM_MARKS = [
-    pytest.mark.parametrize("window_size", [64]),
+    pytest.mark.parametrize("window_size", [64, 512]),
     pytest.mark.parametrize("scale_softmax", [None]),
 ]
 
