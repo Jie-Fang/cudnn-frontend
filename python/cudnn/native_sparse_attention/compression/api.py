@@ -12,6 +12,7 @@ from cutlass.cute.typing import Int32
 from cudnn.api_base import APIBase
 from cudnn.datatypes import _convert_to_cutlass_data_type
 
+from ..utils import make_tensor_strided_like
 from .fmha import BlackwellFusedMultiHeadAttentionForward
 from . import fmha_helpers as fmha_utils
 
@@ -539,32 +540,6 @@ import logging
 
 _logger = logging.getLogger(__name__)
 _cache_of_CompressionAttentionObjects = {}
-
-
-def make_tensor_strided_like(
-    q_tensor: torch.Tensor,
-    o_shape: Tuple[int, ...],
-    dtype: Optional[torch.dtype] = None,
-    device: Optional[torch.device] = None,
-):
-    q_strides = q_tensor.stride()
-    rank_out = len(o_shape)
-    order = tuple(
-        sorted(range(min(len(q_strides), rank_out)), key=lambda i: q_strides[i])
-    )
-
-    strides = [0] * rank_out
-    current = 1
-    for dim in order:
-        strides[dim] = current
-        current *= o_shape[dim]
-
-    return torch.empty_strided(
-        o_shape,
-        tuple(strides),
-        dtype=dtype if dtype is not None else q_tensor.dtype,
-        device=device if device is not None else q_tensor.device,
-    )
 
 
 def compression_attention_wrapper(

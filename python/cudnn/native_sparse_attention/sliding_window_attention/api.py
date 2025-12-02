@@ -8,6 +8,8 @@ from cudnn.datatypes import _torch_to_cudnn_data_type
 from cudnn.api_base import APIBase
 from typing import Optional
 
+from ..utils import make_tensor_strided_like
+
 
 class SlidingWindowAttention(APIBase):
     def __init__(
@@ -624,47 +626,33 @@ def sliding_window_attention_wrapper(
         _logger.debug(
             "sliding_window_attention_wrapper: Creating empty output tensor o for thd layout"
         )
-        o_tensor = torch.empty(
-            q_tensor.shape[0],
-            q_tensor.shape[1],
-            v_tensor.shape[2],
-            device=q_tensor.device,
-            dtype=o_dtype,
+        t, h_q, d = q_tensor.shape
+        _, h_k, d_v = v_tensor.shape
+        o_tensor = make_tensor_strided_like(
+            q_tensor, (t, h_q, d_v), dtype=o_dtype, device=q_tensor.device
         )
         if not is_infer:
             _logger.debug(
                 "sliding_window_attention_wrapper: Creating empty output tensor stats for thd layout"
             )
-            stats_tensor = torch.empty(
-                q_tensor.shape[0],
-                q_tensor.shape[1],
-                1,
-                device=q_tensor.device,
-                dtype=torch.float32,
+            stats_tensor = make_tensor_strided_like(
+                q_tensor, (t, h_q, 1), dtype=torch.float32, device=q_tensor.device
             )
     else:  # bshd
         _logger.debug(
             "sliding_window_attention_wrapper: Creating empty output tensor o for bshd layout"
         )
-        o_tensor = torch.empty(
-            q_tensor.shape[0],
-            q_tensor.shape[1],
-            q_tensor.shape[2],
-            v_tensor.shape[3],
-            device=q_tensor.device,
-            dtype=o_dtype,
+        b, h_q, s_q, d = q_tensor.shape
+        _, h_k, s_k, d_v = v_tensor.shape
+        o_tensor = make_tensor_strided_like(
+            q_tensor, (b, h_q, s_q, d_v), dtype=o_dtype, device=q_tensor.device
         )
         if not is_infer:
             _logger.debug(
                 "sliding_window_attention_wrapper: Creating empty output tensor stats for bshd layout"
             )
-            stats_tensor = torch.empty(
-                q_tensor.shape[0],
-                q_tensor.shape[1],
-                q_tensor.shape[2],
-                1,
-                device=q_tensor.device,
-                dtype=torch.float32,
+            stats_tensor = make_tensor_strided_like(
+                q_tensor, (b, h_q, s_q, 1), dtype=torch.float32, device=q_tensor.device
             )
 
     cache_key = (
@@ -715,8 +703,6 @@ def sliding_window_attention_wrapper(
             cache_key
         ]
 
-        assert sliding_window_attention_object.check_support()
-        sliding_window_attention_object.compile(current_stream=stream)
         sliding_window_attention_object.execute(
             q_tensor=q_tensor,
             k_tensor=k_tensor,
