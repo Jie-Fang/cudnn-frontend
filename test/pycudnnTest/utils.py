@@ -1,4 +1,5 @@
 import os, sys
+from enum import Enum
 
 # Module scope variables -- can be set from pycudnnTest.py
 LOG_RUNTIME = False
@@ -13,6 +14,12 @@ if LOG_RUNTIME:
 class ImplementationError(Exception):
     def __init__(self, reason):
         self.reason = reason
+
+
+class StatusCode(Enum):
+    PASSED = "PASSED"
+    FAILED = "FAILED"
+    WAIVED = "WAIVED"
 
 
 def getFwdConvInputDims(outputTensorDim, pad, filterDim, stride, dilation):
