@@ -189,7 +189,7 @@ def run_tensor_ir_from_legacy_args(parent_args, unknown_args):
             get_tensorir_compilation_config(m, n, k, matmul_element_bits, tensorir_args)
         ]
 
-    run_tensor_ir_test_from_json_definition(
+    status = run_tensor_ir_test_from_json_definition(
         testGraph,
         kernel_config,
         tensorir_args,
@@ -197,6 +197,7 @@ def run_tensor_ir_from_legacy_args(parent_args, unknown_args):
         legacy_args,
     )
     assert "cudnn" not in sys.modules
+    return status
 
 
 def parse_legacy_args(parent_args, unparsed_graphRunner_args):
@@ -1027,7 +1028,7 @@ def run_tensor_ir_test_from_json_definition(
     # Do something with tensor_ir_module...
     reportCurrentTime("test_setup")
 
-    passed = tensor_ir_tester.run_tensor_ir_module(
+    status = tensor_ir_tester.run_tensor_ir_module(
         tensor_ir_module,
         compiler_backend,
         kernel_config,
@@ -1038,7 +1039,7 @@ def run_tensor_ir_test_from_json_definition(
         atol,
         rtol,
     )
-    return passed
+    return status
 
 
 # @brief: Combine properties from the legacy op, and input tensors to create the pycudnn kwargs

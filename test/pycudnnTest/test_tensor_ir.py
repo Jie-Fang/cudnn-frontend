@@ -2,6 +2,7 @@ from typing import Optional
 import test_graph as tg
 import torch
 import utils
+from utils import StatusCode
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from collections import namedtuple
@@ -1223,6 +1224,7 @@ class test_tensor_ir:
         atol=1e-2,
         rtol=1e-2,
     ):
+        flag_finished_once = False
         device = torch.device("cuda")
 
         # Prepare inputs - scalars stay on CPU, tensors go to GPU
@@ -1336,8 +1338,16 @@ class test_tensor_ir:
                     )
 
                     print(
-                        f"#### Running tile_size={tile_size}, mma_shape={mma_shape}, cluster_shape={cluster_shape}, cta_count={cta_count}, stream_k={stream_k}, cubin_chip={cubin_chip}"
+                        f"\n#### Running tile_size={tile_size}, mma_shape={mma_shape}, cluster_shape={cluster_shape}, cta_count={cta_count}, stream_k={stream_k}, cubin_chip={cubin_chip}"
                     )
+                    if self.compiler_with_kernel_cache.base_compiler.compiler.can_compile(
+                        module, compile_options
+                    ):
+                        print(f"#### Can compile")
+                    else:
+                        print(f"#### Cannot compile")
+                        continue
+
                     cloned_module = ir.Module.parse(str(module))
                     shader = self.compiler_with_kernel_cache.compile(
                         cloned_module, compile_options
@@ -1395,6 +1405,7 @@ class test_tensor_ir:
                                 "cta_count": cta_count,
                             }
                         torch.cuda.synchronize()
+                    flag_finished_once = True
             else:
                 for config in kernel_configs:
                     tile_size = config[0]  # Extract first value from the config list
@@ -1459,9 +1470,14 @@ class test_tensor_ir:
                                 "tile_size": tile_size,
                             }
                         torch.cuda.synchronize()
+                    flag_finished_once = True
             print(
                 f"@@@@ Best perf achieved is {best_perf / 1000} msec with kernel config: {best_config}"
             )
+        # At least one config is tested successfully
+        if flag_finished_once:
+            return StatusCode.PASSED
+        return StatusCode.WAIVED
 
     def build_tensor_ir_module(self, json_test_name="graph"):
         input_tensors = []

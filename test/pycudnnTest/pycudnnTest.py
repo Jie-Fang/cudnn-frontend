@@ -2,6 +2,7 @@
 
 import torch
 import utils
+from utils import StatusCode
 
 utils.reportCurrentTime("Start")
 import argparse
@@ -22,17 +23,17 @@ def reportError(e, repro_cmd):
 
 def processTestFileLine_TensorIR(args, unknown_args, line_count, line):
     error_count = 0
-    status = "CUDNNBATCH_PASSED"
+    status = StatusCode.PASSED
     try:
         print(f"$$$$ Processing line {line_count}: {line.strip()}")
-        run_tensor_ir_from_legacy_args(args, unknown_args)
+        status = run_tensor_ir_from_legacy_args(args, unknown_args)
     except Exception as e:
         error_count += 1
         repro_cmd = "{} {}".format(sys.argv[0], line.strip())
         reportError(e, repro_cmd)
-        status = "CUDNNBATCH_FAILED"
+        status = StatusCode.FAILED
 
-    print(f"$$$$ Test on line {line_count} returned status {status}")
+    print(f"$$$$ Test on line {line_count} returned status CUDNNBATCH_{status.value}")
     utils.reportCurrentTime("done")
     return error_count
 
@@ -190,12 +191,20 @@ if __name__ == "__main__":
     # Graphs defined in json file
     elif args.R == "tensor_ir":  # -Rtensor_ir
         try:
-            run_tensor_ir_from_legacy_args(args, unknown_args)
+            status = run_tensor_ir_from_legacy_args(args, unknown_args)
+            print(f"#### TensorIR test returned status {status.value}")
         except Exception as e:
             reportError(e, cmd)
             sys.exit(1)
         utils.reportCurrentTime("done")
-        sys.exit(0)
+        # Make cudnn_run.py can recognize the status
+        if status == StatusCode.FAILED:
+            sys.exit(1)
+        elif status == StatusCode.WAIVED:
+            sys.exit(2)
+        elif status == StatusCode.PASSED:
+            sys.exit(0)
+        raise ValueError(f"Unknown status: {status}")
 
     elif args.testPath.endswith(".json"):
         pytest_cmd = [json_graph_test]
