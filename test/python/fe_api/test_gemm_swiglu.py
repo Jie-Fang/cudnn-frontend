@@ -159,19 +159,20 @@ def test_gemm_swiglu_wrapper(
     )
 
     try:
-        c_torch, glu_torch = gemm_swiglu_wrapper_sm100(
-            a_tensor=a_torch,
-            b_tensor=b_torch,
-            alpha=cfg["alpha"],
-            c_major=cfg["c_major"],
-            c_dtype=cfg["c_dtype"],
-            glu_dtype=cfg["glu_dtype"],
-            acc_dtype=cfg["acc_dtype"],
-            use_2cta_instrs=cfg["use_2cta_instrs"],
-            mma_tiler_mn=cfg["mma_tiler_mn"],
-            cluster_shape_mn=cfg["cluster_shape_mn"],
-            stream=stream,
-        )
+        for _ in range(2):  # Run twice to test caching path
+            c_torch, glu_torch = gemm_swiglu_wrapper_sm100(
+                a_tensor=a_torch,
+                b_tensor=b_torch,
+                alpha=cfg["alpha"],
+                c_major=cfg["c_major"],
+                c_dtype=cfg["c_dtype"],
+                glu_dtype=cfg["glu_dtype"],
+                acc_dtype=cfg["acc_dtype"],
+                use_2cta_instrs=cfg["use_2cta_instrs"],
+                mma_tiler_mn=cfg["mma_tiler_mn"],
+                cluster_shape_mn=cfg["cluster_shape_mn"],
+                stream=stream,
+            )
     except (ValueError, NotImplementedError) as e:
         pytest.skip(f"Unsupported testcase: {e}")
 

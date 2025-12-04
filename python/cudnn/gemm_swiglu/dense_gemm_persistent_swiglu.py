@@ -206,7 +206,7 @@ class PersistentDenseGemmKernel:
         self.cta_sync_bar_id = 0
         self.epilog_sync_bar_id = 1
         self.tmem_ptr_sync_bar_id = 2
-        self.smem_capacity = utils.smem_capacity.get_smem_capacity_in_bytes("sm_100")
+        self.smem_capacity = utils.get_smem_capacity_in_bytes("sm_100")
 
     def _setup_attributes(self):
         """Set up configurations that are dependent on GEMM inputs
@@ -1058,9 +1058,9 @@ class PersistentDenseGemmKernel:
             bSG_sGlu = None
             bSG_gC_partitioned = None
             bSG_gGlu_partitioned = None
-            tTR_rC = cute.make_fragment(tTR_rAcc.shape, self.c_dtype)
-            tTR_rC1 = cute.make_fragment(tTR_rAcc.shape, self.c_dtype)
-            tTR_rGlu = cute.make_fragment(tTR_rAcc.shape, self.glu_dtype)
+            tTR_rC = cute.make_rmem_tensor(tTR_rAcc.shape, self.c_dtype)
+            tTR_rC1 = cute.make_rmem_tensor(tTR_rAcc.shape, self.c_dtype)
+            tTR_rGlu = cute.make_rmem_tensor(tTR_rAcc.shape, self.glu_dtype)
             tiled_copy_r2s, tRS_rC, tRS_rC1, tRS_rGlu, tRS_sC, tRS_sGlu = (
                 self.epilog_smem_copy_and_partition(
                     tiled_copy_t2r, tTR_rC, tTR_rC1, tTR_rGlu, epi_tidx, sC, sGlu
@@ -1101,7 +1101,6 @@ class PersistentDenseGemmKernel:
             # Threads/warps participating in tma store pipeline
             c_producer_group = pipeline.CooperativeGroup(
                 pipeline.Agent.Thread,
-                32 * len(self.epilog_warp_id),
                 32 * len(self.epilog_warp_id),
             )
             c_pipeline = pipeline.PipelineTmaStore.create(
@@ -1187,7 +1186,7 @@ class PersistentDenseGemmKernel:
                         self.acc_dtype
                     )
 
-                    res = cute.make_fragment(gate_rcp.shape, cutlass.Float32)
+                    res = cute.make_rmem_tensor(gate_rcp.shape, cutlass.Float32)
                     res.store(gate_rcp)
                     for i in cutlass.range_constexpr(cute.size(res.shape)):
                         res[i] = cute.arch.rcp_approx(res[i])
@@ -1362,10 +1361,10 @@ class PersistentDenseGemmKernel:
         # (T2R, T2R_M, T2R_N, EPI_M, EPI_N, RestM, RestN, RestL)
         tTR_gC = thr_copy_t2r.partition_D(gC_mnl_epi)
         # (T2R, T2R_M, T2R_N)
-        tTR_rAcc = cute.make_fragment(
+        tTR_rAcc = cute.make_rmem_tensor(
             tTR_gC[(None, None, None, 0, 0, 0, 0, 0)].shape, self.acc_dtype
         )
-        tTR_rAcc1 = cute.make_fragment(
+        tTR_rAcc1 = cute.make_rmem_tensor(
             tTR_gC[(None, None, None, 0, 0, 0, 0, 0)].shape, self.acc_dtype
         )
         return tiled_copy_t2r, tTR_tAcc, tTR_rAcc, tTR_rAcc1

@@ -348,11 +348,9 @@ class FineGrainedReductionQK:
         load_compute_lse_producer_group = pipeline.CooperativeGroup(
             pipeline.Agent.Thread,
             self.threads_per_warp,
-            self.threads_per_warp,
         )
         load_compute_lse_consumer_group = pipeline.CooperativeGroup(
             pipeline.Agent.Thread,
-            self.threads_per_warp * self.num_compute_warps,
             self.threads_per_warp * self.num_compute_warps,
         )
         return pipeline.PipelineCpAsync.create(
@@ -369,7 +367,6 @@ class FineGrainedReductionQK:
         )
         mma_compute_S_consumer_group = pipeline.CooperativeGroup(
             pipeline.Agent.Thread,
-            self.num_compute_warps * self.threads_per_warp,
             self.num_compute_warps * self.threads_per_warp,
         )
         return pipeline.PipelineUmmaAsync.create(
@@ -714,13 +711,15 @@ class FineGrainedReductionQK:
                 load_compute_LSE_pipeline.consumer_wait(load_compute_LSE_consumer_state)
                 thread_idx = tidx % (self.threads_per_warp * self.num_compute_warps)
 
-                heap_size_ref = cute.make_fragment((1,), Int32)
+                heap_size_ref = cute.make_rmem_tensor((1,), Int32)
                 heap_size_ref[0] = 0
                 # # Create temporary register heaps for computation
-                scores_heap_rf = cute.make_fragment(
+                scores_heap_rf = cute.make_rmem_tensor(
                     ((4, self.k_value // 4), 1, 1), Float32
                 )
-                idx_heap_rf = cute.make_fragment(((4, self.k_value // 4), 1, 1), Int32)
+                idx_heap_rf = cute.make_rmem_tensor(
+                    ((4, self.k_value // 4), 1, 1), Int32
+                )
 
                 tmem_load_atom = cute.make_copy_atom(
                     tcgen05.Ld32x32bOp(tcgen05.copy.Repetition(32)),
@@ -754,8 +753,10 @@ class FineGrainedReductionQK:
                 tTR_cS = thr_t2r.partition_D(cS_tiled)
                 tTR_tS = thr_t2r.partition_S(tStS_tiled)
                 tTR_tS_compute = thr_t2r.partition_S(tStS_compute_tiled)
-                tTR_rS = cute.make_fragment(tTR_cS[None, None, 0].shape, self.acc_dtype)
-                tTR_rS_compute = cute.make_fragment(
+                tTR_rS = cute.make_rmem_tensor(
+                    tTR_cS[None, None, 0].shape, self.acc_dtype
+                )
+                tTR_rS_compute = cute.make_rmem_tensor(
                     tTR_cS[None, None, 0].shape, self.acc_dtype
                 )
 
@@ -771,9 +772,11 @@ class FineGrainedReductionQK:
                     tStS_reduce[(None, None), 0, 0]
                 )
                 tTR_cS_reduce = thr_t2r_reduce.partition_D(cS)
-                tTR_rS_reduce = cute.make_fragment(tTR_cS_reduce.shape, self.acc_dtype)
+                tTR_rS_reduce = cute.make_rmem_tensor(
+                    tTR_cS_reduce.shape, self.acc_dtype
+                )
 
-                tmp = cute.make_fragment(
+                tmp = cute.make_rmem_tensor(
                     (self.mma_tiler[1] // self.num_elem_for_reduction), self.acc_dtype
                 )
 
@@ -1018,7 +1021,7 @@ class FineGrainedReductionQK:
                 tcTopk = thr_copy.partition_D(cTopk)
 
                 pred_shape = (tcTopk.shape[0][1], tcTopk.shape[1], tcTopk.shape[2])
-                preds = cute.make_fragment(pred_shape, cutlass.Boolean)
+                preds = cute.make_rmem_tensor(pred_shape, cutlass.Boolean)
                 for v in cutlass.range_constexpr(preds.shape[0]):
                     for m in cutlass.range_constexpr(preds.shape[1]):
                         for n in cutlass.range_constexpr(preds.shape[2]):
