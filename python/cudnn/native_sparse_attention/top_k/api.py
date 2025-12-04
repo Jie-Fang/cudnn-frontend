@@ -301,16 +301,16 @@ class TopKReduction(APIBase):
 
         self._compiled_kernel = cute.compile(
             topk_reduction,
-            problem_size,
-            sample_q_cute,
-            sample_k_cute,
-            sample_lse_cute,
-            sample_topk_scores_cute,
-            sample_topk_indices_cute,
-            softmax_scale_log2_e,
-            sample_cum_seqlen_q_cute,
-            sample_cum_seqlen_k_cute,
-            current_stream,
+            problem_size=problem_size,
+            Q=sample_q_cute,
+            K=sample_k_cute,
+            LSE=sample_lse_cute,
+            Topk_scores=sample_topk_scores_cute,
+            Topk_indices=sample_topk_indices_cute,
+            softmax_scale_log2_e=softmax_scale_log2_e,
+            cumulative_s_q=sample_cum_seqlen_q_cute,
+            cumulative_s_k=sample_cum_seqlen_k_cute,
+            stream=current_stream,
         )
         self._logger.debug("Kernel compiled successfully")
 
@@ -323,6 +323,7 @@ class TopKReduction(APIBase):
         topk_indices_tensor: torch.Tensor,
         cumulative_s_q_tensor: Optional[torch.Tensor] = None,
         cumulative_s_k_tensor: Optional[torch.Tensor] = None,
+        skip_compile: bool = False,
         current_stream: Optional[cuda.CUstream] = None,
     ) -> None:
         self._logger.debug("Entering execute")
@@ -406,19 +407,47 @@ class TopKReduction(APIBase):
             self.head_dim,
         )
 
-        self._compiled_kernel(
-            problem_size,
-            q_cute,
-            k_cute,
-            lse_cute,
-            topk_scores_cute,
-            topk_indices_cute,
-            softmax_scale_log2_e,
-            cumulative_s_q_cute,
-            cumulative_s_k_cute,
-            current_stream,
-        )
-        self._logger.debug("Kernel executed successfully")
+        if not skip_compile:
+            if self._compiled_kernel is None:
+                raise ValueError("TopKReduction kernel not compiled")
+            self._logger.debug("Executing with compiled kernel")
+            self._compiled_kernel(
+                problem_size=problem_size,
+                Q=q_cute,
+                K=k_cute,
+                LSE=lse_cute,
+                Topk_scores=topk_scores_cute,
+                Topk_indices=topk_indices_cute,
+                softmax_scale_log2_e=softmax_scale_log2_e,
+                cumulative_s_q=cumulative_s_q_cute,
+                cumulative_s_k=cumulative_s_k_cute,
+                stream=current_stream,
+            )
+            self._logger.debug("Executed with compiled kernel successfully")
+        else:
+            self._logger.debug("Executing without compiled kernel (JIT)")
+            topk_reduction = self._kernel(
+                element_dtype=_convert_to_cutlass_data_type(self.dtype),
+                acc_dtype=_convert_to_cutlass_data_type(self.acc_dtype),
+                k_value=self.k_value,
+                selection_block_size=self.selection_block_size,
+                compress_block_sliding_stride=self.compress_stride,
+                mma_tiler=(*self.mma_tiler_mn, self.head_dim),
+                is_causal=self.is_causal,
+            )
+            topk_reduction(
+                problem_size=problem_size,
+                Q=q_cute,
+                K=k_cute,
+                LSE=lse_cute,
+                Topk_scores=topk_scores_cute,
+                Topk_indices=topk_indices_cute,
+                softmax_scale_log2_e=softmax_scale_log2_e,
+                cumulative_s_q=cumulative_s_q_cute,
+                cumulative_s_k=cumulative_s_k_cute,
+                stream=current_stream,
+            )
+            self._logger.debug("Executed successfully")
 
 
 import logging

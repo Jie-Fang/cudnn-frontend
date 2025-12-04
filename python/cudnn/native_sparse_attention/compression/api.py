@@ -302,57 +302,57 @@ class CompressionAttention(APIBase):
         self._logger.debug("Compiling CompressionAttention kernel with cute.compile")
         self._compiled_kernel = cute.compile(
             fmha_kernel,
-            from_dlpack(self.sample_q, assumed_align=16).iterator,
-            (
+            q_iter=from_dlpack(self.sample_q, assumed_align=16).iterator,
+            q_stride=(
                 self.sample_q.transpose(1, 2).stride()
                 if self.input_layout == "B,H,S,D"
                 else (self.sample_q.stride()[0], *self.sample_q.stride())
             ),
-            from_dlpack(self.sample_k, assumed_align=16).iterator,
-            (
+            k_iter=from_dlpack(self.sample_k, assumed_align=16).iterator,
+            k_stride=(
                 self.sample_k.transpose(1, 2).stride()
                 if self.input_layout == "B,H,S,D"
                 else (self.sample_k.stride()[0], *self.sample_k.stride())
             ),
-            from_dlpack(self.sample_v, assumed_align=16).iterator,
-            (
+            v_iter=from_dlpack(self.sample_v, assumed_align=16).iterator,
+            v_stride=(
                 self.sample_v.transpose(1, 2).stride()
                 if self.input_layout == "B,H,S,D"
                 else (self.sample_v.stride()[0], *self.sample_v.stride())
             ),
-            from_dlpack(self.sample_o, assumed_align=16).iterator,
-            (
+            o_iter=from_dlpack(self.sample_o, assumed_align=16).iterator,
+            o_stride=(
                 self.sample_o.transpose(1, 2).stride()
                 if self.input_layout == "B,H,S,D"
                 else (self.sample_o.stride()[0], *self.sample_o.stride())
             ),
-            self.problem_size,
-            (
+            problem_size=self.problem_size,
+            cum_seqlen_q=(
                 from_dlpack(self.sample_cum_seqlen_q, assumed_align=16)
                 if self.input_layout == "T,H,D"
                 else None
             ),
-            (
+            cum_seqlen_k=(
                 from_dlpack(self.sample_cum_seqlen_k, assumed_align=16)
                 if self.input_layout == "T,H,D"
                 else None
             ),
-            (
+            lse_iter=(
                 from_dlpack(self.sample_lse, assumed_align=16).iterator
                 if self.enable_lse
                 else None
             ),
-            (
+            lse_stride=(
                 self.sample_lse.transpose(1, 2).stride()
                 if self.input_layout == "B,H,S,D"
                 else (0, *self.sample_lse.stride())
             ),
-            scale_softmax_log2,
-            scale_softmax,
-            scale_output,
-            None,
-            Int32(0),
-            current_stream,
+            scale_softmax_log2=scale_softmax_log2,
+            scale_softmax=scale_softmax,
+            scale_output=scale_output,
+            window_size_left=None,
+            window_size_right=Int32(0),
+            stream=current_stream,
         )
         self._logger.debug("Kernel compiled successfully")
 
@@ -412,7 +412,7 @@ class CompressionAttention(APIBase):
                 raise ValueError("CompressionAttention kernel not compiled")
             self._logger.debug("Executing with compiled kernel")
             self._compiled_kernel(
-                from_dlpack(
+                q_iter=from_dlpack(
                     (
                         q_tensor.transpose(1, 2)
                         if self.input_layout == "B,H,S,D"
@@ -420,7 +420,7 @@ class CompressionAttention(APIBase):
                     ),
                     assumed_align=16,
                 ).iterator,
-                from_dlpack(
+                k_iter=from_dlpack(
                     (
                         k_tensor.transpose(1, 2)
                         if self.input_layout == "B,H,S,D"
@@ -428,7 +428,7 @@ class CompressionAttention(APIBase):
                     ),
                     assumed_align=16,
                 ).iterator,
-                from_dlpack(
+                v_iter=from_dlpack(
                     (
                         v_tensor.transpose(1, 2)
                         if self.input_layout == "B,H,S,D"
@@ -436,7 +436,7 @@ class CompressionAttention(APIBase):
                     ),
                     assumed_align=16,
                 ).iterator,
-                from_dlpack(
+                o_iter=from_dlpack(
                     (
                         o_tensor.transpose(1, 2)
                         if self.input_layout == "B,H,S,D"
@@ -444,28 +444,28 @@ class CompressionAttention(APIBase):
                     ),
                     assumed_align=16,
                 ).iterator,
-                self.problem_size,
-                (
+                problem_size=self.problem_size,
+                cum_seqlen_q=(
                     from_dlpack(cum_seqlen_q_tensor, assumed_align=16).iterator
                     if self.input_layout == "T,H,D"
                     else None
                 ),
-                (
+                cum_seqlen_k=(
                     from_dlpack(cum_seqlen_k_tensor, assumed_align=16).iterator
                     if self.input_layout == "T,H,D"
                     else None
                 ),
-                (
+                lse_iter=(
                     from_dlpack(lse_tensor, assumed_align=16).iterator
                     if self.enable_lse
                     else None
                 ),
-                scale_softmax_log2_val,
-                scale_softmax_val,
-                scale_output_val,
-                None,
-                Int32(0),
-                current_stream,
+                scale_softmax_log2=scale_softmax_log2_val,
+                scale_softmax=scale_softmax_val,
+                scale_output=scale_output_val,
+                window_size_left=None,
+                window_size_right=Int32(0),
+                stream=current_stream,
             )
             self._logger.debug("Executed with compiled kernel successfully")
         else:
@@ -478,7 +478,7 @@ class CompressionAttention(APIBase):
                 mask_type=fmha_utils.MaskType.COMPRESSED_CAUSAL_MASK,
             )
             fmha_kernel(
-                from_dlpack(
+                q_iter=from_dlpack(
                     (
                         q_tensor.transpose(1, 2)
                         if self.input_layout == "B,H,S,D"
@@ -486,7 +486,12 @@ class CompressionAttention(APIBase):
                     ),
                     assumed_align=16,
                 ).iterator,
-                from_dlpack(
+                q_stride=(
+                    q_tensor.transpose(1, 2).stride()
+                    if self.input_layout == "B,H,S,D"
+                    else (q_tensor.stride()[0], *q_tensor.stride())
+                ),
+                k_iter=from_dlpack(
                     (
                         k_tensor.transpose(1, 2)
                         if self.input_layout == "B,H,S,D"
@@ -494,7 +499,12 @@ class CompressionAttention(APIBase):
                     ),
                     assumed_align=16,
                 ).iterator,
-                from_dlpack(
+                k_stride=(
+                    k_tensor.transpose(1, 2).stride()
+                    if self.input_layout == "B,H,S,D"
+                    else (k_tensor.stride()[0], *k_tensor.stride())
+                ),
+                v_iter=from_dlpack(
                     (
                         v_tensor.transpose(1, 2)
                         if self.input_layout == "B,H,S,D"
@@ -502,7 +512,12 @@ class CompressionAttention(APIBase):
                     ),
                     assumed_align=16,
                 ).iterator,
-                from_dlpack(
+                v_stride=(
+                    v_tensor.transpose(1, 2).stride()
+                    if self.input_layout == "B,H,S,D"
+                    else (v_tensor.stride()[0], *v_tensor.stride())
+                ),
+                o_iter=from_dlpack(
                     (
                         o_tensor.transpose(1, 2)
                         if self.input_layout == "B,H,S,D"
@@ -510,28 +525,38 @@ class CompressionAttention(APIBase):
                     ),
                     assumed_align=16,
                 ).iterator,
-                self.problem_size,
-                (
-                    from_dlpack(cum_seqlen_q_tensor, assumed_align=16).iterator
+                o_stride=(
+                    o_tensor.transpose(1, 2).stride()
+                    if self.input_layout == "B,H,S,D"
+                    else (o_tensor.stride()[0], *o_tensor.stride())
+                ),
+                problem_size=self.problem_size,
+                cum_seqlen_q=(
+                    from_dlpack(cum_seqlen_q_tensor, assumed_align=16)
                     if self.input_layout == "T,H,D"
                     else None
                 ),
-                (
-                    from_dlpack(cum_seqlen_k_tensor, assumed_align=16).iterator
+                cum_seqlen_k=(
+                    from_dlpack(cum_seqlen_k_tensor, assumed_align=16)
                     if self.input_layout == "T,H,D"
                     else None
                 ),
-                (
+                lse_iter=(
                     from_dlpack(lse_tensor, assumed_align=16).iterator
                     if self.enable_lse
                     else None
                 ),
-                scale_softmax_log2_val,
-                scale_softmax_val,
-                scale_output_val,
-                None,
-                Int32(0),
-                current_stream,
+                lse_stride=(
+                    lse_tensor.transpose(1, 2).stride()
+                    if self.input_layout == "B,H,S,D"
+                    else (0, *lse_tensor.stride())
+                ),
+                scale_softmax_log2=scale_softmax_log2_val,
+                scale_softmax=scale_softmax_val,
+                scale_output=scale_output_val,
+                window_size_left=None,
+                window_size_right=Int32(0),
+                stream=current_stream,
             )
             self._logger.debug("Executed successfully")
 

@@ -413,13 +413,27 @@ class SlidingWindowAttention(APIBase):
                 )
         elif self.input_layout == "thd":
             self.o_cudnn.set_dim((b, h_q, self.max_seq_len_q, d_v))
-            self.o_cudnn.set_stride((self.max_seq_len_q * h_q * d_v, d_v, h_q * d_v, 1))
+            self.o_cudnn.set_stride(
+                (
+                    self.sample_o.stride()[0] * self.max_seq_len_q,
+                    self.sample_o.stride()[1],
+                    self.sample_o.stride()[0],
+                    self.sample_o.stride()[2],
+                )
+            )
             self.o_cudnn.set_ragged_offset(self.o_ragged_offset_cudnn)
 
             if not self.is_infer:
                 self.stats_cudnn.set_output(True).set_data_type(cudnn.data_type.FLOAT)
                 self.stats_cudnn.set_dim((b, h_q, self.max_seq_len_q, 1))
-                self.stats_cudnn.set_stride((self.max_seq_len_q * h_q, 1, h_q, 1))
+                self.stats_cudnn.set_stride(
+                    (
+                        self.sample_stats.stride()[0] * self.max_seq_len_q,
+                        self.sample_stats.stride()[1],
+                        self.sample_stats.stride()[0],
+                        self.sample_stats.stride()[2],
+                    )
+                )
                 self.stats_cudnn.set_ragged_offset(self.stats_ragged_offset_cudnn)
 
         try:
@@ -717,6 +731,7 @@ def sliding_window_attention_wrapper(
             o_ragged_offset_tensor=o_ragged_offset_tensor,
             stats_ragged_offset_tensor=stats_ragged_offset_tensor,
             current_stream=stream,
+            cudnn_handle=cudnn_handle,
         )
     else:
         _logger.debug(

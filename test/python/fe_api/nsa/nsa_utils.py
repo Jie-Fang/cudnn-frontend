@@ -246,18 +246,18 @@ def allocate_input_tensors(cfg):
         max_s_q = max(actual_s_q).item()
         max_s_kv = max(actual_s_kv).item()
 
-        total_seq_len = max(actual_s_q.sum().item(), actual_s_kv.sum().item())
+        total_seq_len_q = max(actual_s_q.sum().item(), actual_s_kv.sum().item())
         total_seq_len_kv = actual_s_kv.sum().item()
         # Q: (T, H_q, D_qk)
-        Q = torch.randn((total_seq_len, h_q, d_qk), dtype=dtype).cuda()
+        Q = torch.randn((total_seq_len_q, h_q, d_qk), dtype=dtype).cuda()
         # K: (T, H_kv, D_qk)
         K = torch.randn((total_seq_len_kv, h_k, d_qk), dtype=dtype).cuda()
         # V: (T, H_kv, D_v)
-        V = torch.randn((total_seq_len, h_k, d_v), dtype=dtype).cuda()
+        V = torch.randn((total_seq_len_kv, h_k, d_v), dtype=dtype).cuda()
         # LSE: (T, H_q, 1)
         LSE = (
             -1.0
-            * torch.randn((1, h_q, total_seq_len), dtype=torch.float32)
+            * torch.randn((1, h_q, total_seq_len_q), dtype=torch.float32)
             .transpose(0, 2)
             .cuda()
         )
