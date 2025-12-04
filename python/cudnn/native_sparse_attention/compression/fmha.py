@@ -101,7 +101,7 @@ Constraints for this example:
 
 
 def make_thread_cooperative_group(size: int):
-    return pipeline.CooperativeGroup(pipeline.Agent.Thread, size, size)
+    return pipeline.CooperativeGroup(pipeline.Agent.Thread, size)
 
 
 class BlackwellFusedMultiHeadAttentionForward:
@@ -1520,7 +1520,7 @@ class BlackwellFusedMultiHeadAttentionForward:
                     for i in cutlass.range(0, seqlen_kv_loop_steps, 1, unroll=1):
                         # wait for vec0 (row_wise current max & previous max)
                         vec0_handle = s0_corr_consumer.wait_and_advance()
-                        tTMEM_LOAD_VECrS = cute.make_fragment(
+                        tTMEM_LOAD_VECrS = cute.make_rmem_tensor(
                             tTMEM_LOAD_VECcS.shape, self.qk_acc_dtype
                         )
                         cute.copy(
@@ -1559,7 +1559,7 @@ class BlackwellFusedMultiHeadAttentionForward:
 
                     # wait for vec0 (row_wise global sum)
                     vec0_handle = s0_corr_consumer.wait_and_advance()
-                    tTMEM_LOAD_VECrS = cute.make_fragment(
+                    tTMEM_LOAD_VECrS = cute.make_rmem_tensor(
                         tTMEM_LOAD_VECcS.shape, self.qk_acc_dtype
                     )
                     cute.copy(tiled_tmem_load_vec, tTMEM_LOAD_VECtS0, tTMEM_LOAD_VECrS)
@@ -1709,7 +1709,7 @@ class BlackwellFusedMultiHeadAttentionForward:
 
         # Wait for Si
         si_handle = mma_si_consumer.wait_and_advance()
-        tTMEM_LOADrS = cute.make_fragment(tTMEM_LOADcS.shape, self.qk_acc_dtype)
+        tTMEM_LOADrS = cute.make_rmem_tensor(tTMEM_LOADcS.shape, self.qk_acc_dtype)
         cute.copy(tiled_tmem_load, tTMEM_LOADtS, tTMEM_LOADrS)
         if need_apply_mask:
             if self.mask_type != fmha_utils.MaskType.COMPRESSED_CAUSAL_MASK:
@@ -1762,7 +1762,7 @@ class BlackwellFusedMultiHeadAttentionForward:
         if row_max == -cutlass.Float32.inf:
             row_max_safe = 0.0
 
-        tTMEM_STORE_VECrS = cute.make_fragment(
+        tTMEM_STORE_VECrS = cute.make_rmem_tensor(
             tTMEM_STORE_VECcS.shape, self.qk_acc_dtype
         )
 
@@ -1773,7 +1773,7 @@ class BlackwellFusedMultiHeadAttentionForward:
         # Notify correction wg that row_max is ready
         vec_i_handle.commit()
 
-        tTMEM_STORErS_x4 = cute.make_fragment(tTMEM_STOREcS.shape, self.qk_acc_dtype)
+        tTMEM_STORErS_x4 = cute.make_rmem_tensor(tTMEM_STOREcS.shape, self.qk_acc_dtype)
         tTMEM_STORErS_x4_e = cute.make_tensor(
             cute.recast_ptr(tTMEM_STORErS_x4.iterator, dtype=self.q_dtype),
             tTMEM_LOADrS.layout,
@@ -2180,7 +2180,7 @@ class BlackwellFusedMultiHeadAttentionForward:
                         tensor_args,
                     )
                 si_handle = mma_si_consumer.wait_and_advance()
-                tTMEM_STORE_VECrS = cute.make_fragment(
+                tTMEM_STORE_VECrS = cute.make_rmem_tensor(
                     tTMEM_STORE_VECcS.shape, self.qk_acc_dtype
                 )
 
@@ -2269,7 +2269,7 @@ class BlackwellFusedMultiHeadAttentionForward:
 
         tTMEM_STOREtO = thr_tmem_store.partition_D(tOtO_i)
 
-        tTMrO = cute.make_fragment(
+        tTMrO = cute.make_rmem_tensor(
             (tTMEM_LOADcO.shape, 128 // corr_tile_size), self.pv_acc_dtype
         )
         for i in cutlass.range(self.cta_tiler[2] // corr_tile_size):
@@ -2388,7 +2388,7 @@ class BlackwellFusedMultiHeadAttentionForward:
         for i in cutlass.range(self.cta_tiler[2] // corr_tile_size):
             tTMEM_LOADtO_i = tTMEM_LOADtO[None, 0, 0, i]
             tTMEM_LOADsO_i = tTMEM_LOADsO[None, 0, 0, i]
-            tTMrO = cute.make_fragment(
+            tTMrO = cute.make_rmem_tensor(
                 tTMEM_LOADoO[None, 0, 0, i].shape, self.pv_acc_dtype
             )
             cute.copy(tiled_tmem_load, tTMEM_LOADtO_i, tTMrO)
@@ -2399,7 +2399,7 @@ class BlackwellFusedMultiHeadAttentionForward:
                     (scale, scale),
                 )
 
-            tSMrO = cute.make_fragment(tTMrO.shape, self.o_dtype)
+            tSMrO = cute.make_rmem_tensor(tTMrO.shape, self.o_dtype)
             o_vec = tTMrO.load()
             tSMrO.store(o_vec.to(self.o_dtype))
             cute.copy(tiled_smem_store, tSMrO, tTMEM_LOADsO_i)

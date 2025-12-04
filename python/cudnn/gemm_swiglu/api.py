@@ -328,10 +328,10 @@ class GemmSwigluSm100(APIBase):
             self._kernel = PersistentDenseGemmKernel
 
         gemm_swiglu = self._kernel(
-            _convert_to_cutlass_data_type(self.acc_dtype),
-            self.use_2cta_instrs,
-            self.mma_tiler_mn,
-            self.cluster_shape_mn,
+            acc_dtype=_convert_to_cutlass_data_type(self.acc_dtype),
+            use_2cta_instrs=self.use_2cta_instrs,
+            mma_tiler_mn=self.mma_tiler_mn,
+            cluster_shape_mn=self.cluster_shape_mn,
         )
         hardware_info = cutlass.utils.HardwareInfo()
         max_active_clusters = hardware_info.get_max_active_clusters(
@@ -342,14 +342,13 @@ class GemmSwigluSm100(APIBase):
             self._logger.debug("Compiling gemm_swiglu (dlpack)")
             self._compiled_kernel = cute.compile(
                 gemm_swiglu,
-                from_dlpack(self.sample_a),
-                from_dlpack(self.sample_b),
-                from_dlpack(self.sample_c),
-                from_dlpack(self.sample_glu),
-                self.alpha,
-                max_active_clusters,
-                current_stream,
-                lambda x: x / (1 + math.exp(-1 * x, True)),
+                a=from_dlpack(self.sample_a),
+                b=from_dlpack(self.sample_b),
+                c=from_dlpack(self.sample_c),
+                glu=from_dlpack(self.sample_glu),
+                alpha=self.alpha,
+                max_active_clusters=max_active_clusters,
+                stream=current_stream,
             )
         else:  # use_no_dlpack
             # Create cute pointers/tensors manually to avoid DLPack requirements
@@ -381,20 +380,19 @@ class GemmSwigluSm100(APIBase):
 
             self._compiled_kernel = cute.compile(
                 gemm_swiglu,
-                a_ptr,
-                tuple(self.sample_a.shape),
-                a_order,
-                b_ptr,
-                tuple(self.sample_b.shape),
-                b_order,
-                c_ptr,
-                tuple(self.sample_c.shape),
-                c_order,
-                from_dlpack(self.sample_glu),
-                self.alpha,
-                max_active_clusters,
-                current_stream,
-                lambda x: x / (1 + math.exp(-1 * x, True)),
+                a_ptr=a_ptr,
+                a_shape=a_shape,
+                a_order=a_order,
+                b_ptr=b_ptr,
+                b_shape=b_shape,
+                b_order=b_order,
+                c_ptr=c_ptr,
+                c_shape=c_shape,
+                c_order=c_order,
+                glu_cute=from_dlpack(self.sample_glu),
+                alpha=self.alpha,
+                max_active_clusters=max_active_clusters,
+                stream=current_stream,
             )
         self._logger.debug("Kernel compiled successfully")
 
@@ -428,33 +426,32 @@ class GemmSwigluSm100(APIBase):
                     )
                 self._logger.debug("Executing with compiled kernel")
                 self._compiled_kernel(
-                    from_dlpack(a_tensor),
-                    from_dlpack(b_tensor),
-                    from_dlpack(c_tensor),
-                    from_dlpack(glu_tensor),
-                    alpha,
-                    current_stream,
+                    a=from_dlpack(a_tensor),
+                    b=from_dlpack(b_tensor),
+                    c=from_dlpack(c_tensor),
+                    glu=from_dlpack(glu_tensor),
+                    alpha=alpha,
+                    stream=current_stream,
                 )
                 self._logger.debug("Executed with compiled kernel successfully")
             else:
                 self._logger.debug("Executing without compiled kernel (JIT)")
                 gemm_swiglu = self._kernel(
-                    _convert_to_cutlass_data_type(self.acc_dtype),
-                    self.use_2cta_instrs,
-                    self.mma_tiler_mn,
-                    self.cluster_shape_mn,
+                    acc_dtype=_convert_to_cutlass_data_type(self.acc_dtype),
+                    use_2cta_instrs=self.use_2cta_instrs,
+                    mma_tiler_mn=self.mma_tiler_mn,
+                    cluster_shape_mn=self.cluster_shape_mn,
                 )
                 gemm_swiglu(
-                    from_dlpack(a_tensor),
-                    from_dlpack(b_tensor),
-                    from_dlpack(c_tensor),
-                    from_dlpack(glu_tensor),
-                    alpha,
-                    cutlass.utils.HardwareInfo().get_max_active_clusters(
+                    a=from_dlpack(a_tensor),
+                    b=from_dlpack(b_tensor),
+                    c=from_dlpack(c_tensor),
+                    glu=from_dlpack(glu_tensor),
+                    alpha=alpha,
+                    max_active_clusters=cutlass.utils.HardwareInfo().get_max_active_clusters(
                         self.cluster_shape_mn[0] * self.cluster_shape_mn[1]
                     ),
-                    current_stream,
-                    lambda x: x / (1 + math.exp(-1 * x, True)),
+                    stream=current_stream,
                 )
         else:  # use_no_dlpack
             a_ptr = make_ptr(
@@ -483,21 +480,21 @@ class GemmSwigluSm100(APIBase):
                     )
                 self._logger.debug("Executing with compiled kernel")
                 self._compiled_kernel(
-                    a_ptr,
-                    b_ptr,
-                    c_ptr,
-                    from_dlpack(glu_tensor),
-                    alpha,
-                    current_stream,
+                    a_ptr=a_ptr,
+                    b_ptr=b_ptr,
+                    c_ptr=c_ptr,
+                    glu_cute=from_dlpack(glu_tensor),
+                    alpha=alpha,
+                    stream=current_stream,
                 )
                 self._logger.debug("Executed with compiled kernel successfully")
             else:
                 self._logger.debug("Executing without compiled kernel (JIT)")
                 gemm_swiglu = self._kernel(
-                    _convert_to_cutlass_data_type(self.acc_dtype),
-                    self.use_2cta_instrs,
-                    self.mma_tiler_mn,
-                    self.cluster_shape_mn,
+                    acc_dtype=_convert_to_cutlass_data_type(self.acc_dtype),
+                    use_2cta_instrs=self.use_2cta_instrs,
+                    mma_tiler_mn=self.mma_tiler_mn,
+                    cluster_shape_mn=self.cluster_shape_mn,
                 )
 
                 a_shape = tuple(a_tensor.shape)
@@ -508,21 +505,21 @@ class GemmSwigluSm100(APIBase):
                 c_order = (1, 0, 2) if self.c_major == "n" else (0, 1, 2)
 
                 gemm_swiglu(
-                    a_ptr,
-                    tuple(a_tensor.shape),
-                    a_order,
-                    b_ptr,
-                    tuple(b_tensor.shape),
-                    b_order,
-                    c_ptr,
-                    tuple(c_tensor.shape),
-                    c_order,
-                    from_dlpack(glu_tensor),
-                    alpha,
-                    cutlass.utils.HardwareInfo().get_max_active_clusters(
+                    a_ptr=a_ptr,
+                    a_shape=a_shape,
+                    a_order=a_order,
+                    b_ptr=b_ptr,
+                    b_shape=b_shape,
+                    b_order=b_order,
+                    c_ptr=c_ptr,
+                    c_shape=c_shape,
+                    c_order=c_order,
+                    glu_cute=from_dlpack(glu_tensor),
+                    alpha=alpha,
+                    max_active_clusters=cutlass.utils.HardwareInfo().get_max_active_clusters(
                         self.cluster_shape_mn[0] * self.cluster_shape_mn[1]
                     ),
-                    current_stream,
+                    stream=current_stream,
                 )
             self._logger.debug("Executed successfully")
 

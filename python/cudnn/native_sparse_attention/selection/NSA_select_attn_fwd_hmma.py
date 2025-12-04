@@ -452,14 +452,14 @@ class HopperSelectAttentionFwd:
         :rtype: cute.TensorSSA or cutlass.Float32
         """
         if cutlass.const_expr(isinstance(x, cute.TensorSSA)):
-            res = cute.make_fragment(x.shape, cutlass.Float32)
+            res = cute.make_rmem_tensor(x.shape, cutlass.Float32)
             res.store(x)
 
             for i in cutlass.range_constexpr(cute.size(x.shape)):
                 res[i] = self._exp2f(res[i])
 
             return res.load()
-        return cute.arch.exp2(x)
+        return cute.math.exp2(x, fastmath=True)
 
     @cute.kernel
     def kernel(
@@ -761,7 +761,7 @@ class HopperSelectAttentionFwd:
             acc_shape_QK = thr_mma_QK.partition_shape_C(
                 (self.tile_shape_mnk_QK[0], self.tile_shape_mnk_QK[1])
             )
-            acc_QK = cute.make_fragment(acc_shape_QK, self.acc_dtype)
+            acc_QK = cute.make_rmem_tensor(acc_shape_QK, self.acc_dtype)
             acc_QK.fill(0)
 
             mainloop_producer_state_K = pipeline.make_pipeline_state(
@@ -802,10 +802,10 @@ class HopperSelectAttentionFwd:
             # ********************
 
             # shape:(mmaSahpeM * mma_m)
-            row_max = cute.make_fragment(
+            row_max = cute.make_rmem_tensor(
                 (acc_shape_QK[0][0] * acc_shape_QK[1]), cutlass.Float32
             )
-            row_sum = cute.make_fragment(
+            row_sum = cute.make_rmem_tensor(
                 (acc_shape_QK[0][0] * acc_shape_QK[1]), cutlass.Float32
             )
             row_max.fill(-cutlass.Float32.inf)
@@ -892,7 +892,7 @@ class HopperSelectAttentionFwd:
                 (self.tile_shape_mnk_PV[0], self.tile_shape_mnk_PV[1])
             )
 
-            acc_PV = cute.make_fragment(acc_shape_PV, self.acc_dtype)
+            acc_PV = cute.make_rmem_tensor(acc_shape_PV, self.acc_dtype)
             acc_PV.fill(0)
             acc_QK_mn = self._make_acc_tensor_mn_view(acc_QK)
             acc_PV_mn = self._make_acc_tensor_mn_view(acc_PV)
