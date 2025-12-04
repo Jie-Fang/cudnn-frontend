@@ -331,18 +331,18 @@ class SelectionAttention(APIBase):
         self._logger.debug("Compiling selection_attention")
         self._compiled_kernel = cute.compile(
             selection_attention,
-            mQ,
-            mK,
-            mV,
-            mO,
-            mL,
-            mM,
-            m_block_indices,
-            m_block_counts,
-            self.max_s_q,
-            m_cum_seqlen_q,
-            self.scale_softmax,
-            current_stream,
+            Q=mQ,
+            K=mK,
+            V=mV,
+            O=mO,
+            L=mL,
+            M=mM,
+            block_indices=m_block_indices,
+            block_counts=m_block_counts,
+            max_length=self.max_s_q,
+            seq_offsets=m_cum_seqlen_q,
+            softmax_scale=self.scale_softmax,
+            stream=current_stream,
         )
         self._logger.debug("Kernel compiled successfully")
 
@@ -392,18 +392,18 @@ class SelectionAttention(APIBase):
                 raise RuntimeError("SelectionAttention kernel not compiled")
             self._logger.debug("Executing with compiled kernel")
             self._compiled_kernel(
-                mQ,
-                mK,
-                mV,
-                mO,
-                mL,
-                mM,
-                m_block_indices,
-                m_block_counts,
-                self.max_s_q,
-                m_cum_seqlen_q,
-                scale_softmax,
-                current_stream,
+                Q=mQ,
+                K=mK,
+                V=mV,
+                O=mO,
+                L=mL,
+                M=mM,
+                block_indices=m_block_indices,
+                block_counts=m_block_counts,
+                max_length=self.max_s_q,
+                seq_offsets=m_cum_seqlen_q,
+                softmax_scale=scale_softmax,
+                stream=current_stream,
             )
             self._logger.debug("Executed with compiled kernel successfully")
         else:
@@ -417,18 +417,18 @@ class SelectionAttention(APIBase):
                 acc_dtype=_convert_to_cutlass_data_type(self.acc_dtype),
             )
             selection_attention(
-                mQ,
-                mK,
-                mV,
-                mO,
-                mL,
-                mM,
-                m_block_indices,
-                m_block_counts,
-                self.max_s_q,
-                m_cum_seqlen_q,
-                scale_softmax,
-                current_stream,
+                Q=mQ,
+                K=mK,
+                V=mV,
+                O=mO,
+                L=mL,
+                M=mM,
+                block_indices=m_block_indices,
+                block_counts=m_block_counts,
+                max_length=self.max_s_q,
+                seq_offsets=m_cum_seqlen_q,
+                softmax_scale=scale_softmax,
+                stream=current_stream,
             )
             self._logger.debug("Executed successfully")
 
