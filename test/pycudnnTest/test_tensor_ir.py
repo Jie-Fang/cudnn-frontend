@@ -82,16 +82,14 @@ def generate_tensorir_compilation_configs(m, n, k, matmul_element_bits, tensorir
     stream_k = False
     cubin_chip = "sm_100a"
 
-    config = nv_tensor_ir.recommend_compilation_config_by_problem_size(
-        nv_tensor_ir.MmaShape(m, n, k), matmul_element_bits
-    )
+    default_mma_k = 256 // matmul_element_bits
 
     kphase = [1, 1, 4]
 
     mma_shapes = [
-        [64, 128, config.mmaShape.k],
-        [128, 128, config.mmaShape.k],
-        [128, 256, config.mmaShape.k],
+        [64, 128, default_mma_k],
+        [128, 128, default_mma_k],
+        [128, 256, default_mma_k],
     ]
 
     cluster_shapes = [
@@ -189,17 +187,14 @@ def get_tensorir_compilation_config(m, n, k, matmul_element_bits, tensorir_args)
     Returns:
         List of configuration parameters
     """
-    # Get recommended configuration based on problem size
-    config = nv_tensor_ir.recommend_compilation_config_by_problem_size(
-        nv_tensor_ir.MmaShape(m, n, k), matmul_element_bits
-    )
+    default_mma_k = 256 // matmul_element_bits
 
     kphase = 4
 
     # Initialize default configuration values
     defaults = {
-        "tile_size": [128, 128, kphase * config.mmaShape.k],
-        "mma_shape": [128, 128, config.mmaShape.k],
+        "tile_size": [128, 128, kphase * default_mma_k],
+        "mma_shape": [128, 128, default_mma_k],
         "cluster_shape": [1, 1, 1],
         "cta_count": 1,
         "stream_k": False,
