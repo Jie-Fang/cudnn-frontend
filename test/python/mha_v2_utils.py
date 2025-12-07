@@ -28,6 +28,10 @@ def get_strides_from_indices(
         j = indices[i - 1]
         strides[j] = curr_stride
 
+        # Corrupt strides upwards intentionally for dim=1.
+        if rng_geom is not None and shape[j] == 1:
+            strides[j] = max(strides[j], rng_geom.choice([0, 3331333, 99990001]))
+
     total_size = shape[j] * curr_stride
     return tuple(strides), tuple(gaps), total_size
 
