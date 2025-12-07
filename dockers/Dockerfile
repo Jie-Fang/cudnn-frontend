@@ -51,3 +51,4 @@ RUN CUDNN_VERSION_M=${CUDNN_VERSION_%%.*} && \
 RUN sed -i '/nvidia-cudnn-frontend\|ninja/d' /etc/pip/constraint.txt
 COPY requirements.txt /tmp/
 RUN pip install -U --no-cache-dir -r /tmp/requirements.txt
+RUN pip install -U --no-cache-dir cupy-cuda13x
