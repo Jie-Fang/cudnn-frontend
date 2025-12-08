@@ -172,7 +172,7 @@ def generate_tensorir_compilation_configs(m, n, k, matmul_element_bits, tensorir
                         matmul_element_bits,
                     ]
                 )
-
+    print(f"Generated {len(configs)} configurations")
     return configs
 
 
@@ -1388,7 +1388,7 @@ class test_tensor_ir:
                         import utils
 
                         # TODO: Shall we use median instead of average?
-                        (_, avg_rt, _) = utils.measure_gpu_runtime(
+                        avg_rt = utils.measure_gpu_runtime_with_events(
                             lambda: execution_plan.launch(device_workspace), timing_loop
                         )
                         if avg_rt < best_perf:
@@ -1456,7 +1456,7 @@ class test_tensor_ir:
                         execution_plan.launch(device_workspace)
                         import utils
 
-                        (_, avg_rt, _) = utils.measure_gpu_runtime(
+                        avg_rt = utils.measure_gpu_runtime_with_events(
                             lambda: execution_plan.launch(device_workspace), timing_loop
                         )
                         if avg_rt < best_perf:

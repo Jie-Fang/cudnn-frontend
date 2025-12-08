@@ -1,5 +1,7 @@
 import os, sys
 from enum import Enum
+import torch
+import cupy
 
 # Module scope variables -- can be set from pycudnnTest.py
 LOG_RUNTIME = False
@@ -116,6 +118,177 @@ def create_nhwc_strides(dims):
         stride[dim_N] = stride[dim_H] * dims[dim_H]
 
     return stride
+
+
+def filter_outliers_iqr(data_list, multiplier=1.5):
+    """
+    Filter outliers from a list using the Interquartile Range (IQR) method.
+
+    Args:
+        data_list: List of float values to filter
+        multiplier: IQR multiplier for defining outlier bounds (default: 1.5)
+                   - 1.5 is standard for outliers
+                   - 3.0 is more conservative, removes only extreme outliers
+
+    Returns:
+        tuple: (filtered_list, removed_count, lower_bound, upper_bound)
+            - filtered_list: List with outliers removed
+            - removed_count: Number of outliers removed
+            - lower_bound: Lower threshold used
+            - upper_bound: Upper threshold used
+
+    Example:
+        >>> data = [1, 2, 3, 4, 5, 100]  # 100 is an outlier
+        >>> filtered, count, lower, upper = filter_outliers_iqr(data)
+        >>> print(filtered)  # [1, 2, 3, 4, 5]
+        >>> print(count)     # 1
+    """
+    import numpy as np
+
+    if len(data_list) == 0:
+        return [], 0, 0, 0
+
+    if len(data_list) < 4:
+        # Not enough data points for IQR, return original
+        return data_list, 0, min(data_list), max(data_list)
+
+    # Calculate quartiles
+    q1 = np.percentile(data_list, 25)
+    q3 = np.percentile(data_list, 75)
+    iqr = q3 - q1
+
+    # Calculate bounds
+    lower_bound = q1 - multiplier * iqr
+    upper_bound = q3 + multiplier * iqr
+
+    # Filter data
+    filtered_list = [x for x in data_list if lower_bound <= x <= upper_bound]
+    removed_count = len(data_list) - len(filtered_list)
+
+    return filtered_list, removed_count, lower_bound, upper_bound
+
+
+# Launch a delay kernel for 2ms to cover the overhead of the kernel launch
+def launch_cupy_delay_kernel_2ms():
+    torch_stream = torch.cuda.current_stream()
+    cupy_stream = cupy.cuda.ExternalStream(torch_stream.cuda_stream)
+
+    delay_kernel = cupy.RawKernel(
+        r"""
+        extern "C" __global__
+        void delay_kernel(unsigned long long wait_cycles) {
+            unsigned long long start = clock64();
+            while (clock64() - start < wait_cycles) {;}
+        }
+        """,
+        "delay_kernel",
+    )
+    wait_cycles = int(2e6)
+
+    with cupy_stream:
+        delay_kernel((1,), (1,), (wait_cycles,))
+
+
+def measure_gpu_runtime_with_events(execution_callback, timingLoop):
+    """
+    Measure GPU runtime using CUDA Events for precise kernel timing.
+    This method is lightweight and suitable for quick performance measurements.
+
+    Args:
+        execution_callback: Function to execute the GPU kernel/graph
+        timingLoop: Number of iterations to measure
+
+    Returns:
+        float: (avg_time) in microseconds
+    """
+    import numpy as np
+
+    batch_size = min(10, timingLoop)
+    time_list = []
+    num_batches = (timingLoop + batch_size - 1) // batch_size
+
+    # Warmup the GPU
+    for _ in range(5):
+        execution_callback()
+    torch.cuda.synchronize()
+    cupy.cuda.Stream.null.synchronize()
+
+    for batch_idx in range(num_batches):
+        # Determine how many iterations in this batch
+        remaining = timingLoop - batch_idx * batch_size
+        current_batch_size = min(batch_size, remaining)
+
+        start_event_batch = [
+            torch.cuda.Event(enable_timing=True) for _ in range(current_batch_size)
+        ]
+        end_event_batch = [
+            torch.cuda.Event(enable_timing=True) for _ in range(current_batch_size)
+        ]
+
+        # Submit all kernels in the batch without intermediate synchronization
+        for i in range(current_batch_size):
+            start_event = start_event_batch[i]
+            end_event = end_event_batch[i]
+
+            launch_cupy_delay_kernel_2ms()
+            start_event.record()
+            execution_callback()
+            end_event.record()
+
+            start_event.synchronize()
+            end_event.synchronize()
+
+            elapsed = start_event.elapsed_time(end_event)
+            time_list.append(elapsed)
+
+        # Synchronize each measurement
+        torch.cuda.synchronize()
+        cupy.cuda.Stream.null.synchronize()
+
+    # Log environment info for reproducibility (only once)
+    if not hasattr(measure_gpu_runtime_with_events, "_env_logged"):
+        try:
+            gpu_name = torch.cuda.get_device_name(0)
+            gpu_capability = torch.cuda.get_device_capability(0)
+            print(f"[CUDA_EVENT] GPU: {gpu_name}, Compute Capability: {gpu_capability}")
+            print(
+                f"[CUDA_EVENT] PyTorch: {torch.__version__}, CUDA: {torch.version.cuda}"
+            )
+            print(f"[CUDA_EVENT] Runs: {timingLoop}")
+        except Exception as e:
+            print(f"[CUDA_EVENT] Warning: Could not log environment info: {e}")
+        measure_gpu_runtime_with_events._env_logged = True
+    # Apply IQR filtering to remove outliers
+    filtered_list, removed_count, lower_bound, upper_bound = filter_outliers_iqr(
+        time_list, multiplier=1.5
+    )
+
+    if removed_count > 0:
+        print(
+            f"[CUDA_EVENT] IQR filtering: removed {removed_count} outliers (lower={lower_bound*1000:.3f} us, upper={upper_bound*1000:.3f} us)"
+        )
+        print(
+            f"[CUDA_EVENT] Filtered data: {len(filtered_list)}/{len(time_list)} measurements retained"
+        )
+    else:
+        print(f"[CUDA_EVENT] IQR filtering: no outliers detected")
+        filtered_list = time_list
+
+    # Use filtered data for final statistics
+    min_time = min(filtered_list)
+    max_time = max(filtered_list)
+    median_time = np.median(filtered_list)
+    max_time_ratio = (max_time - min_time) / max_time
+    avg_time = np.mean(filtered_list)
+    std_time = np.std(filtered_list)
+    cv = std_time / avg_time if avg_time > 0 else 0
+
+    print(
+        f"[CUDA_EVENT] Summary (min {min_time* 1000:.3f} us, avg {avg_time* 1000:.3f} us, max {max_time* 1000:.3f} us, median {median_time* 1000:.3f} us, std {std_time*1000:.3f} us, CV {cv*100:.2f}%, (max-min)/max {max_time_ratio:.3f})"
+    )
+
+    # Return the results in microseconds
+    return avg_time * 1000
 
 
 def measure_gpu_runtime(execution_callback, timingLoop):
