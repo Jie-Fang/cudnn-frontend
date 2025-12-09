@@ -364,28 +364,10 @@ class GemmAmaxSm100(APIBase):
         )
 
         if not use_no_dlpack_kernel:
-            sample_a_cute = from_dlpack(
-                self.sample_a, assumed_align=16
-            ).mark_compact_shape_dynamic(
-                mode=1 if self.a_major == "k" else 0,
-                stride_order=(2, 0, 1) if self.a_major == "k" else (2, 1, 0),
-                divisibility=(16),
-            )
-            sample_b_cute = from_dlpack(
-                self.sample_b, assumed_align=16
-            ).mark_compact_shape_dynamic(
-                mode=1 if self.b_major == "k" else 0,
-                stride_order=(2, 0, 1) if self.b_major == "k" else (2, 1, 0),
-                divisibility=(16),
-            )
+            sample_a_cute = from_dlpack(self.sample_a, assumed_align=16)
+            sample_b_cute = from_dlpack(self.sample_b, assumed_align=16)
 
-            sample_c_cute = from_dlpack(
-                self.sample_c, assumed_align=16
-            ).mark_compact_shape_dynamic(
-                mode=1 if self.c_major == "n" else 0,
-                stride_order=(2, 0, 1) if self.c_major == "n" else (2, 1, 0),
-                divisibility=16,
-            )
+            sample_c_cute = from_dlpack(self.sample_c, assumed_align=16)
 
             self._logger.debug("Compiling gemm_amax")
             self._compiled_kernel = cute.compile(
@@ -545,27 +527,9 @@ class GemmAmaxSm100(APIBase):
         use_no_dlpack_kernel = is_ab_fp4 or is_c_fp4 or not _fp8_dlpack_supported
 
         if not use_no_dlpack_kernel:
-            a_tensor_cute = from_dlpack(
-                a_tensor, assumed_align=16
-            ).mark_compact_shape_dynamic(
-                mode=1 if self.a_major == "k" else 0,
-                stride_order=(2, 0, 1) if self.a_major == "k" else (2, 1, 0),
-                divisibility=(16),
-            )
-            b_tensor_cute = from_dlpack(
-                b_tensor, assumed_align=16
-            ).mark_compact_shape_dynamic(
-                mode=1 if self.b_major == "k" else 0,
-                stride_order=(2, 0, 1) if self.b_major == "k" else (2, 1, 0),
-                divisibility=(16),
-            )
-            c_tensor_cute = from_dlpack(
-                c_tensor, assumed_align=16
-            ).mark_compact_shape_dynamic(
-                mode=1 if self.c_major == "n" else 0,
-                stride_order=(2, 0, 1) if self.c_major == "n" else (2, 1, 0),
-                divisibility=16,
-            )
+            a_tensor_cute = from_dlpack(a_tensor, assumed_align=16)
+            b_tensor_cute = from_dlpack(b_tensor, assumed_align=16)
+            c_tensor_cute = from_dlpack(c_tensor, assumed_align=16)
 
             if not skip_compile:
                 if self._compiled_kernel is None:
