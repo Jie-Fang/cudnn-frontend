@@ -1898,27 +1898,12 @@ class Sm100BlockScaledPersistentDenseGemmKernelNoDlpack:
         a_cute = cute.make_tensor(
             a_ptr, layout=cute.make_ordered_layout(a_shape, order=a_order)
         )
-        # a_cute.mark_compact_shape_dynamic(
-        #     mode=1,
-        #     stride_order=(2, 0, 1),
-        #     divisibility=32 if a_cute.element_type == cutlass.Float4E2M1FN else 16,
-        # )
         b_cute = cute.make_tensor(
             b_ptr, layout=cute.make_ordered_layout(b_shape, order=b_order)
         )
-        # b_cute.mark_compact_shape_dynamic(
-        #     mode=1,
-        #     stride_order=(2, 0, 1),
-        #     divisibility=32 if b_cute.element_type == cutlass.Float4E2M1FN else 16,
-        # )
         c_cute = cute.make_tensor(
             c_ptr, layout=cute.make_ordered_layout(c_shape, order=c_order)
         )
-        # c_cute.mark_compact_shape_dynamic(
-        #     mode=1,
-        #     stride_order=(2, 0, 1),
-        #     divisibility=32 if c_cute.element_type == cutlass.Float4E2M1FN else 16,
-        # )
 
         sfa_cute = cute.make_tensor(
             sfa_ptr, layout=cute.make_ordered_layout(sfa_shape, order=sfa_order)
