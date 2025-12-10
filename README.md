@@ -1,7 +1,7 @@
 
 # cuDNN FrontEnd(FE)
 
-**cuDNN FE** is the modern, open-source entry point to the NVIDIA cuDNN library. It provides a C++ header-only library and a Python interface to access the powerful cuDNN Graph API.
+**cuDNN FE** is the modern, open-source entry point to the NVIDIA cuDNN library and high performance open-source kernels. It provides a C++ header-only library and a Python interface to access the powerful cuDNN Graph API and open-source kernels.
 
 ## 🚀 Embracing Open Source
 
