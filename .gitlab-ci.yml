@@ -193,6 +193,7 @@ stages:
     - L4_graph_runner
     - thunder
     - deploy
+    - notify
 
 build:cudnn_dev_latest:
     needs: []
@@ -416,3 +417,40 @@ python_samples:cudnn_ga_latest:
     - .python_samples:template
     - .cudnn_ga_image:template
   needs: []
+
+# ==============================================================================
+# Slack Notification Job
+# Posts pipeline status to #swdl-cudnn-frontend-dev channel
+# Compares with previous scheduled run to identify new failures
+# ==============================================================================
+slack_notification:
+  stage: notify
+  image: python:3.10-slim
+  variables:
+    GIT_STRATEGY: none
+  before_script:
+    - pip install requests --quiet
+  script:
+    - |
+      # Download the notifier scripts from ci/scripts/
+      curl -s -H "PRIVATE-TOKEN: $GITLAB_ALL_KEY" \
+        "$CI_SERVER_URL/api/v4/projects/$CI_PROJECT_ID/repository/files/ci%2Fscripts%2Fpipeline_slack_notifier.py/raw?ref=$CI_COMMIT_REF_NAME" \
+        -o pipeline_slack_notifier.py
+      
+      curl -s -H "PRIVATE-TOKEN: $GITLAB_ALL_KEY" \
+        "$CI_SERVER_URL/api/v4/projects/$CI_PROJECT_ID/repository/files/ci%2Fscripts%2Fgitlab_pipeline_monitor.py/raw?ref=$CI_COMMIT_REF_NAME" \
+        -o gitlab_pipeline_monitor.py
+      
+      # Run the notifier
+      python pipeline_slack_notifier.py \
+        --bot-token "$CUDNN_FE_SLACK_BOT_TOKEN" \
+        --token "$GITLAB_ALL_KEY" \
+        --channel "#swdl-cudnn-frontend-dev" \
+        --ref "$CI_COMMIT_REF_NAME"
+  rules:
+    # Only run for scheduled pipelines on develop branch
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_REF_NAME == "develop"'
+      when: always
+  # Run even if previous stages failed
+  when: always
+  allow_failure: true

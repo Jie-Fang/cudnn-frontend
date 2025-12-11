@@ -1,0 +1,190 @@
+# GitLab CI Job Configuration for Slack Notifications
+#
+# Add this job to your .gitlab-ci.yml to automatically post pipeline results to Slack
+# when scheduled (nightly) pipelines complete.
+#
+# SETUP:
+# 1. Add CI/CD Variables in GitLab (Settings > CI/CD > Variables):
+#    - CUDNN_FE_SLACK_BOT_TOKEN (masked, protected) - Slack Bot User OAuth Token
+#    - GITLAB_ALL_KEY (masked, protected) - GitLab API access token
+#
+# 2. Copy this job into your .gitlab-ci.yml
+#
+# Channel: #swdl-cudnn-frontend-dev (hardcoded)
+
+# ==============================================================================
+# OPTION 1: Simple notification job (runs after all jobs)
+# ==============================================================================
+
+stages:
+  - build
+  - test
+  - python_samples
+  - notify  # Add this stage
+
+slack_notification:
+  stage: notify
+  image: python:3.10-slim
+  variables:
+    GIT_STRATEGY: none  # Don't need repo checkout
+  before_script:
+    - pip install requests --quiet
+  script:
+    - |
+      # Download the notifier scripts from ci/scripts/
+      curl -s -H "PRIVATE-TOKEN: $GITLAB_ALL_KEY" \
+        "$CI_SERVER_URL/api/v4/projects/$CI_PROJECT_ID/repository/files/ci%2Fscripts%2Fpipeline_slack_notifier.py/raw?ref=$CI_COMMIT_REF_NAME" \
+        -o pipeline_slack_notifier.py
+      
+      curl -s -H "PRIVATE-TOKEN: $GITLAB_ALL_KEY" \
+        "$CI_SERVER_URL/api/v4/projects/$CI_PROJECT_ID/repository/files/ci%2Fscripts%2Fgitlab_pipeline_monitor.py/raw?ref=$CI_COMMIT_REF_NAME" \
+        -o gitlab_pipeline_monitor.py
+      
+      # Run the notifier
+      python pipeline_slack_notifier.py \
+        --bot-token "$CUDNN_FE_SLACK_BOT_TOKEN" \
+        --token "$GITLAB_ALL_KEY" \
+        --channel "#swdl-cudnn-frontend-dev" \
+        --ref "$CI_COMMIT_REF_NAME"
+  rules:
+    # Only run for scheduled pipelines on develop branch
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_REF_NAME == "develop"'
+      when: always
+  # Run even if previous stages failed
+  when: always
+  allow_failure: true  # Don't fail the pipeline if Slack notification fails
+
+
+# ==============================================================================
+# OPTION 2: Only notify on new failures
+# ==============================================================================
+
+slack_notification_failures_only:
+  stage: notify
+  image: python:3.10-slim
+  variables:
+    GIT_STRATEGY: none
+  before_script:
+    - pip install requests --quiet
+  script:
+    - |
+      curl -s -H "PRIVATE-TOKEN: $GITLAB_ALL_KEY" \
+        "$CI_SERVER_URL/api/v4/projects/$CI_PROJECT_ID/repository/files/ci%2Fscripts%2Fpipeline_slack_notifier.py/raw?ref=$CI_COMMIT_REF_NAME" \
+        -o pipeline_slack_notifier.py
+      
+      curl -s -H "PRIVATE-TOKEN: $GITLAB_ALL_KEY" \
+        "$CI_SERVER_URL/api/v4/projects/$CI_PROJECT_ID/repository/files/ci%2Fscripts%2Fgitlab_pipeline_monitor.py/raw?ref=$CI_COMMIT_REF_NAME" \
+        -o gitlab_pipeline_monitor.py
+      
+      python pipeline_slack_notifier.py \
+        --bot-token "$CUDNN_FE_SLACK_BOT_TOKEN" \
+        --token "$GITLAB_ALL_KEY" \
+        --channel "#swdl-cudnn-frontend-dev" \
+        --ref "$CI_COMMIT_REF_NAME" \
+        --only-failures
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: always
+  when: always
+  allow_failure: true
+
+
+# ==============================================================================
+# OPTION 3: Inline script (no external files needed)
+# ==============================================================================
+
+slack_notification_inline:
+  stage: notify
+  image: python:3.10-slim
+  variables:
+    GIT_STRATEGY: none
+  before_script:
+    - pip install requests --quiet
+  script:
+    - |
+      python3 << 'EOF'
+      import os
+      import requests
+      import json
+      
+      GITLAB_URL = os.environ["CI_SERVER_URL"]
+      PROJECT_ID = os.environ["CI_PROJECT_ID"]
+      PIPELINE_ID = os.environ["CI_PIPELINE_ID"]
+      PIPELINE_URL = os.environ["CI_PIPELINE_URL"]
+      REF = os.environ["CI_COMMIT_REF_NAME"]
+      TOKEN = os.environ["GITLAB_ALL_KEY"]
+      SLACK_BOT_TOKEN = os.environ["CUDNN_FE_SLACK_BOT_TOKEN"]
+      SLACK_CHANNEL = "#swdl-cudnn-frontend-dev"
+      
+      headers = {"PRIVATE-TOKEN": TOKEN}
+      
+      # Get current pipeline jobs
+      jobs_url = f"{GITLAB_URL}/api/v4/projects/{PROJECT_ID}/pipelines/{PIPELINE_ID}/jobs"
+      jobs = requests.get(jobs_url, headers=headers, params={"per_page": 100}).json()
+      
+      failed_jobs = [j for j in jobs if j["status"] == "failed" and not j.get("allow_failure")]
+      total_jobs = len(jobs)
+      
+      # Get previous scheduled pipeline
+      pipelines_url = f"{GITLAB_URL}/api/v4/projects/{PROJECT_ID}/pipelines"
+      params = {"ref": REF, "source": "schedule", "per_page": 2}
+      pipelines = requests.get(pipelines_url, headers=headers, params=params).json()
+      
+      prev_failed_names = set()
+      if len(pipelines) > 1:
+          prev_id = pipelines[1]["id"]
+          prev_jobs_url = f"{GITLAB_URL}/api/v4/projects/{PROJECT_ID}/pipelines/{prev_id}/jobs"
+          prev_jobs = requests.get(prev_jobs_url, headers=headers, params={"per_page": 100}).json()
+          prev_failed_names = {j["name"] for j in prev_jobs if j["status"] == "failed" and not j.get("allow_failure")}
+      
+      current_failed_names = {j["name"] for j in failed_jobs}
+      new_failures = current_failed_names - prev_failed_names
+      fixed = prev_failed_names - current_failed_names
+      
+      # Build Slack message
+      if new_failures:
+          color = "danger"
+          status = f"🚨 {len(new_failures)} NEW FAILURE(S)"
+      elif failed_jobs:
+          color = "warning"
+          status = f"⚠️ {len(failed_jobs)} persistent failure(s)"
+      else:
+          color = "good"
+          status = "✅ All tests passing!"
+      
+      text = f"*cudnn_frontend* | `{REF}` | <{PIPELINE_URL}|Pipeline #{PIPELINE_ID}>\n"
+      text += f"*{status}*\n"
+      text += f"_{len(failed_jobs)} failed / {total_jobs} total_\n\n"
+      
+      if new_failures:
+          text += "*New Failures:*\n"
+          for j in failed_jobs:
+              if j["name"] in new_failures:
+                  text += f"• `{j['name']}` - <{j['web_url']}|View>\n"
+      
+      if fixed:
+          text += f"\n*Fixed ({len(fixed)}):* " + ", ".join(f"`{n}`" for n in list(fixed)[:5])
+      
+      # Send via Slack Bot API
+      message = {
+          "channel": SLACK_CHANNEL,
+          "text": "Pipeline Status Update",
+          "attachments": [{"color": color, "text": text, "mrkdwn_in": ["text"]}]
+      }
+      response = requests.post(
+          "https://slack.com/api/chat.postMessage",
+          headers={"Authorization": f"Bearer {SLACK_BOT_TOKEN}", "Content-Type": "application/json"},
+          json=message
+      )
+      result = response.json()
+      if result.get("ok"):
+          print(f"✅ Sent Slack notification: {status}")
+      else:
+          print(f"❌ Slack error: {result.get('error')}")
+      EOF
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: always
+  when: always
+  allow_failure: true
+
