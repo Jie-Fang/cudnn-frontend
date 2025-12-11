@@ -425,7 +425,8 @@ python_samples:cudnn_ga_latest:
 # ==============================================================================
 slack_notification:
   stage: notify
-  image: python:3.10-slim
+  extends:
+    - .cudnn_ga_image:template
   variables:
     GIT_STRATEGY: none
   before_script:
