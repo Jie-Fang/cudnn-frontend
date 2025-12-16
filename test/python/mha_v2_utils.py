@@ -129,6 +129,9 @@ class RandomizationContext:
             if hasattr(randoms_, k)
         ]
 
+        if "is_deterministic" in randoms:
+            randoms_.is_determin = randoms["is_deterministic"] == True
+
         randoms_.s_q, randoms_.s_kv = randoms["s_q_s_kv"]
         randoms_.d_qk, randoms_.d_v = randoms["d_qk_d_v"]
         randoms_.h_q, randoms_.h_k, randoms_.h_v = randoms["head_count"]
