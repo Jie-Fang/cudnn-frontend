@@ -1738,6 +1738,22 @@ Graph::get_knobs_for_engine(int64_t const engine, std::vector<Knob> &knobs) {
 inline error_t
 Graph::create_execution_plans(std::vector<HeurMode_t> const &mode) {
     CUDNN_FE_LOG_BANNER("  CREATE EXECUTION PLANS  (HEURISTICS QUERY)  ");
+
+    // CHECK IF NEED TO OVERRIDE HEURISTICS QUERY
+    for (auto &sub_node : sub_nodes) {
+        if (auto [engine_id, user_knobs] = sub_node->override_heuristics_query(); engine_id != -1) {
+#ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
+            CUDNN_FE_LOG_LABEL_ENDL("INFO: Overriding heuristics query with engine ID "
+                                    << engine_id << " and user knobs " << nlohmann::json(user_knobs).dump());
+#else
+            CUDNN_FE_LOG_LABEL_ENDL("INFO: Overriding heuristics query with engine ID "
+                                    << engine_id << " and user knobs " << static_cast<int>(user_knobs.size()));
+#endif
+            CHECK_CUDNN_FRONTEND_ERROR(create_execution_plan(engine_id, user_knobs));
+            return {error_code_t::OK, ""};
+        }
+    }
+
     EngineConfigList op_graph_to_configs;
     CHECK_CUDNN_FRONTEND_ERROR(detail::query_cudnn_heuristics_impl(
         operation_graph, op_graph_to_configs, mode, context.get_target_sm_count(), device_properties));

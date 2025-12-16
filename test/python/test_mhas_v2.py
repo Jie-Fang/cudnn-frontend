@@ -1295,6 +1295,7 @@ def test_sdpa_random_bwd_L0(env_info, test_no, request, cudnn_handle):
         diag_align=RandomChoice({cudnn.diagonal_alignment.TOP_LEFT : 1, cudnn.diagonal_alignment.BOTTOM_RIGHT : 1}),
         is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 0, "padded" : 1, "full" : 1}),
         stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "disabled" : 1}),
+        is_deterministic=RandomChoice({True : 1, False : 1}),
     ) as randomization_ctx:
         test.cfg = randomization_ctx(rng, data_seed)
 
