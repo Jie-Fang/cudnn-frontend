@@ -22,7 +22,6 @@
 #include "node/resample.h"
 #include "node/reshape.h"
 #include "node/slice.h"
-// #include "node/scaled_dot_product_attention.h"
 #include "node/scaled_dot_product_flash_attention.h"
 #include "node/sdpa_fp8_bwd.h"
 #include "node/block_scale_quantize.h"
@@ -47,6 +46,9 @@ class Graph : public ICudnn, public INode {
     std::unordered_set<std::shared_ptr<Tensor_attributes>> deserialized_tensor_properties;
     std::unordered_map<uid_t, pass_by_values_t> deserialized_pass_by_value;
     std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>> deserialized_workspace_modifications;
+
+    // char: 'x'=hex, 'd'=decimal, 'b'=base64
+    std::vector<std::pair<std::shared_ptr<Tensor_attributes>, char>> tensors_to_dump;
 
     error_t
     get_pre_assigned_uids(std::unordered_set<Tensor_attributes::uid_t> &used_uids) {
@@ -277,6 +279,15 @@ class Graph : public ICudnn, public INode {
             attributes.inputs.at(SDPA_attributes::input_names::Scale_O) != nullptr) {
             sdpa_outputs.Amax_O = attributes.outputs[SDPA_attributes::output_names::Amax_O] =
                 output_tensor(attributes.name + "::Amax_O");
+        }
+
+        auto seq_len_q_it  = attributes.inputs.find(SDPA_attributes::input_names::SEQ_LEN_Q);
+        auto seq_len_kv_it = attributes.inputs.find(SDPA_attributes::input_names::SEQ_LEN_KV);
+        if (seq_len_q_it != attributes.inputs.end() && seq_len_q_it->second != nullptr) {
+            tensors_to_dump.emplace_back(seq_len_q_it->second, 'd');
+        }
+        if (seq_len_kv_it != attributes.inputs.end() && seq_len_kv_it->second != nullptr) {
+            tensors_to_dump.emplace_back(seq_len_kv_it->second, 'd');
         }
 
         if (attributes.implementation == AttentionImplementation_t::AUTO) {
@@ -824,6 +835,165 @@ class Graph : public ICudnn, public INode {
         return execute(handle, tensor_uid_to_pointer_map, workspace);
     }
 
+    static std::string
+    to_hex_(const void *data, size_t num_elements, size_t elem_size) {
+        const auto *bytes = static_cast<const unsigned char *>(data);
+        std::stringstream ss;
+        ss << "[";
+        for (size_t i = 0; i < num_elements; ++i) {
+            if (i > 0) ss << ", ";
+            ss << "0x" << std::hex << std::uppercase;
+            switch (elem_size) {
+                case 1:
+                    ss << static_cast<unsigned>(bytes[i]);
+                    break;
+                case 2:
+                    ss << *reinterpret_cast<const uint16_t *>(&bytes[i * 2]);
+                    break;
+                case 4:
+                    ss << *reinterpret_cast<const uint32_t *>(&bytes[i * 4]);
+                    break;
+                case 8:
+                    ss << *reinterpret_cast<const uint64_t *>(&bytes[i * 8]);
+                    break;
+                default:
+                    ss << "?";
+            }
+        }
+        ss << "]";
+        return ss.str();
+    }
+
+    static std::string
+    to_decimal_(const void *data, size_t num_elements, size_t elem_size) {
+        const auto *bytes = static_cast<const unsigned char *>(data);
+        std::stringstream ss;
+        ss << "[";
+        for (size_t i = 0; i < num_elements; ++i) {
+            if (i > 0) ss << ", ";
+            switch (elem_size) {
+                case 1:
+                    ss << static_cast<int>(bytes[i]);
+                    break;
+                case 2:
+                    ss << *reinterpret_cast<const int16_t *>(&bytes[i * 2]);
+                    break;
+                case 4:
+                    ss << *reinterpret_cast<const int32_t *>(&bytes[i * 4]);
+                    break;
+                case 8:
+                    ss << *reinterpret_cast<const int64_t *>(&bytes[i * 8]);
+                    break;
+                default:
+                    ss << "?";
+            }
+        }
+        ss << "]";
+        return ss.str();
+    }
+
+    static std::string
+    to_base64_(const void *data, size_t total_bytes) {
+        static const char table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        const auto *bytes         = static_cast<const unsigned char *>(data);
+        std::string result;
+        result.reserve(((total_bytes + 2) / 3) * 4);
+        for (size_t i = 0; i < total_bytes; i += 3) {
+            uint32_t n = static_cast<uint32_t>(bytes[i]) << 16;
+            if (i + 1 < total_bytes) n |= static_cast<uint32_t>(bytes[i + 1]) << 8;
+            if (i + 2 < total_bytes) n |= static_cast<uint32_t>(bytes[i + 2]);
+            result.push_back(table[(n >> 18) & 0x3F]);
+            result.push_back(table[(n >> 12) & 0x3F]);
+            result.push_back((i + 1 < total_bytes) ? table[(n >> 6) & 0x3F] : '=');
+            result.push_back((i + 2 < total_bytes) ? table[n & 0x3F] : '=');
+        }
+        return result;
+    }
+
+    error_t
+    dump_tensor_content_(int64_t uid,
+                         void *ptr,
+                         std::shared_ptr<Tensor_attributes> const &tensor,
+                         char fmt,
+                         cudaStream_t stream) const {
+        if (!isLoggingEnabled()) return {error_code_t::OK, ""};
+
+        auto const &dims    = tensor->get_dim();
+        size_t num_elements = 1;
+        for (auto d : dims) num_elements *= static_cast<size_t>(d);
+        size_t elem_size   = detail::get_data_type_size(tensor->get_data_type());
+        size_t total_bytes = num_elements * elem_size;
+
+        cudaPointerAttributes attr;
+        _CUDNN_CHECK_CUDA_ERROR(detail::cuda_pointer_get_attributes(&attr, ptr));
+
+        std::vector<unsigned char> host_buf(total_bytes);
+        if (attr.type == cudaMemoryTypeDevice || attr.type == cudaMemoryTypeManaged) {
+            _CUDNN_CHECK_CUDA_ERROR(
+                detail::cuda_mem_cpy_async(host_buf.data(), ptr, total_bytes, cudaMemcpyDeviceToHost, stream));
+            _CUDNN_CHECK_CUDA_ERROR(detail::cuda_stream_synchronize(stream));
+        } else {
+            std::memcpy(host_buf.data(), ptr, total_bytes);
+        }
+
+        std::string data_str;
+        switch (fmt) {
+            case 'x':
+                data_str = to_hex_(host_buf.data(), num_elements, elem_size);
+                break;
+            case 'd':
+                data_str = to_decimal_(host_buf.data(), num_elements, elem_size);
+                break;
+            case 'b':
+                data_str = to_base64_(host_buf.data(), total_bytes);
+                break;
+            default:
+                data_str = to_hex_(host_buf.data(), num_elements, elem_size);
+        }
+        CUDNN_FE_LOG_LABEL_ENDL("Tensor Dump Uid: " << uid << " Name: " << tensor->get_name() << " Data: " << data_str);
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    log_variant_pack_memory_type_(int64_t uid, void *ptr) const {
+        if (isLoggingEnabled()) {
+            cudaPointerAttributes attributes;
+            _CUDNN_CHECK_CUDA_ERROR(detail::cuda_pointer_get_attributes(&attributes, ptr));
+
+            auto memory_type_to_string = [](cudaMemoryType type) {
+                switch (type) {
+                    case cudaMemoryTypeHost:
+                        return std::string("Host");
+                    case cudaMemoryTypeDevice:
+                        return std::string("Device");
+                    case cudaMemoryTypeManaged:
+                        return std::string("Managed");
+                    case cudaMemoryTypeUnregistered:
+                        return std::string("Unregistered");
+                    default:
+                        return "UNKNOWN cudaMemoryType (" + std::to_string(type) + ")";
+                }
+            };
+
+            auto ptr_to_string = [](void *p) {
+                std::stringstream ss;
+                ss << "0x" << std::hex << std::setw(sizeof(void *) * 2) << std::setfill('0')
+                   << reinterpret_cast<uintptr_t>(p);
+                return ss.str();
+            };
+
+            // clang-format off
+            CUDNN_FE_LOG_LABEL_ENDL("Variant Pack" << std::setw(0) << " Uid: " << std::setw(20) << uid
+                                                   << std::setw(0) << " MemoryType: " << std::setw(12) << memory_type_to_string(attributes.type)
+                                                   << std::setw(0) << " Device: " << std::setw(4) << attributes.device
+                                                   << std::setw(0) << " UnifiedPtr: " << std::setw(20) << ptr_to_string(ptr)
+                                                   << std::setw(0) << " DevicePtr: " << std::setw(20) << ptr_to_string(attributes.devicePointer)
+                                                   << std::setw(0) << " HostPtr: " << std::setw(20) << ptr_to_string(attributes.hostPointer));
+            // clang-format on
+        }
+        return {error_code_t::OK, ""};
+    }
+
     error_t
     execute_plan_at_index(cudnnHandle_t handle,
                           std::unordered_map<int64_t, void *> &tensor_uid_to_pointer_map,
@@ -853,6 +1023,20 @@ class Graph : public ICudnn, public INode {
         // offset workspace by the already used fe graph workspace
         // this is where cudnn backend can start using workspace for its execution plans
         void *cudnn_workspace = static_cast<char *>(workspace) + fe_workspace_size;
+
+        if (isLoggingEnabled()) {
+            cudaStream_t stream;
+            _CUDNN_CHECK_CUDNN_ERROR(detail::get_stream(handle, &stream));
+            for (auto const &[uid, ptr] : tensor_uid_to_pointer_map) {
+                CHECK_CUDNN_FRONTEND_ERROR(log_variant_pack_memory_type_(uid, ptr));
+            }
+            for (auto const &[tensor, fmt] : tensors_to_dump) {
+                auto it = tensor_uid_to_pointer_map.find(tensor->get_uid());
+                if (it != tensor_uid_to_pointer_map.end()) {
+                    CHECK_CUDNN_FRONTEND_ERROR(dump_tensor_content_(it->first, it->second, tensor, fmt, stream));
+                }
+            }
+        }
 
         CHECK_CUDNN_FRONTEND_ERROR(
             execute_cudnn_plan_with_uid(handle, tensor_uid_to_pointer_map, cudnn_workspace, plan_index));
@@ -888,6 +1072,20 @@ class Graph : public ICudnn, public INode {
         // offset workspace by the already used fe graph workspace
         // this is where cudnn backend can start using workspace for its execution plans
         void *cudnn_workspace = static_cast<char *>(workspace) + fe_workspace_size;
+
+        if (isLoggingEnabled()) {
+            cudaStream_t stream;
+            _CUDNN_CHECK_CUDNN_ERROR(detail::get_stream(handle, &stream));
+            for (auto const &[uid, ptr] : tensor_uid_to_pointer_map) {
+                CHECK_CUDNN_FRONTEND_ERROR(log_variant_pack_memory_type_(uid, ptr));
+            }
+            for (auto const &[tensor, fmt] : tensors_to_dump) {
+                auto it = tensor_uid_to_pointer_map.find(tensor->get_uid());
+                if (it != tensor_uid_to_pointer_map.end()) {
+                    CHECK_CUDNN_FRONTEND_ERROR(dump_tensor_content_(it->first, it->second, tensor, fmt, stream));
+                }
+            }
+        }
 
         CHECK_CUDNN_FRONTEND_ERROR(
             execute_cudnn_plan_with_uid(handle, tensor_uid_to_pointer_map, cudnn_workspace, plans.candidate));
@@ -1018,6 +1216,12 @@ class Graph : public ICudnn, public INode {
 
         j["fe_workspace_size"] = fe_workspace_size;
 
+        std::vector<std::pair<uid_t, char>> tensors_to_dump_uids;
+        for (auto const &[tensor, fmt] : tensors_to_dump) {
+            tensors_to_dump_uids.emplace_back(tensor->get_uid(), fmt);
+        }
+        j["tensors_to_dump"] = tensors_to_dump_uids;
+
         data = json::to_ubjson(j);
         CUDNN_FE_LOG_BANNER(" SERIALIZE PLAN (ALL OK) ");
         return {error_code_t::OK, ""};
@@ -1058,6 +1262,18 @@ class Graph : public ICudnn, public INode {
         variant_pack_replacements = j["variant_pack_replacements"];
 
         fe_workspace_size = j["fe_workspace_size"];
+
+        if (j.contains("tensors_to_dump")) {
+            auto dump_uids = j["tensors_to_dump"].get<std::vector<std::pair<uid_t, char>>>();
+            for (auto const &[uid, fmt] : dump_uids) {
+                for (auto const &tensor : deserialized_tensor_properties) {
+                    if (tensor->get_uid() == uid) {
+                        tensors_to_dump.emplace_back(tensor, fmt);
+                        break;
+                    }
+                }
+            }
+        }
 
         CHECK_CUDNN_FRONTEND_ERROR(warmup(handle));
 
