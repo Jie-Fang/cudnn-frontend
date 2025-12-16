@@ -961,10 +961,10 @@ class CompositeSDPABackwardNode : public NodeCRTP<CompositeSDPABackwardNode> {
                                         error_code_t::GRAPH_NOT_SUPPORTED,
                                         "Deterministic algorithm is not supported on blackwell architecture with cudnn version below 9.18.0");
 
-            // dbias bias rng/dropout alibi d_qk < 64
-            RETURN_CUDNN_FRONTEND_ERROR_IF(is_dbias || is_rng || is_dropout || attributes.alibi_mask || d_qk <= 64,
+            // dbias bias rng/dropout alibi
+            RETURN_CUDNN_FRONTEND_ERROR_IF(is_dbias || is_rng || is_dropout || attributes.alibi_mask,
                                         error_code_t::GRAPH_NOT_SUPPORTED,
-                                        "Deterministic algorithm is not supported on blackwell architecture when dbias, rng/dropout, alibi, d_qk <= 64 is enabled");
+                                        "Deterministic algorithm is not supported on blackwell architecture when dbias, rng/dropout, alibi is enabled");
 
             is_deterministic_algorithm_supported_on_blackwell = true;
         }
