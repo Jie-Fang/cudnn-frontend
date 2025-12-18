@@ -5,14 +5,12 @@
 
 ## 🚀 Embracing Open Source
 
-We are making a major transition to embrace open source. FE is no longer just a wrapper; it is becoming a hub for shipping high-performance, open-source kernels directly to users.
+We will begin open-sourcing kernels based on customer needs, with the goal to educate developers and enable them to customize as needed.
 
-We are now shipping **OSS kernels** written in Python, allowing you to inspect, modify, and contribute to the core logic. Check out our latest implementations:
+We are now shipping **OSS kernels**, allowing you to inspect, modify, and contribute to the core logic. Check out our latest implementations:
 
 *   **[GEMM + Amax](https://github.com/NVIDIA/cudnn-frontend/tree/main/python/cudnn/gemm_amax):** Optimized FP8 matrix multiplication with absolute maximum calculation.
 *   **[GEMM + SwiGLU](https://github.com/NVIDIA/cudnn-frontend/tree/main/python/cudnn/gemm_swiglu):** High-performance implementation of the SwiGLU activation fused with GEMM.
-
-**This is just the beginning.** We are committed to releasing more open-source kernels and features in the future. We believe the future of deep learning optimization is collaborative, and we want you to be a part of it.
 
 ## Key Features
 
