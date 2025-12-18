@@ -290,6 +290,12 @@ class Graph : public ICudnn, public INode {
             tensors_to_dump.emplace_back(seq_len_kv_it->second, 'd');
         }
 
+        for (auto t : {q, k, v, sdpa_outputs.O}) {
+            if (auto ragged = t->get_ragged_offset()) {
+                tensors_to_dump.emplace_back(ragged, 'd');
+            }
+        }
+
         if (attributes.implementation == AttentionImplementation_t::AUTO) {
             // Sets attributes.implementation to a supporting implementation,
             // or leaves as AUTO if none found
@@ -835,165 +841,6 @@ class Graph : public ICudnn, public INode {
         return execute(handle, tensor_uid_to_pointer_map, workspace);
     }
 
-    static std::string
-    to_hex_(const void *data, size_t num_elements, size_t elem_size) {
-        const auto *bytes = static_cast<const unsigned char *>(data);
-        std::stringstream ss;
-        ss << "[";
-        for (size_t i = 0; i < num_elements; ++i) {
-            if (i > 0) ss << ", ";
-            ss << "0x" << std::hex << std::uppercase;
-            switch (elem_size) {
-                case 1:
-                    ss << static_cast<unsigned>(bytes[i]);
-                    break;
-                case 2:
-                    ss << *reinterpret_cast<const uint16_t *>(&bytes[i * 2]);
-                    break;
-                case 4:
-                    ss << *reinterpret_cast<const uint32_t *>(&bytes[i * 4]);
-                    break;
-                case 8:
-                    ss << *reinterpret_cast<const uint64_t *>(&bytes[i * 8]);
-                    break;
-                default:
-                    ss << "?";
-            }
-        }
-        ss << "]";
-        return ss.str();
-    }
-
-    static std::string
-    to_decimal_(const void *data, size_t num_elements, size_t elem_size) {
-        const auto *bytes = static_cast<const unsigned char *>(data);
-        std::stringstream ss;
-        ss << "[";
-        for (size_t i = 0; i < num_elements; ++i) {
-            if (i > 0) ss << ", ";
-            switch (elem_size) {
-                case 1:
-                    ss << static_cast<int>(bytes[i]);
-                    break;
-                case 2:
-                    ss << *reinterpret_cast<const int16_t *>(&bytes[i * 2]);
-                    break;
-                case 4:
-                    ss << *reinterpret_cast<const int32_t *>(&bytes[i * 4]);
-                    break;
-                case 8:
-                    ss << *reinterpret_cast<const int64_t *>(&bytes[i * 8]);
-                    break;
-                default:
-                    ss << "?";
-            }
-        }
-        ss << "]";
-        return ss.str();
-    }
-
-    static std::string
-    to_base64_(const void *data, size_t total_bytes) {
-        static const char table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-        const auto *bytes         = static_cast<const unsigned char *>(data);
-        std::string result;
-        result.reserve(((total_bytes + 2) / 3) * 4);
-        for (size_t i = 0; i < total_bytes; i += 3) {
-            uint32_t n = static_cast<uint32_t>(bytes[i]) << 16;
-            if (i + 1 < total_bytes) n |= static_cast<uint32_t>(bytes[i + 1]) << 8;
-            if (i + 2 < total_bytes) n |= static_cast<uint32_t>(bytes[i + 2]);
-            result.push_back(table[(n >> 18) & 0x3F]);
-            result.push_back(table[(n >> 12) & 0x3F]);
-            result.push_back((i + 1 < total_bytes) ? table[(n >> 6) & 0x3F] : '=');
-            result.push_back((i + 2 < total_bytes) ? table[n & 0x3F] : '=');
-        }
-        return result;
-    }
-
-    error_t
-    dump_tensor_content_(int64_t uid,
-                         void *ptr,
-                         std::shared_ptr<Tensor_attributes> const &tensor,
-                         char fmt,
-                         cudaStream_t stream) const {
-        if (!isLoggingEnabled()) return {error_code_t::OK, ""};
-
-        auto const &dims    = tensor->get_dim();
-        size_t num_elements = 1;
-        for (auto d : dims) num_elements *= static_cast<size_t>(d);
-        size_t elem_size   = detail::get_data_type_size(tensor->get_data_type());
-        size_t total_bytes = num_elements * elem_size;
-
-        cudaPointerAttributes attr;
-        _CUDNN_CHECK_CUDA_ERROR(detail::cuda_pointer_get_attributes(&attr, ptr));
-
-        std::vector<unsigned char> host_buf(total_bytes);
-        if (attr.type == cudaMemoryTypeDevice || attr.type == cudaMemoryTypeManaged) {
-            _CUDNN_CHECK_CUDA_ERROR(
-                detail::cuda_mem_cpy_async(host_buf.data(), ptr, total_bytes, cudaMemcpyDeviceToHost, stream));
-            _CUDNN_CHECK_CUDA_ERROR(detail::cuda_stream_synchronize(stream));
-        } else {
-            std::memcpy(host_buf.data(), ptr, total_bytes);
-        }
-
-        std::string data_str;
-        switch (fmt) {
-            case 'x':
-                data_str = to_hex_(host_buf.data(), num_elements, elem_size);
-                break;
-            case 'd':
-                data_str = to_decimal_(host_buf.data(), num_elements, elem_size);
-                break;
-            case 'b':
-                data_str = to_base64_(host_buf.data(), total_bytes);
-                break;
-            default:
-                data_str = to_hex_(host_buf.data(), num_elements, elem_size);
-        }
-        CUDNN_FE_LOG_LABEL_ENDL("Tensor Dump Uid: " << uid << " Name: " << tensor->get_name() << " Data: " << data_str);
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
-    log_variant_pack_memory_type_(int64_t uid, void *ptr) const {
-        if (isLoggingEnabled()) {
-            cudaPointerAttributes attributes;
-            _CUDNN_CHECK_CUDA_ERROR(detail::cuda_pointer_get_attributes(&attributes, ptr));
-
-            auto memory_type_to_string = [](cudaMemoryType type) {
-                switch (type) {
-                    case cudaMemoryTypeHost:
-                        return std::string("Host");
-                    case cudaMemoryTypeDevice:
-                        return std::string("Device");
-                    case cudaMemoryTypeManaged:
-                        return std::string("Managed");
-                    case cudaMemoryTypeUnregistered:
-                        return std::string("Unregistered");
-                    default:
-                        return "UNKNOWN cudaMemoryType (" + std::to_string(type) + ")";
-                }
-            };
-
-            auto ptr_to_string = [](void *p) {
-                std::stringstream ss;
-                ss << "0x" << std::hex << std::setw(sizeof(void *) * 2) << std::setfill('0')
-                   << reinterpret_cast<uintptr_t>(p);
-                return ss.str();
-            };
-
-            // clang-format off
-            CUDNN_FE_LOG_LABEL_ENDL("Variant Pack" << std::setw(0) << " Uid: " << std::setw(20) << uid
-                                                   << std::setw(0) << " MemoryType: " << std::setw(12) << memory_type_to_string(attributes.type)
-                                                   << std::setw(0) << " Device: " << std::setw(4) << attributes.device
-                                                   << std::setw(0) << " UnifiedPtr: " << std::setw(20) << ptr_to_string(ptr)
-                                                   << std::setw(0) << " DevicePtr: " << std::setw(20) << ptr_to_string(attributes.devicePointer)
-                                                   << std::setw(0) << " HostPtr: " << std::setw(20) << ptr_to_string(attributes.hostPointer));
-            // clang-format on
-        }
-        return {error_code_t::OK, ""};
-    }
-
     error_t
     execute_plan_at_index(cudnnHandle_t handle,
                           std::unordered_map<int64_t, void *> &tensor_uid_to_pointer_map,
@@ -1028,12 +875,17 @@ class Graph : public ICudnn, public INode {
             cudaStream_t stream;
             _CUDNN_CHECK_CUDNN_ERROR(detail::get_stream(handle, &stream));
             for (auto const &[uid, ptr] : tensor_uid_to_pointer_map) {
-                CHECK_CUDNN_FRONTEND_ERROR(log_variant_pack_memory_type_(uid, ptr));
+                CHECK_CUDNN_FRONTEND_ERROR(detail::log_variant_pack_memory_type(uid, ptr));
             }
             for (auto const &[tensor, fmt] : tensors_to_dump) {
                 auto it = tensor_uid_to_pointer_map.find(tensor->get_uid());
                 if (it != tensor_uid_to_pointer_map.end()) {
-                    CHECK_CUDNN_FRONTEND_ERROR(dump_tensor_content_(it->first, it->second, tensor, fmt, stream));
+                    auto const &dims    = tensor->get_dim();
+                    size_t num_elements = 1;
+                    for (auto d : dims) num_elements *= static_cast<size_t>(d);
+                    size_t elem_size = detail::get_data_type_size(tensor->get_data_type());
+                    CHECK_CUDNN_FRONTEND_ERROR(detail::log_dump_tensor_content(
+                        it->first, tensor->get_name(), it->second, num_elements, elem_size, fmt, stream));
                 }
             }
         }
@@ -1077,12 +929,17 @@ class Graph : public ICudnn, public INode {
             cudaStream_t stream;
             _CUDNN_CHECK_CUDNN_ERROR(detail::get_stream(handle, &stream));
             for (auto const &[uid, ptr] : tensor_uid_to_pointer_map) {
-                CHECK_CUDNN_FRONTEND_ERROR(log_variant_pack_memory_type_(uid, ptr));
+                CHECK_CUDNN_FRONTEND_ERROR(detail::log_variant_pack_memory_type(uid, ptr));
             }
             for (auto const &[tensor, fmt] : tensors_to_dump) {
                 auto it = tensor_uid_to_pointer_map.find(tensor->get_uid());
                 if (it != tensor_uid_to_pointer_map.end()) {
-                    CHECK_CUDNN_FRONTEND_ERROR(dump_tensor_content_(it->first, it->second, tensor, fmt, stream));
+                    auto const &dims    = tensor->get_dim();
+                    size_t num_elements = 1;
+                    for (auto d : dims) num_elements *= static_cast<size_t>(d);
+                    size_t elem_size = detail::get_data_type_size(tensor->get_data_type());
+                    CHECK_CUDNN_FRONTEND_ERROR(detail::log_dump_tensor_content(
+                        it->first, tensor->get_name(), it->second, num_elements, elem_size, fmt, stream));
                 }
             }
         }
