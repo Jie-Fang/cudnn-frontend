@@ -43,6 +43,7 @@ $$
 Notes:
 - The `alpha` scaling is applied before the SwiGLU; both `X_b` and `G_b` are from the scaled GEMM results.
 - `AB12` stores the entire scaled GEMM output (both input and gate blocks), while `C` stores the fused SwiGLU-projected result with half the columns.
+- **N divisibility requirement**: `N` must be divisible by 64 (two consecutive 32-column blocks) to ensure proper pairing for the SwiGLU operation.
 
 ### Diagram
 
@@ -72,7 +73,7 @@ ab12, c = gemm_swiglu_wrapper_sm100(
     a_tensor,
     b_tensor,
     alpha=1.0,
-    c_major="n",
+    c_major="m",
     ab12_dtype=torch.float32,
     c_dtype=torch.float16,
     acc_dtype=torch.float32,
@@ -91,7 +92,7 @@ ab12, c, sfc, amax = gemm_swiglu_wrapper_sm100(
     a_tensor,
     b_tensor,
     alpha=1.0,
-    c_major="n",
+    c_major="m",
     ab12_dtype=torch.bfloat16,
     c_dtype=torch.bfloat16,
     acc_dtype=torch.float32,
@@ -184,25 +185,25 @@ gemm.execute(
   - Shape: `(M, K, L)`
   - Stride: `(1, M, M·K)` for `m`-major or `(K, 1, M·K)` for `k`-major
     - Quantized mode: Must be `k`-major for FP4 inputs
-  - Dtype:
+  - Dtype (`ab_dtype`):
     - Standard mode: `{float16, bfloat16, float32, float8_e4m3fn, float8_e5m2}`
     - Quantized mode: `{float4_e2m1fn_x2, uint8, float8_e4m3fn, float8_e5m2}`
       - `uint8` is interpreted as packed FP4 (two FP4 values per byte)
 - Input tensor **B**: `b_tensor` (wrapper) or `sample_b`, `b_tensor` (class)
   - Shape: `(N, K, L)`
   - Stride: `(1, N, N·K)` for `n`-major or `(K, 1, N·K)` for `k`-major
-  - Dtype: Must match `A`
+  - Dtype (`ab_dtype`): Must match `A`
 - Output tensor **AB12**: return value (wrapper) or `sample_ab12`, `ab12_tensor` (class)
   - Shape: `(M, N, L)`
   - Stride: `(1, M, M·N)` for `m`-major or `(N, 1, M·N)` for `n`-major. Provided as `c_major` argument for wrapper
     - Quantized mode: Must be `n`-major for FP4 outputs
-  - Dtype:
+  - Dtype (`ab12_dtype`, provided as `ab12_dtype` argument for wrapper):
     - Standard mode: `{float32, float16, bfloat16}` if `acc_dtype == float32`, `{float16, bfloat16}` if `acc_dtype == float16`
     - Quantized mode: `{float32, float16, bfloat16, float8_e4m3fn, float8_e5m2}`
 - Output tensor **C**: return value (wrapper) or `sample_c`, `c_tensor` (class)
   - Shape: `(M, N/2, L)`
   - Stride: `(1, M, M·N/2)` for `m`-major or `(N/2, 1, M·N/2)` for `n`-major. Must match with `AB12`
-  - Dtype (provided as `c_dtype` argument for wrapper):
+  - Dtype (`c_dtype`, provided as `c_dtype` argument for wrapper):
     - Standard mode: `{float16, bfloat16}`
     - Quantized mode: `{float32, float16, bfloat16, float8_e4m3fn, float8_e5m2}`
 - **Quantization-specific tensors**
@@ -219,7 +220,7 @@ gemm.execute(
   - Input tensor **AMAX** (**Optional**): `amax_tensor` (wrapper) or `sample_amax`, `amax_tensor` (class)
     - Shape: `(1,)`
     - Dtype: `float32`
-    - **Required when**: FP4 ab_dtype and bf16 c_dtype
+    - **Required when**: `ab_dtype` is FP4 and `c_dtype == bfloat16`
   - Input tensor **Norm Const** (**Optional**): `norm_const_tensor` (wrapper) or `sample_norm_const`, `norm_const_tensor` (class)
     - Shape: `(1,)`
     - Dtype: `float32`
@@ -262,7 +263,7 @@ gemm.execute(
 
 ### Wrapper-specific parameters: `gemm_swiglu_wrapper_sm100`
 
-- `a_tensor`, `b_tensor`, `ab12_tensor`, `c_tensor`: see Input/Output tensors
+- `a_tensor`, `b_tensor`: see Input/Output tensors
 - `c_major: str`: see Input/Output tensors. Default: `"n"`
 - `ab12_dtype: torch.dtype`: see Input/Output tensors. Default: `torch.float32`
 - `c_dtype: torch.dtype`: see Input/Output tensors. Default: `torch.float16`
@@ -304,15 +305,15 @@ gemm.execute(
 #### Standard mode
 
 - `A`/`B` must have the same dtype.
-- `AB12 ∈ {float8_e4m3fn, float8_e5m2}` is currently disabled
-- `acc_dtype == float16` is only supported with `A/B ∈ {float16, float8_e4m3fn, float8_e5m2}`
-- `AB12 ∈ {float32}` requires `acc_dtype == float32` and `mma_tiler_mn[0] == 256`
+- `ab12_dtype ∈ {float8_e4m3fn, float8_e5m2}` is currently disabled
+- `acc_dtype == float16` is only supported with `ab_dtype ∈ {float16, float8_e4m3fn, float8_e5m2}`
+- `ab12_dtype ∈ {float32}` requires `acc_dtype == float32` and `mma_tiler_mn[0] == 256`
 
 #### Quantized mode
 
 The quantized kernel supports the following configurations:
 
-| Format | A/B dtype | sf_dtype | sf_vec_size | Notes |
+| Format | ab_dtype | sf_dtype | sf_vec_size | Notes |
 |--------|-----------|----------|-------------|-------|
 | **MXFP4** | `float4_e2m1fn_x2` or `uint8` | `float8_e8m0fnu` | 16 | Standard MX FP4 |
 | **MXFP4** | `float4_e2m1fn_x2` or `uint8` | `float8_e4m3fn` | 16 | NVF4 variant |
@@ -320,9 +321,9 @@ The quantized kernel supports the following configurations:
 
 Additional constraints:
 - `acc_dtype` must be `float32`
-- FP4 inputs are not compatible with FP8 output (`c_dtype`). BF16 `c_dtype` is expected.
+- FP4 `ab_dtype` is not compatible with FP8 `c_dtype`. BF16 `c_dtype` is expected.
 - When `c_dtype ∈ {float8_e4m3fn, float8_e5m2}`: `sfc_tensor` and `norm_const_tensor` are required
-- When `A/B` is FP4 and `c_dtype == bfloat16`: `amax_tensor` is required
+- When `ab_dtype` is FP4 and `c_dtype == bfloat16`: `amax_tensor` is required
 - `c_dtype` and `ab12_dtype` cannot both be `float32`
 
 ### Tiling and cluster
@@ -331,7 +332,7 @@ Additional constraints:
 - If `mma_tiler_mn == (128, 128)` and `cluster_shape_mn == (1, 1)`, `c_major` must be `"m"`.
 - If `mma_tiler_mn != (128, 128)`, `c_major` must be `"m"`.
 - If `TILE_M == 128` and `cluster_shape_mn != (1, 1)`, `mma_tiler_mn` must be exactly `(128, 128)`.
-- `TILE_M == 256` and `AB12 ∈ {float32}` is currently disabled.
+- `TILE_M == 256` and `ab12_dtype ∈ {float32}` is currently disabled.
 - If `mma_tiler_mn[0] == 256`, `CLUSTER_M` must be divisible by 2
 - Standard mode: If `mma_tiler_mn[0] != 256`, `cluster_shape_mn` must be `(1, 1)`.
 - Quantized mode: If `mma_tiler_mn == (256, 256)` with `cluster_shape_mn != (1, 1)`, `sf_vec_size == 32`, and `sf_dtype == float8_e8m0fnu`: both `ab12_dtype` and `c_dtype` must be `bfloat16`.
