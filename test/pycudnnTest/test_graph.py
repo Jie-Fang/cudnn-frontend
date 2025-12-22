@@ -1168,6 +1168,14 @@ class test_tensor:
 
         return rep
 
+    def cleanTensorData(self):
+        if hasattr(self, "ref_data") and torch.is_tensor(self.ref_data):
+            if hasattr(self.ref_data, "is_cuda") and self.ref_data.is_cuda:
+                del self.ref_data
+        if hasattr(self, "compute_data") and torch.is_tensor(self.compute_data):
+            if hasattr(self.compute_data, "is_cuda") and self.compute_data.is_cuda:
+                del self.compute_data
+
 
 class test_graph:
     __test__ = False
