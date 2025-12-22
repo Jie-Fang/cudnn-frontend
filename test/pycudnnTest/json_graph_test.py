@@ -1039,6 +1039,7 @@ def run_tensor_ir_test_from_json_definition(
         atol,
         rtol,
     )
+    tensor_ir_tester.cleanup()
     return status
 
 

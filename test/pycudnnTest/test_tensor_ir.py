@@ -1187,6 +1187,55 @@ class test_tensor_ir:
     def calc_ref(self):
         self.ref_outputs = self.test_graph.calc_reference()
 
+    def cleanup(self):
+        """
+        Clean up GPU memory by explicitly deleting tensor references and forcing garbage collection.
+
+        This method should be called after test execution to free GPU memory.
+        It clears:
+        - Output tensors (self.outputs)
+        - Reference outputs (self.ref_outputs)
+        - Any cached data in the test_graph
+        """
+        import torch
+        import gc
+
+        # Clear output tensors
+        if hasattr(self, "outputs") and self.outputs:
+            for tensor in self.outputs:
+                if torch.is_tensor(tensor) and tensor.is_cuda:
+                    del tensor
+            self.outputs.clear()
+            self.outputs = []
+
+        # Clear reference outputs
+        if hasattr(self, "ref_outputs") and self.ref_outputs:
+            if isinstance(self.ref_outputs, list):
+                for tensor in self.ref_outputs:
+                    if torch.is_tensor(tensor):
+                        del tensor
+                self.ref_outputs.clear()
+            self.ref_outputs = None
+
+        # Clear any cached nodes data
+        if hasattr(self, "test_graph") and hasattr(self.test_graph, "nodes"):
+            for node in self.test_graph.nodes:
+                if hasattr(node, "output"):
+                    for output_tensor in node.output:
+                        output_tensor.cleanTensorData()
+
+        # Clear entrance nodes cached values and GPU tensors
+        if hasattr(self, "test_graph") and hasattr(self.test_graph, "entrance_nodes"):
+            for node in self.test_graph.entrance_nodes:
+                if hasattr(node, "output"):
+                    for output_tensor in node.output:
+                        output_tensor.cleanTensorData()
+
+        # Final garbage collection pass
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
     def tensorir_compare_to_reference(self, atol=1e-2, rtol=1e-2):
         assert len(self.ref_outputs) == len(self.outputs)
 
