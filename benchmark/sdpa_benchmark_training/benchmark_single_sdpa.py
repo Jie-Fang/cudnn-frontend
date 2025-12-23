@@ -73,6 +73,18 @@ parser.add_argument(
     help="Run both forward and backward pass (fwd only by default)",
 )
 parser.add_argument(
+    "--profile_pass",
+    default=None,
+    type=str,
+    choices=["fwd", "bwd", "both"],
+    help="Which pass to profile (default: fwd unless --fwd_bwd is set).",
+)
+parser.add_argument(
+    "--deterministic_bwd",
+    action="store_true",
+    help="Use deterministic algorithm for backward pass where supported (cudnn_fe FP16/BF16)",
+)
+parser.add_argument(
     "--attn_mask",
     default="no_mask",
     type=str,
@@ -144,6 +156,15 @@ else:
     raise ValueError("Both --head_dim_qk and --head_dim_vo must be provided together when using asymmetric head dims.")
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 assert device.type == "cuda", "Requires CUDA device"
+if args.profile_pass is not None:
+    run_fwd = args.profile_pass in ("fwd", "both")
+    run_bwd = args.profile_pass in ("bwd", "both")
+elif args.fwd_bwd:
+    run_fwd = True
+    run_bwd = True
+else:
+    run_fwd = True
+    run_bwd = False
 enable_gqa = num_q_heads != num_kv_heads
 assert (
     args.attn_mask != "bottom_right" or q_seqlen <= kv_seqlen
@@ -352,7 +373,7 @@ if args.sdpa_backend == "cudnn_fe":
             dropout=dropout_tuple if is_dropout else None,
         )
 
-    if args.fwd_bwd:
+    if run_bwd:
         if args.data_type == "fp8":
             o_fwd.set_output(True).set_dim(output.size()).set_stride(output.stride()).set_data_type(
                 cudnn.data_type.FP8_E4M3
@@ -397,7 +418,7 @@ if args.sdpa_backend == "cudnn_fe":
     graph_fwd.build_plans()
 
     # If backward is requested, set up backward graph.
-    if args.fwd_bwd:
+    if run_bwd:
         graph_bwd = cudnn.pygraph(
             io_data_type=(cudnn.data_type.FP8_E4M3 if args.data_type == "fp8" else convert_to_cudnn_type(target_dtype)),
             intermediate_data_type=cudnn.data_type.FLOAT,
@@ -484,6 +505,7 @@ if args.sdpa_backend == "cudnn_fe":
                 ),
                 diagonal_band_right_bound=None if args.attn_mask == "no_mask" else 0,
                 dropout=dropout_tuple if is_dropout else None,
+                use_deterministic_algorithm=args.deterministic_bwd,
             )
 
         if args.data_type == "fp8":
@@ -537,10 +559,10 @@ if args.sdpa_backend == "cudnn_fe":
             }
 
             variant_pack_bwd = {
-                q_fwd: query,
-                k_fwd: key,
-                v_fwd: value,
-                o_fwd: output,
+                q_bwd: query,
+                k_bwd: key,
+                v_bwd: value,
+                o_bwd: output,
                 dQ_bwd: dQuery,
                 dK_bwd: dKey,
                 dV_bwd: dValue,
@@ -622,8 +644,9 @@ if args.sdpa_backend == "cudnn_fe":
     if is_dropout:
         variant_pack_fwd[seed_fwd] = dropout_seed
         variant_pack_fwd[offset_fwd] = dropout_offset
-        variant_pack_bwd[seed_bwd] = dropout_seed
-        variant_pack_bwd[offset_bwd] = dropout_offset
+        if run_bwd:
+            variant_pack_bwd[seed_bwd] = dropout_seed
+            variant_pack_bwd[offset_bwd] = dropout_offset
 ## Done setting up cuDNN graph.
 
 
@@ -949,7 +972,7 @@ for i in range(total_iters):
             dropout_offset = torch.full((1, 1, 1, 1), 789, dtype=torch.int64, device="cuda")
 
         # Only variant pack and workspace need to be updated for each iteration.
-        if args.fwd_bwd:
+        if run_bwd:
             if args.data_type == "fp8":
                 variant_pack_fwd = {
                     q_fwd: query,
@@ -1046,43 +1069,51 @@ for i in range(total_iters):
         if is_dropout:
             variant_pack_fwd[seed_fwd] = dropout_seed
             variant_pack_fwd[offset_fwd] = dropout_offset
-            variant_pack_bwd[seed_bwd] = dropout_seed
-            variant_pack_bwd[offset_bwd] = dropout_offset
+            if run_bwd:
+                variant_pack_bwd[seed_bwd] = dropout_seed
+                variant_pack_bwd[offset_bwd] = dropout_offset
 
     l2_flush_buffer.zero_()
 
-    # Run kernel with profiler
-    with profile(activities=[ProfilerActivity.CUDA], record_shapes=True) as prof:
-        with record_function("sdpa.forward"):  # Custom marker
-            if args.sdpa_backend == "cudnn_fe":
-                graph_fwd.execute(variant_pack_fwd, workspace)
-            else:
-                output = sdpa_function(query, key, value)
-        torch.cuda.synchronize()  # Ensure all kernels finish
+    # Run kernel with profiler for forward if requested, else run unprofiled to prep for backward
+    if run_fwd:
+        with profile(activities=[ProfilerActivity.CUDA], record_shapes=True) as prof:
+            with record_function("sdpa.forward"):  # Custom marker
+                if args.sdpa_backend == "cudnn_fe":
+                    graph_fwd.execute(variant_pack_fwd, workspace)
+                else:
+                    output = sdpa_function(query, key, value)
+            torch.cuda.synchronize()  # Ensure all kernels finish
 
-    # Filter profiler results by kernel name prefix
-    matched_kernels = [
-        item
-        for item in prof.key_averages()
-        if item.key.startswith("cudnn")
-        or item.key.startswith("kernel_cutlass")
-        or "pytorch_flash::" in item.key
-        or "flash::" in item.key
-        or "at::native::" in item.key
-        or "cutlass3x" in item.key
-        or "(anonymous namespace)::" in item.key
-        or item.key.startswith("fmha_")
-    ]
-    if len(matched_kernels) >= 1:
-        fwd_time = sum(item.device_time for item in matched_kernels) / 1000
-    if i >= dry_run_iters:
-        forward_times.append(fwd_time)
+        # Filter profiler results by kernel name prefix
+        matched_kernels = [
+            item
+            for item in prof.key_averages()
+            if item.key.startswith("cudnn")
+            or item.key.startswith("kernel_cutlass")
+            or "pytorch_flash::" in item.key
+            or "flash::" in item.key
+            or "at::native::" in item.key
+            or "cutlass3x" in item.key
+            or "(anonymous namespace)::" in item.key
+            or item.key.startswith("fmha_")
+        ]
+        if len(matched_kernels) >= 1:
+            fwd_time = sum(item.device_time for item in matched_kernels) / 1000
+            if i >= dry_run_iters:
+                forward_times.append(fwd_time)
+    else:
+        if args.sdpa_backend == "cudnn_fe":
+            graph_fwd.execute(variant_pack_fwd, workspace)
+        else:
+            output = sdpa_function(query, key, value)
+        torch.cuda.synchronize()
 
     # Sleep for some time proportional to fwd_time for stable measurements
-    sleep_time = np.min([fwd_time / 100, 1.0])
+    sleep_time = np.min([fwd_time / 100, 1.0]) if run_fwd and len(matched_kernels) >= 1 else 0.0
     time.sleep(sleep_time)
 
-    if args.fwd_bwd:
+    if run_bwd:
         # Run backward pass
 
         l2_flush_buffer.zero_()
@@ -1120,10 +1151,10 @@ for i in range(total_iters):
         ]
         if len(matched_kernels) >= 1:
             bwd_time = sum(item.device_time for item in matched_kernels) / 1000
-        if i >= dry_run_iters:
-            backward_times.append(bwd_time)
+            if i >= dry_run_iters:
+                backward_times.append(bwd_time)
 
-        sleep_time = np.min([bwd_time / 100, 1.0])
+        sleep_time = np.min([bwd_time / 100, 1.0]) if run_bwd and len(matched_kernels) >= 1 else 0.0
         time.sleep(sleep_time)
 
         dQuery, dKey, dValue, dOutput = postprocess_dqdkdvdo(dQuery, dKey, dValue, dOutput, args.sdpa_backend)
@@ -1134,10 +1165,10 @@ for i in range(total_iters):
         value,
         output,
     ) = postprocess_qkvo(query, key, value, output, args.sdpa_backend)
-    if args.data_type != "fp8" and not args.skip_ref:
+    if args.data_type != "fp8" and not args.skip_ref and run_fwd:
         try:
             output_ref = flash_attention_4_sdpa(query, key, value)
-            if args.fwd_bwd:
+            if run_bwd:
                 query.retain_grad()
                 key.retain_grad()
                 value.retain_grad()
@@ -1168,20 +1199,32 @@ for i in range(total_iters):
         del query, key, value, output
 
 ## print results
-fwd_median_time = np.median(np.array(forward_times[5:]))
-fwd_tflops = tflops_per_sec(
-    args.batch_size,
-    args.q_seqlen,
-    args.kv_seqlen,
-    head_dim_qk,
-    head_dim_vo,
-    args.num_q_heads,
-    args.attn_mask,
-    fwd_median_time,
-    "fwd",
+fwd_median_time = (
+    np.median(np.array(forward_times[5:]))
+    if len(forward_times) > 5
+    else (np.median(np.array(forward_times)) if len(forward_times) > 0 else 0.0)
 )
-if args.fwd_bwd:
-    bwd_median_time = np.median(np.array(backward_times[5:]))
+fwd_tflops = 0.0
+if run_fwd and fwd_median_time > 0:
+    fwd_tflops = tflops_per_sec(
+        args.batch_size,
+        args.q_seqlen,
+        args.kv_seqlen,
+        head_dim_qk,
+        head_dim_vo,
+        args.num_q_heads,
+        args.attn_mask,
+        fwd_median_time,
+        "fwd",
+    )
+
+bwd_median_time = (
+    np.median(np.array(backward_times[5:]))
+    if len(backward_times) > 5
+    else (np.median(np.array(backward_times)) if len(backward_times) > 0 else 0.0)
+)
+bwd_tflops = 0.0
+if run_bwd and bwd_median_time > 0:
     bwd_tflops = tflops_per_sec(
         args.batch_size,
         args.q_seqlen,
@@ -1193,20 +1236,17 @@ if args.fwd_bwd:
         bwd_median_time,
         "bwd",
     )
-    if args.format_output:
-        print(
-            f"{args.case_tag},{args.sdpa_backend},{args.batch_size},{args.q_seqlen},{args.kv_seqlen},{args.num_q_heads},{args.num_kv_heads},{head_dim_qk},{fwd_median_time:.3f},{bwd_median_time:.3f},{fwd_tflops:.0f},{bwd_tflops:.0f},{np.max(np.array(forward_diffs[5:])):.6f},{num_iters}"
-        )
-    else:
-        print(
-            f"{args.sdpa_backend}:: Median (fwd, bwd) Execution Times: {fwd_median_time:.3f} ms ({fwd_tflops:.0f} TFLOPS), {bwd_median_time:.3f} ms ({bwd_tflops:.0f} TFLOPS) (max difference vs. pyt_reference: {np.max(np.array(forward_diffs[5:])):.6f} from {num_iters} iterations)"
-        )
+
+if args.format_output:
+    print(
+        f"{args.case_tag},{args.sdpa_backend},{args.batch_size},{args.q_seqlen},{args.kv_seqlen},{args.num_q_heads},{args.num_kv_heads},{head_dim_qk},{fwd_median_time:.3f},{bwd_median_time:.3f},{fwd_tflops:.0f},{bwd_tflops:.0f},{(np.max(np.array(forward_diffs[5:])) if len(forward_diffs) > 5 else (np.max(np.array(forward_diffs)) if len(forward_diffs) > 0 else 0.0)):.6f},{num_iters}"
+    )
 else:
-    if args.format_output:
+    if run_fwd and run_bwd:
         print(
-            f"{args.case_tag},{args.sdpa_backend},{args.batch_size},{args.q_seqlen},{args.kv_seqlen},{args.num_q_heads},{args.num_kv_heads},{head_dim_qk},{fwd_median_time:.3f},0,{fwd_tflops:.0f},0,{np.max(np.array(forward_diffs[5:])):.6f},{num_iters}"
+            f"{args.sdpa_backend}:: Median (fwd, bwd) Execution Times: {fwd_median_time:.3f} ms ({fwd_tflops:.0f} TFLOPS), {bwd_median_time:.3f} ms ({bwd_tflops:.0f} TFLOPS)"
         )
-    else:
-        print(
-            f"{args.sdpa_backend}:: Median (fwd) Execution Times: {fwd_median_time:.3f} ms ({fwd_tflops:.0f} TFLOPS) (max difference vs. pyt_reference: {np.max(np.array(forward_diffs[5:])):.6f} from {num_iters} iterations)"
-        )
+    elif run_fwd:
+        print(f"{args.sdpa_backend}:: Median (fwd) Execution Time: {fwd_median_time:.3f} ms ({fwd_tflops:.0f} TFLOPS)")
+    elif run_bwd:
+        print(f"{args.sdpa_backend}:: Median (bwd) Execution Time: {bwd_median_time:.3f} ms ({bwd_tflops:.0f} TFLOPS)")
