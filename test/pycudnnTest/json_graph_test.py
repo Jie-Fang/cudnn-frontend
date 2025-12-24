@@ -113,6 +113,8 @@ def run_tensor_ir_from_legacy_args(parent_args, unknown_args):
         get_element_bits,
         generate_tensorir_compilation_configs,
         get_tensorir_compilation_config,
+        is_float_dtype,
+        is_integer_dtype,
     )
 
     tensorir_parser = argparse.ArgumentParser(
@@ -125,6 +127,9 @@ def run_tensor_ir_from_legacy_args(parent_args, unknown_args):
     tensorir_parser.add_argument("-stream_k", action="store_true")
     tensorir_parser.add_argument("-cubin_chip", action="store", default="sm_100a")
     tensorir_parser.add_argument("-sweep_tile_configs", action="store_true")
+    tensorir_parser.add_argument(
+        "-random_sweep_tile_configs", action="store", type=int, default=0
+    )
     tensorir_parser.add_argument("-dump_ir_path", action="store", default="")
     tensorir_parser.add_argument("-load_ir_path", action="store", default="")
     tensorir_parser.add_argument("-mlir_timing", action="store_true")
@@ -152,6 +157,11 @@ def run_tensor_ir_from_legacy_args(parent_args, unknown_args):
         tensorir_args.compiler_backend if tensorir_args.compiler_backend else "Tile"
     )
 
+    is8BitTransposeB = False
+    isUTCHMMA = False
+    isUTCIMMA = False
+    isBlockScaled = False
+
     if compiler_backend == "Tile":
         m, n, k = 256, 256, 256
         matmul_element_bits = get_element_bits(
@@ -167,10 +177,20 @@ def run_tensor_ir_from_legacy_args(parent_args, unknown_args):
                 tensor_B = node.producer_nodes[1].output[0]
 
                 matmul_element_bits = get_element_bits(tensor_A.data_type)
+
+                if (tensor_B.stride[1] != 1) and (matmul_element_bits != 8):
+                    is8BitTransposeB = True
+
+                if is_float_dtype(tensor_A.data_type):
+                    isUTCHMMA = True
+                elif is_integer_dtype(tensor_A.data_type):
+                    isUTCIMMA = True
+
                 m = tensor_A.dim[1]
                 n = tensor_B.dim[2]
                 k = tensor_A.dim[2]
                 flag_matmul = True
+                isBlockScaled = node.op_name == "scaled_matmul"
                 break
 
         if not flag_matmul:
@@ -180,9 +200,23 @@ def run_tensor_ir_from_legacy_args(parent_args, unknown_args):
     else:
         raise ValueError("Invalid compiler backend: {}".format(compiler_backend))
 
-    if tensorir_args.sweep_tile_configs:
+    if tensorir_args.sweep_tile_configs or (
+        tensorir_args.random_sweep_tile_configs
+        and tensorir_args.random_sweep_tile_configs > 0
+    ):
+        assert not (
+            isUTCHMMA and isUTCIMMA
+        ), "isUTCHMMA and isUTCIMMA cannot be True at the same time"
         kernel_config = generate_tensorir_compilation_configs(
-            m, n, k, matmul_element_bits, tensorir_args
+            m,
+            n,
+            k,
+            matmul_element_bits,
+            tensorir_args,
+            is8BitTransposeB,
+            isUTCHMMA,
+            isUTCIMMA,
+            isBlockScaled,
         )
     else:
         kernel_config = [

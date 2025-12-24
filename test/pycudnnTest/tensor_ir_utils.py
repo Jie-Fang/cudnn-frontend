@@ -14,6 +14,7 @@ class CompilerWithCaskContext:
 class CompilerWithKernelCache:
     def __init__(self):
         self.cached_shaders = {}
+        self.cached_can_compile_results = {}
         # Need to make sure the lifetime of the cask context and compiler is longer
         # than the shaders to avoid segmentation fault when the cask context is released
         self.base_compiler = CompilerWithCaskContext()
@@ -66,7 +67,20 @@ class CompilerWithKernelCache:
     def get_miss_cnt(self):
         return self.miss_cnt
 
-    def __del__(self):
+    def can_compile(self, module, compile_options):
+        cache_key = self.base_compiler.compiler.get_shader_cache_key(
+            module, compile_options
+        )
+        with self.lock_kernel_cache:
+            can_compile = self.cached_can_compile_results.get(cache_key, None)
+            if can_compile is not None:
+                return can_compile
+        can_compile = self.base_compiler.compiler.can_compile(module, compile_options)
+        with self.lock_kernel_cache:
+            self.cached_can_compile_results[cache_key] = can_compile
+        return can_compile
+
+    def print_stats(self):
         print(f"hit rate: {self.get_hit_rate()*100:.2f}%")
         print(f"hit cnt: {self.get_hit_cnt():,d}")
         print(f"miss cnt: {self.get_miss_cnt():,d}")
