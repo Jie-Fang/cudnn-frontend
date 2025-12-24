@@ -156,6 +156,10 @@ if __name__ == "__main__":
         if args.R == "irStream":
             print("$$$$ Reading from stdin")
 
+        from tensor_ir_utils import CompilerWithKernelCacheSingleton
+
+        compiler_with_kernel_cache = CompilerWithKernelCacheSingleton()
+
         # Process each line in stdin, and run as a graphRunner command
         for line in sys.stdin:
             line_count += 1
@@ -182,7 +186,7 @@ if __name__ == "__main__":
                 error_count += processTestFileLine_graphRunner(
                     args_stream, unknown_args_stream, line_count, line
                 )
-
+        compiler_with_kernel_cache.print_stats()
         if error_count > 0:
             print("ERROR: {} failed tests.".format(error_count))
             sys.exit(1)

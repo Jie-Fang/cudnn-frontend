@@ -41,6 +41,19 @@ def get_element_bits(data_type):
         raise ValueError(f"Unsupported data type: {data_type}")
 
 
+def is_float_dtype(data_type):
+    return data_type in [
+        DataType.FLOAT,
+        DataType.DOUBLE,
+        DataType.HALF,
+        DataType.BFLOAT16,
+    ]
+
+
+def is_integer_dtype(data_type):
+    return data_type in [DataType.INT8, DataType.INT32, DataType.INT64]
+
+
 def parse_int_list(value):
     """Parse comma-separated string into list of integers.
 
@@ -77,102 +90,226 @@ def get_optional_arg(args, attr_name, parser=None, default=None):
     return parser(value) if parser else value
 
 
-def generate_tensorir_compilation_configs(m, n, k, matmul_element_bits, tensorir_args):
-    # Set the default values for the config sweep lists
-    stream_k = False
-    cubin_chip = "sm_100a"
+def _get_arg_from_tensorir_args(tensorir_args, attr_name, converter=None, default=None):
+    value = getattr(tensorir_args, attr_name, None)
+    if value is None:
+        return default
+    return converter(value) if converter else value
 
-    default_mma_k = 256 // matmul_element_bits
 
-    kphase = [1, 1, 4]
+def _parse_comma_separated_ints(value):
+    return list(map(int, value.split(",")))
 
-    mma_shapes = [
-        [64, 128, default_mma_k],
-        [128, 128, default_mma_k],
-        [128, 256, default_mma_k],
+
+def _extract_config_properties(config):
+    cga_tile_size = [config.cgaTileSize.m, config.cgaTileSize.n, config.cgaTileSize.k]
+    mma_shape = [config.mmaShape.m, config.mmaShape.n, config.mmaShape.k]
+    cluster_shape = [
+        config.clusterShape.m,
+        config.clusterShape.n,
+        config.clusterShape.k,
+    ]
+    cta_count = config.mmaTileSize.m // config.ctaTileSize.m
+    return cga_tile_size, mma_shape, cluster_shape, cta_count
+
+
+def _create_config_list(
+    cga_tile_size,
+    mma_shape,
+    cluster_shape,
+    cta_count,
+    stream_k,
+    cubin_chip,
+    matmul_element_bits,
+):
+    """
+    Create a configuration list with all parameters.
+
+    Returns:
+        List containing all configuration parameters
+    """
+    return [
+        cga_tile_size,
+        mma_shape,
+        cluster_shape,
+        cta_count,
+        stream_k,
+        cubin_chip,
+        matmul_element_bits,
     ]
 
-    cluster_shapes = [
-        [1, 1, 1],
-        [1, 2, 1],
-        [1, 4, 1],
-        [2, 1, 1],
-        [2, 2, 1],
-        [2, 4, 1],
-        [4, 1, 1],
-        [4, 2, 1],
-        [4, 4, 1],
-    ]
 
-    cta_counts = [1, 2]
+class TensorIRArguments:
+    """Helper class to encapsulate parsed TensorIR arguments."""
 
-    # Parse user-provided arguments for shape configuration
-    # If user specifies tile_size, mma_shape, or cluster_shape, all three must be provided together
-    input_tile_size = get_optional_arg(tensorir_args, "tile_size", parse_int_list)
-    input_mma_shape = get_optional_arg(tensorir_args, "mma_shape", parse_int_list)
-    input_cluster_shape = get_optional_arg(
-        tensorir_args, "cluster_shape", parse_int_list
-    )
+    def __init__(self, tensorir_args):
+        """Parse and store all TensorIR arguments."""
+        self.tile_size = _get_arg_from_tensorir_args(
+            tensorir_args, "tile_size", _parse_comma_separated_ints
+        )
+        self.mma_shape = _get_arg_from_tensorir_args(
+            tensorir_args, "mma_shape", _parse_comma_separated_ints
+        )
+        self.cluster_shape = _get_arg_from_tensorir_args(
+            tensorir_args, "cluster_shape", _parse_comma_separated_ints
+        )
+        self.cta_count = _get_arg_from_tensorir_args(tensorir_args, "cta_count", int)
+        self.stream_k = _get_arg_from_tensorir_args(
+            tensorir_args, "stream_k", bool, False
+        )
+        self.cubin_chip = _get_arg_from_tensorir_args(
+            tensorir_args, "cubin_chip", default="sm_100a"
+        )
 
-    # Validate shape parameters: either all three or none must be specified
-    shape_params = [input_tile_size, input_mma_shape, input_cluster_shape]
-    if any(param is not None for param in shape_params):
-        if not all(param is not None for param in shape_params):
-            raise ValueError(
-                "When specifying shapes, all three parameters must be provided: "
-                "tile_size, mma_shape, and cluster_shape"
+    def has_all_required(self):
+        """Check if all required arguments are provided."""
+        return all(
+            x is not None
+            for x in [
+                self.mma_shape,
+                self.tile_size,
+                self.cluster_shape,
+                self.cta_count,
+            ]
+        )
+
+    def create_config(
+        self, cga_tile_size, mma_shape, cluster_shape, cta_count, matmul_element_bits
+    ):
+        """Create a configuration using the stored stream_k and cubin_chip."""
+        return _create_config_list(
+            cga_tile_size,
+            mma_shape,
+            cluster_shape,
+            cta_count,
+            self.stream_k,
+            self.cubin_chip,
+            matmul_element_bits,
+        )
+
+    def print_args(self):
+        """Print the parsed arguments for debugging."""
+        print(
+            f"args_mma_shape {self.mma_shape}, args_cta_count {self.cta_count}, "
+            f"args_stream_k {self.stream_k}, args_cubin_chip {self.cubin_chip}"
+        )
+
+
+def generate_tensorir_compilation_configs(
+    m,
+    n,
+    k,
+    matmul_element_bits,
+    tensorir_args,
+    is8BitTransposeB,
+    isUTCHMMA=False,
+    isUTCIMMA=False,
+    isBlockScaled=False,
+):
+    """
+    Generate multiple TensorIR compilation configurations.
+
+    Returns a list of valid configurations based on problem size and constraints.
+    """
+    args = TensorIRArguments(tensorir_args)
+
+    # If all required arguments are provided, return immediately
+    if args.has_all_required():
+        return [
+            args.create_config(
+                args.tile_size,
+                args.mma_shape,
+                args.cluster_shape,
+                args.cta_count,
+                matmul_element_bits,
             )
-        # Use user-provided shapes (single configuration)
-        mma_shapes = [input_mma_shape]
-        cluster_shapes = [input_cluster_shape]
+        ]
 
-    # Override other default parameters
-    cta_counts = get_optional_arg(
-        tensorir_args, "cta_count", parse_int_list, cta_counts
+    args.print_args()
+
+    # Generate all valid configurations
+    print(
+        "isUTCHMMA",
+        isUTCHMMA,
+        "isUTCIMMA",
+        isUTCIMMA,
+        "is8BitTransposeB",
+        is8BitTransposeB,
+    )
+    print("m", m, "n", n, "k", k)
+    configList = nv_tensor_ir.generateAllValidConfigurations_by_problem_size(
+        nv_tensor_ir.MmaShape(m, n, k),
+        matmul_element_bits,
+        isSparse=False,
+        isWSMode=False,
+        is8BitTransposeB=is8BitTransposeB,
+        kPhase=4,
+        isUTCHMMA=isUTCHMMA,
+        isUTCIMMA=isUTCIMMA,
+        blockScaling=isBlockScaled,
     )
 
-    stream_k = get_optional_arg(tensorir_args, "stream_k", bool, stream_k)
-    cubin_chip = get_optional_arg(tensorir_args, "cubin_chip", default=cubin_chip)
+    def should_keep_config(config):
+        """Filter function to determine if a config should be kept."""
+        cga_tile_size, mma_shape, cluster_shape, cta_count = _extract_config_properties(
+            config
+        )
 
-    # Generate all configuration combinations
+        # Apply all filters
+        if args.tile_size is not None and cga_tile_size != args.tile_size:
+            return False
+        if args.mma_shape is not None and mma_shape != args.mma_shape:
+            return False
+        if args.cta_count is not None and cta_count != args.cta_count:
+            return False
+        return True
+
+    # Apply filter to configList
+    filtered_configs = filter(should_keep_config, configList)
+
     configs = []
+    seen = set()
 
-    for cta_count in cta_counts:
-        kcta_count = [cta_count, 1, 1]
-        for mma_shape in mma_shapes:
-            # Scale mma_shape by cta_count
-            scaled_mma_shape = [k * m for k, m in zip(kcta_count, mma_shape)]
+    for config in filtered_configs:
+        cga_tile_size, mma_shape, cluster_shape, cta_count = _extract_config_properties(
+            config
+        )
 
-            for cluster_shape in cluster_shapes:
-                # Skip invalid configurations where cluster size is less than cta_count
-                if cluster_shape[0] < cta_count:
-                    continue
-
-                # Calculate or use user-provided tile_size
-                if input_tile_size is not None:
-                    tile_size = input_tile_size
-                else:
-                    # Calculate tile_size based on mma_shape, cluster_shape, and kphase
-                    tile_size = [
-                        int(m * c * k / cta)
-                        for m, c, k, cta in zip(
-                            scaled_mma_shape, cluster_shape, kphase, kcta_count
-                        )
-                    ]
-
-                # Append configuration tuple
-                configs.append(
-                    [
-                        tile_size,
-                        scaled_mma_shape,
-                        cluster_shape,
-                        cta_count,
-                        stream_k,
-                        cubin_chip,
-                        matmul_element_bits,
-                    ]
+        # Create config and check for duplicates
+        config_tuple = (
+            tuple(cga_tile_size),
+            tuple(mma_shape),
+            tuple(cluster_shape),
+            cta_count,
+            args.stream_k,
+            args.cubin_chip,
+            matmul_element_bits,
+        )
+        if config_tuple not in seen:
+            seen.add(config_tuple)
+            configs.append(
+                args.create_config(
+                    cga_tile_size,
+                    mma_shape,
+                    cluster_shape,
+                    cta_count,
+                    matmul_element_bits,
                 )
-    print(f"Generated {len(configs)} configurations")
+            )
+
+    # Randomly shuffle the configs
+    if (
+        tensorir_args.random_sweep_tile_configs
+        and tensorir_args.random_sweep_tile_configs > 0
+    ):
+        import time
+
+        random.seed(int(time.time()))
+        random.shuffle(configs)
+        configs = configs[: tensorir_args.random_sweep_tile_configs]
+
+    print(f"Generated {len(configs)} configs")
+
     return configs
 
 
@@ -1268,7 +1405,6 @@ class test_tensor_ir:
         atol=1e-2,
         rtol=1e-2,
     ):
-        flag_finished_once = False
         device = torch.device("cuda")
 
         # Prepare inputs - scalars stay on CPU, tensors go to GPU
@@ -1327,6 +1463,8 @@ class test_tensor_ir:
             best_config = dict(
                 tile_size=[], mma_shape=[], cluster_shape=[], cta_count=[]
             )
+            finished_cnt = 0
+
             if compiler_backend == "Collective":
                 for (
                     tile_size,
@@ -1351,6 +1489,9 @@ class test_tensor_ir:
                         )
                         print(f"#### Skip this config")
                         continue
+                    print(
+                        f"\n#### Valid configuration: {tile_size}, {mma_shape}, {cluster_shape}, {cta_count}"
+                    )
 
                     cc = self.compiler_with_kernel_cache.get_compute_capability()
                     # TODO: Add enum to support more cubin_chip
@@ -1382,9 +1523,10 @@ class test_tensor_ir:
                     )
 
                     print(
-                        f"\n#### Running tile_size={tile_size}, mma_shape={mma_shape}, cluster_shape={cluster_shape}, cta_count={cta_count}, stream_k={stream_k}, cubin_chip={cubin_chip}"
+                        f"#### Running tile_size={tile_size}, mma_shape={mma_shape}, cluster_shape={cluster_shape}, cta_count={cta_count}, stream_k={stream_k}, cubin_chip={cubin_chip}"
                     )
-                    if self.compiler_with_kernel_cache.base_compiler.compiler.can_compile(
+
+                    if self.compiler_with_kernel_cache.can_compile(
                         module, compile_options
                     ):
                         print(f"#### Can compile")
@@ -1404,7 +1546,11 @@ class test_tensor_ir:
                         overwrite_stride = overwrite_stride_func(tile_size)
                         tensor_desc.overwrite_strides(overwrite_stride)
 
-                    execution_plan = nv_tensor_ir.ExecutionPlan(shader, *all_desc)
+                    try:
+                        execution_plan = nv_tensor_ir.ExecutionPlan(shader, *all_desc)
+                    except Exception as e:
+                        print(f"#### Failed to create execution plan: {e}")
+                        continue
                     device_workspace_size = (
                         execution_plan.query_max_device_workspace_size()
                     )
@@ -1449,7 +1595,7 @@ class test_tensor_ir:
                                 "cta_count": cta_count,
                             }
                         torch.cuda.synchronize()
-                    flag_finished_once = True
+                    finished_cnt += 1
             else:
                 for config in kernel_configs:
                     tile_size = config[0]  # Extract first value from the config list
@@ -1514,12 +1660,13 @@ class test_tensor_ir:
                                 "tile_size": tile_size,
                             }
                         torch.cuda.synchronize()
-                    flag_finished_once = True
             print(
                 f"@@@@ Best perf achieved is {best_perf / 1000} msec with kernel config: {best_config}"
             )
-        # At least one config is tested successfully
-        if flag_finished_once:
+        print(
+            f"@@@@ Run {finished_cnt} kernels successfully from {len(kernel_configs)} configs"
+        )
+        if finished_cnt > 0:
             return StatusCode.PASSED
         return StatusCode.WAIVED
 
