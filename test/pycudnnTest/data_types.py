@@ -87,9 +87,7 @@ def convert_datatype(data_type, lib):
     try:
         return type_mapping[lib][data_type]
     except KeyError:
-        raise KeyError(
-            f"Data type {data_type} not found. Choose from {type_mapping[lib].keys()}."
-        )
+        raise KeyError(f"Data type {data_type} not found. Choose from {type_mapping[lib].keys()}.")
     except Exception as e:
         raise Exception(f"An unexpected error occurred: {str(e)}")
 

@@ -144,22 +144,12 @@ class TensorIRArguments:
 
     def __init__(self, tensorir_args):
         """Parse and store all TensorIR arguments."""
-        self.tile_size = _get_arg_from_tensorir_args(
-            tensorir_args, "tile_size", _parse_comma_separated_ints
-        )
-        self.mma_shape = _get_arg_from_tensorir_args(
-            tensorir_args, "mma_shape", _parse_comma_separated_ints
-        )
-        self.cluster_shape = _get_arg_from_tensorir_args(
-            tensorir_args, "cluster_shape", _parse_comma_separated_ints
-        )
+        self.tile_size = _get_arg_from_tensorir_args(tensorir_args, "tile_size", _parse_comma_separated_ints)
+        self.mma_shape = _get_arg_from_tensorir_args(tensorir_args, "mma_shape", _parse_comma_separated_ints)
+        self.cluster_shape = _get_arg_from_tensorir_args(tensorir_args, "cluster_shape", _parse_comma_separated_ints)
         self.cta_count = _get_arg_from_tensorir_args(tensorir_args, "cta_count", int)
-        self.stream_k = _get_arg_from_tensorir_args(
-            tensorir_args, "stream_k", bool, False
-        )
-        self.cubin_chip = _get_arg_from_tensorir_args(
-            tensorir_args, "cubin_chip", default="sm_100a"
-        )
+        self.stream_k = _get_arg_from_tensorir_args(tensorir_args, "stream_k", bool, False)
+        self.cubin_chip = _get_arg_from_tensorir_args(tensorir_args, "cubin_chip", default="sm_100a")
 
     def has_all_required(self):
         """Check if all required arguments are provided."""
@@ -173,9 +163,7 @@ class TensorIRArguments:
             ]
         )
 
-    def create_config(
-        self, cga_tile_size, mma_shape, cluster_shape, cta_count, matmul_element_bits
-    ):
+    def create_config(self, cga_tile_size, mma_shape, cluster_shape, cta_count, matmul_element_bits):
         """Create a configuration using the stored stream_k and cubin_chip."""
         return _create_config_list(
             cga_tile_size,
@@ -189,10 +177,7 @@ class TensorIRArguments:
 
     def print_args(self):
         """Print the parsed arguments for debugging."""
-        print(
-            f"args_mma_shape {self.mma_shape}, args_cta_count {self.cta_count}, "
-            f"args_stream_k {self.stream_k}, args_cubin_chip {self.cubin_chip}"
-        )
+        print(f"args_mma_shape {self.mma_shape}, args_cta_count {self.cta_count}, " f"args_stream_k {self.stream_k}, args_cubin_chip {self.cubin_chip}")
 
 
 def generate_tensorir_compilation_configs(
@@ -251,9 +236,7 @@ def generate_tensorir_compilation_configs(
 
     def should_keep_config(config):
         """Filter function to determine if a config should be kept."""
-        cga_tile_size, mma_shape, cluster_shape, cta_count = _extract_config_properties(
-            config
-        )
+        cga_tile_size, mma_shape, cluster_shape, cta_count = _extract_config_properties(config)
 
         # Apply all filters
         if args.tile_size is not None and cga_tile_size != args.tile_size:
@@ -271,9 +254,7 @@ def generate_tensorir_compilation_configs(
     seen = set()
 
     for config in filtered_configs:
-        cga_tile_size, mma_shape, cluster_shape, cta_count = _extract_config_properties(
-            config
-        )
+        cga_tile_size, mma_shape, cluster_shape, cta_count = _extract_config_properties(config)
 
         # Create config and check for duplicates
         config_tuple = (
@@ -298,10 +279,7 @@ def generate_tensorir_compilation_configs(
             )
 
     # Randomly shuffle the configs
-    if (
-        tensorir_args.random_sweep_tile_configs
-        and tensorir_args.random_sweep_tile_configs > 0
-    ):
+    if tensorir_args.random_sweep_tile_configs and tensorir_args.random_sweep_tile_configs > 0:
         import time
 
         random.seed(int(time.time()))
@@ -341,24 +319,12 @@ def get_tensorir_compilation_config(m, n, k, matmul_element_bits, tensorir_args)
     # Override defaults with user-provided arguments
     # Example: -tile_size 128,128,64 -mma_shape 64,128,16 -cluster_shape 1,2,1 -cta_count 2 -stream_k false -cubin_chip sm_100a
     config_values = {
-        "tile_size": get_optional_arg(
-            tensorir_args, "tile_size", parse_int_list, defaults["tile_size"]
-        ),
-        "mma_shape": get_optional_arg(
-            tensorir_args, "mma_shape", parse_int_list, defaults["mma_shape"]
-        ),
-        "cluster_shape": get_optional_arg(
-            tensorir_args, "cluster_shape", parse_int_list, defaults["cluster_shape"]
-        ),
-        "cta_count": get_optional_arg(
-            tensorir_args, "cta_count", int, defaults["cta_count"]
-        ),
-        "stream_k": get_optional_arg(
-            tensorir_args, "stream_k", bool, defaults["stream_k"]
-        ),
-        "cubin_chip": get_optional_arg(
-            tensorir_args, "cubin_chip", default=defaults["cubin_chip"]
-        ),
+        "tile_size": get_optional_arg(tensorir_args, "tile_size", parse_int_list, defaults["tile_size"]),
+        "mma_shape": get_optional_arg(tensorir_args, "mma_shape", parse_int_list, defaults["mma_shape"]),
+        "cluster_shape": get_optional_arg(tensorir_args, "cluster_shape", parse_int_list, defaults["cluster_shape"]),
+        "cta_count": get_optional_arg(tensorir_args, "cta_count", int, defaults["cta_count"]),
+        "stream_k": get_optional_arg(tensorir_args, "stream_k", bool, defaults["stream_k"]),
+        "cubin_chip": get_optional_arg(tensorir_args, "cubin_chip", default=defaults["cubin_chip"]),
     }
 
     # Return configuration as list for backward compatibility
@@ -403,26 +369,18 @@ def find_mismatches(tensor_a, tensor_b, atol, rtol):
 
     # Print the largest 10 mismatches to reduce output length.
     for idx, a_num, b_num, diff_val in mismatches[:10]:
-        print(
-            f"Index: {idx}, Tensor A Value: {a_num}, Tensor B Value: {b_num}, diff = {diff_val}"
-        )
+        print(f"Index: {idx}, Tensor A Value: {a_num}, Tensor B Value: {b_num}, diff = {diff_val}")
 
 
 def splat_if_scalar(lsh, rsh):
-    if isinstance(lsh.type, (ir.IntegerType, ir.FloatType)) and isinstance(
-        rsh.type, (ir.IntegerType, ir.FloatType)
-    ):
+    if isinstance(lsh.type, (ir.IntegerType, ir.FloatType)) and isinstance(rsh.type, (ir.IntegerType, ir.FloatType)):
         raise ValueError(f"One of lsh, rsh must be tensor")
 
     if isinstance(lsh.type, (ir.IntegerType, ir.FloatType)):
-        lsh = nv_tensor_ir.splat(
-            nv_tensor_ir.TensorType.get_from_tensor_type(rsh.type, lsh.type), lsh
-        )
+        lsh = nv_tensor_ir.splat(nv_tensor_ir.TensorType.get_from_tensor_type(rsh.type, lsh.type), lsh)
 
     if isinstance(rsh.type, (ir.IntegerType, ir.FloatType)):
-        rsh = nv_tensor_ir.splat(
-            nv_tensor_ir.TensorType.get_from_tensor_type(lsh.type, rsh.type), rsh
-        )
+        rsh = nv_tensor_ir.splat(nv_tensor_ir.TensorType.get_from_tensor_type(lsh.type, rsh.type), rsh)
     return lsh, rsh
 
 
@@ -517,9 +475,7 @@ def calculate_divisibility_from_alignment(
     leading_dim_idx = find_leading_dimension(stride_dynamic, shape)
 
     # Calculate divisibility from alignment for the leading dimension
-    leading_divisibility = (
-        alignment * 8 // dtype_width if leading_dim_idx is not None else 1
-    )
+    leading_divisibility = alignment * 8 // dtype_width if leading_dim_idx is not None else 1
 
     for idx, s in enumerate(stride_dynamic):
         if s == 0:
@@ -531,10 +487,7 @@ def calculate_divisibility_from_alignment(
                 shape_div.append(1)
                 if stride_div_flag and has_stride_zero:
                     actual_stride_div = calculate_actual_divisibility(stride[idx])
-                    final_stride_div = (
-                        gcd(actual_stride_div * dtype_width, tma_requirement_in_bits)
-                        // dtype_width
-                    )
+                    final_stride_div = gcd(actual_stride_div * dtype_width, tma_requirement_in_bits) // dtype_width
                     stride_div.append(final_stride_div)
                     stride_div_flag = False
                 else:
@@ -545,9 +498,7 @@ def calculate_divisibility_from_alignment(
                 stride_div.append(1)
 
     if has_stride_zero:
-        stride_div[0] = (
-            gcd(stride[0] * dtype_width, tma_requirement_in_bits) // dtype_width
-        )
+        stride_div[0] = gcd(stride[0] * dtype_width, tma_requirement_in_bits) // dtype_width
 
     return shape_div, stride_div
 
@@ -570,16 +521,10 @@ class TensorIRNode(ABC):
         self.tensor_ir_test = tensor_ir_test
         self.children = [node_map[child] for child in node.producer_nodes]
         # Get output tensor info with compute data type from node kwargs or output data type
-        self.output_tensor_info = (
-            self.tensor_ir_test.determine_tensor_ir_inout_tensor_type(
-                node,
-                (
-                    node.kwargs["compute_data_type"]
-                    if "compute_data_type" in node.kwargs
-                    else node.output[0].data_type
-                ),
-                keep_divisibility,
-            )
+        self.output_tensor_info = self.tensor_ir_test.determine_tensor_ir_inout_tensor_type(
+            node,
+            (node.kwargs["compute_data_type"] if "compute_data_type" in node.kwargs else node.output[0].data_type),
+            keep_divisibility,
         )
         if keep_divisibility:
             self.output_tensor_info.tensor_type = output_tensor_type
@@ -591,9 +536,7 @@ class TensorIRNode(ABC):
 
     def convert_and_splat_for_binary_pointwise(self, lsh, rsh, tensor_info):
         """Helper method for binary operations to handle input type conversions"""
-        return self.tensor_ir_test.convert_and_splat_for_binary_pointwise(
-            lsh, rsh, tensor_info
-        )
+        return self.tensor_ir_test.convert_and_splat_for_binary_pointwise(lsh, rsh, tensor_info)
 
     def convert_scalar_tensor(self, scalar_tensor, target_type):
         """Helper method to convert scalar tensors"""
@@ -617,13 +560,7 @@ class ReductionNode(TensorIRNode):
 
     def run(self):
         with self.ip:
-            accumulator_type = ir.TypeAttr.get(
-                eval(
-                    convert_datatype(
-                        self.tensor_ir_test.test_graph.compute_data_type, "tensorir"
-                    )
-                )
-            )
+            accumulator_type = ir.TypeAttr.get(eval(convert_datatype(self.tensor_ir_test.test_graph.compute_data_type, "tensorir")))
 
             reduction_mode = None
             if "reduction_mode.ADD" in self.node.kwargs["mode"]:
@@ -636,9 +573,7 @@ class ReductionNode(TensorIRNode):
                 reduction_mode = nv_tensor_ir.ReductionMode.max
 
             input_datatype = nv_tensor_ir.get_tensor_datatype(self.children[0].type)
-            output_datatype = nv_tensor_ir.get_tensor_datatype(
-                self.output_tensor_info.tensor_type
-            )
+            output_datatype = nv_tensor_ir.get_tensor_datatype(self.output_tensor_info.tensor_type)
 
             # Get original stride and shape from the node
             original_stride = self.node.output[0].stride
@@ -646,9 +581,7 @@ class ReductionNode(TensorIRNode):
 
             # Use the pre-calculated alignment from output_tensor_info
             alignment = self.output_tensor_info.alignment
-            dtype_width = (
-                output_datatype.width if hasattr(output_datatype, "width") else 16
-            )
+            dtype_width = output_datatype.width if hasattr(output_datatype, "width") else 16
 
             # Calculate divisibility from stored alignment
             shape_div, _ = calculate_divisibility_from_alignment(
@@ -700,14 +633,10 @@ class MatmulNode(TensorIRNode):
         producer_node = self.node.producer_nodes[producer_node_idx]
         original_type = producer_node.output[0].data_type
 
-        tensor_info = self.tensor_ir_test.determine_tensor_ir_inout_tensor_type(
-            producer_node, original_type
-        )
+        tensor_info = self.tensor_ir_test.determine_tensor_ir_inout_tensor_type(producer_node, original_type)
 
         # Only convert if datatypes differ
-        if nv_tensor_ir.get_tensor_datatype(
-            input_value.type
-        ) != nv_tensor_ir.get_tensor_datatype(tensor_info.tensor_type):
+        if nv_tensor_ir.get_tensor_datatype(input_value.type) != nv_tensor_ir.get_tensor_datatype(tensor_info.tensor_type):
             return nv_tensor_ir.convert(tensor_info.tensor_type, input_value)
 
         return input_value
@@ -740,9 +669,7 @@ class ScaledMatmulNode(MatmulNode):
             output_type = self.output_tensor_info.tensor_type
 
             # Perform scaled matmul operation
-            self.node_map[self.node] = nv_tensor_ir.scaled_matmul(
-                output_type, A, sfA, B, sfB
-            )
+            self.node_map[self.node] = nv_tensor_ir.scaled_matmul(output_type, A, sfA, B, sfB)
 
 
 class BinaryOperationNode(TensorIRNode):
@@ -774,15 +701,11 @@ class BinaryOperationNode(TensorIRNode):
         with self.ip:
             lsh, rsh = self.children[0], self.children[1]
 
-            lsh, rsh = self.convert_and_splat_for_binary_pointwise(
-                lsh, rsh, self.output_tensor_info
-            )
+            lsh, rsh = self.convert_and_splat_for_binary_pointwise(lsh, rsh, self.output_tensor_info)
 
             op_name = self.node.op_name
             if op_name not in self.BINARY_OP_MAP:
-                print(
-                    f"Unimplemented binary Operation in Lowering to Tensor IR: {op_name}"
-                )
+                print(f"Unimplemented binary Operation in Lowering to Tensor IR: {op_name}")
                 return
 
             # Get the unified operation function
@@ -793,9 +716,7 @@ class BinaryOperationNode(TensorIRNode):
             if not "output" in params.keys():
                 self.node_map[self.node] = op_func(lsh, rsh)
             else:
-                self.node_map[self.node] = op_func(
-                    self.output_tensor_info.tensor_type, lsh, rsh
-                )
+                self.node_map[self.node] = op_func(self.output_tensor_info.tensor_type, lsh, rsh)
 
 
 class UnaryOperationNode(TensorIRNode):
@@ -826,20 +747,14 @@ class UnaryOperationNode(TensorIRNode):
 
     def run(self):
         with self.ip:
-            if nv_tensor_ir.get_tensor_datatype(
-                self.output_tensor_info.tensor_type
-            ) != nv_tensor_ir.get_tensor_datatype(self.children[0].type):
-                convert_value = nv_tensor_ir.convert(
-                    self.output_tensor_info.tensor_type, self.children[0]
-                )
+            if nv_tensor_ir.get_tensor_datatype(self.output_tensor_info.tensor_type) != nv_tensor_ir.get_tensor_datatype(self.children[0].type):
+                convert_value = nv_tensor_ir.convert(self.output_tensor_info.tensor_type, self.children[0])
             else:
                 convert_value = self.children[0]
 
             op_name = self.node.op_name
             if op_name not in self.UNARY_OP_MAP:
-                print(
-                    f"Unimplemented unary Operation in Lowering to Tensor IR: {op_name}"
-                )
+                print(f"Unimplemented unary Operation in Lowering to Tensor IR: {op_name}")
                 return
 
             # Get the unified operation function
@@ -875,10 +790,7 @@ class ComparatorNode(TensorIRNode):
     def run(self):
         with self.ip:
             op_name = self.node.op_name
-            if (
-                op_name not in self.COMPARATOR_MAP["float"]
-                and op_name not in self.COMPARATOR_MAP["integer"]
-            ):
+            if op_name not in self.COMPARATOR_MAP["float"] and op_name not in self.COMPARATOR_MAP["integer"]:
                 print(f"Unimplemented comparator operation: {op_name}")
                 return
 
@@ -898,9 +810,7 @@ class ComparatorNode(TensorIRNode):
                     rsh,
                 )
             else:
-                raise ValueError(
-                    f"Comparator {op_name} requires float or integer tensors"
-                )
+                raise ValueError(f"Comparator {op_name} requires float or integer tensors")
 
 
 class IdentityNode(TensorIRNode):
@@ -910,19 +820,13 @@ class IdentityNode(TensorIRNode):
         with self.ip:
             child = self.children[0]
 
-            if isinstance(child.type, (ir.IntegerType, ir.FloatType)) and isinstance(
-                self.output_tensor_info.tensor_type, nv_tensor_ir.TensorType
-            ):
+            if isinstance(child.type, (ir.IntegerType, ir.FloatType)) and isinstance(self.output_tensor_info.tensor_type, nv_tensor_ir.TensorType):
                 child = nv_tensor_ir.splat(
-                    nv_tensor_ir.TensorType.get_from_tensor_type(
-                        self.output_tensor_info.tensor_type, child.type
-                    ),
+                    nv_tensor_ir.TensorType.get_from_tensor_type(self.output_tensor_info.tensor_type, child.type),
                     child,
                 )
 
-            if nv_tensor_ir.get_tensor_datatype(
-                self.output_tensor_info.tensor_type
-            ) != nv_tensor_ir.get_tensor_datatype(child.type):
+            if nv_tensor_ir.get_tensor_datatype(self.output_tensor_info.tensor_type) != nv_tensor_ir.get_tensor_datatype(child.type):
                 self.node_map[self.node] = nv_tensor_ir.convert(
                     self.output_tensor_info.tensor_type,
                     child,
@@ -935,13 +839,7 @@ class ConvolutionNode(TensorIRNode):
     """Base node for convolution operations"""
 
     def _prepare_common_params(self):
-        accumulator_type_attr = ir.TypeAttr.get(
-            eval(
-                convert_datatype(
-                    self.tensor_ir_test.test_graph.compute_data_type, "tensorir"
-                )
-            )
-        )
+        accumulator_type_attr = ir.TypeAttr.get(eval(convert_datatype(self.tensor_ir_test.test_graph.compute_data_type, "tensorir")))
         pre_padding = self.node.kwargs["padding"]
         post_padding = self.node.kwargs["padding"]  # FIXME: what should this be?
         stride = self.node.kwargs["stride"]
@@ -958,9 +856,7 @@ class ConvFpropNode(ConvolutionNode):
             x = self.children[0]
             w = self.children[1]
 
-            accumulator_type_attr, pre_padding, post_padding, stride, dilation = (
-                self._prepare_common_params()
-            )
+            accumulator_type_attr, pre_padding, post_padding, stride, dilation = self._prepare_common_params()
 
             self.node_map[self.node] = nv_tensor_ir.conv_fprop(
                 self.output_tensor_info.tensor_type,
@@ -982,9 +878,7 @@ class ConvDgradNode(ConvolutionNode):
             dy = self.children[0]
             w = self.children[1]
 
-            accumulator_type_attr, pre_padding, post_padding, stride, dilation = (
-                self._prepare_common_params()
-            )
+            accumulator_type_attr, pre_padding, post_padding, stride, dilation = self._prepare_common_params()
 
             self.node_map[self.node] = nv_tensor_ir.conv_dgrad(
                 self.output_tensor_info.tensor_type,
@@ -1006,9 +900,7 @@ class ConvWgradNode(ConvolutionNode):
             dy = self.children[0]
             w = self.children[1]
 
-            accumulator_type_attr, pre_padding, post_padding, stride, dilation = (
-                self._prepare_common_params()
-            )
+            accumulator_type_attr, pre_padding, post_padding, stride, dilation = self._prepare_common_params()
 
             self.node_map[self.node] = nv_tensor_ir.conv_dgrad(
                 self.output_tensor_info.tensor_type,
@@ -1038,21 +930,15 @@ class ActivationForwardNode(TensorIRNode):
             if beta is None:
                 raise ValueError(f"Beta attribute not found for {self.node.op_name}")
 
-            converted_x, _ = self.convert_and_splat_for_binary_pointwise(
-                self.children[0], None, self.output_tensor_info
-            )
+            converted_x, _ = self.convert_and_splat_for_binary_pointwise(self.children[0], None, self.output_tensor_info)
 
             # Ensure we have float tensors for activations
             if not self.is_float(converted_x):
-                raise ValueError(
-                    f"Activation operation {self.node.op_name} requires float tensors"
-                )
+                raise ValueError(f"Activation operation {self.node.op_name} requires float tensors")
 
             op_name = self.node.op_name
             if op_name in self.ACTIVATION_MAP:
-                self.node_map[self.node] = self.ACTIVATION_MAP[op_name](
-                    converted_x, beta
-                )
+                self.node_map[self.node] = self.ACTIVATION_MAP[op_name](converted_x, beta)
             else:
                 print(f"Unimplemented activation forward operation: {op_name}")
 
@@ -1073,21 +959,15 @@ class ActivationBackwardNode(TensorIRNode):
             if beta is None:
                 raise ValueError(f"Beta attribute not found for {self.node.op_name}")
 
-            converted_x, converted_grad = self.convert_and_splat_for_binary_pointwise(
-                self.children[0], self.children[1], self.output_tensor_info
-            )
+            converted_x, converted_grad = self.convert_and_splat_for_binary_pointwise(self.children[0], self.children[1], self.output_tensor_info)
 
             # Ensure we have float tensors for activation gradients
             if not self.is_float(converted_x) or not self.is_float(converted_grad):
-                raise ValueError(
-                    f"Activation gradient operation {self.node.op_name} requires float tensors"
-                )
+                raise ValueError(f"Activation gradient operation {self.node.op_name} requires float tensors")
 
             op_name = self.node.op_name
             if op_name in self.ACTIVATION_BWD_MAP:
-                self.node_map[self.node] = self.ACTIVATION_BWD_MAP[op_name](
-                    converted_x, converted_grad, beta
-                )
+                self.node_map[self.node] = self.ACTIVATION_BWD_MAP[op_name](converted_x, converted_grad, beta)
             else:
                 print(f"Unimplemented activation backward operation: {op_name}")
 
@@ -1103,18 +983,12 @@ class BinarySelectNode(TensorIRNode):
             true_value, false_value = splat_if_scalar(true_value, false_value)
             # Type checking: condition must be integer/boolean, true/false values must be float
             if not self.is_integer(condition):
-                raise ValueError(
-                    f"binary_select condition (first operand) must be an integer tensor, got {condition.type}"
-                )
+                raise ValueError(f"binary_select condition (first operand) must be an integer tensor, got {condition.type}")
 
             if not self.is_float(true_value) or not self.is_float(false_value):
-                raise ValueError(
-                    f"binary_select true and false values (second and third operands) must be float tensors"
-                )
+                raise ValueError(f"binary_select true and false values (second and third operands) must be float tensors")
 
-            self.node_map[self.node] = nv_tensor_ir.binary_select(
-                condition, true_value, false_value
-            )
+            self.node_map[self.node] = nv_tensor_ir.binary_select(condition, true_value, false_value)
 
 
 class test_tensor_ir:
@@ -1199,9 +1073,7 @@ class test_tensor_ir:
 
         self.compiler_with_kernel_cache = CompilerWithKernelCacheSingleton()
 
-    def determine_tensor_ir_inout_tensor_type(
-        self, node, dtype=None, keep_divisibility=False
-    ):
+    def determine_tensor_ir_inout_tensor_type(self, node, dtype=None, keep_divisibility=False):
         # We only set the divisibility when keep_divisibility is True.
         assert len(node.output) == 1
         test_tensor = node.output[0]
@@ -1228,13 +1100,9 @@ class test_tensor_ir:
         ori_shape = test_tensor.dim
 
         # Check if tensor is a scalar tensor (all strides 1 and all dims 1 in json definition)
-        isScalarTensor = all(s == 1 for s in ori_stride) and all(
-            d == 1 for d in ori_shape
-        )
+        isScalarTensor = all(s == 1 for s in ori_stride) and all(d == 1 for d in ori_shape)
         # Calculate alignment first using the corrected approach
-        dtype_width = (
-            dtype.width if hasattr(dtype, "width") else 16
-        )  # fallback to 16 for compatibility
+        dtype_width = dtype.width if hasattr(dtype, "width") else 16  # fallback to 16 for compatibility
 
         # Get TMA alignment
         def get_tma_alignment(dtype_width):
@@ -1377,20 +1245,14 @@ class test_tensor_ir:
         assert len(self.ref_outputs) == len(self.outputs)
 
         # Use the base class method for comparison
-        return tg.test_graph.compare_to_reference(
-            self.ref_outputs, self.outputs, atol=atol, rtol=rtol
-        )
+        return tg.test_graph.compare_to_reference(self.ref_outputs, self.outputs, atol=atol, rtol=rtol)
 
     def get_beta_attr(self):
         for node in self.test_graph.entrance_nodes:
             if node.name == "beta":
                 beta_tensor = node.get_value()
                 # Handle beta tensor of any dimension by accessing the first element
-                return (
-                    beta_tensor.item()
-                    if beta_tensor.numel() == 1
-                    else beta_tensor.flatten()[0].item()
-                )
+                return beta_tensor.item() if beta_tensor.numel() == 1 else beta_tensor.flatten()[0].item()
         return None
 
     def run_tensor_ir_module(
@@ -1450,19 +1312,14 @@ class test_tensor_ir:
         ]
 
         # Add output tensors to DLPack inputs
-        desc_outputs = [
-            nv_tensor_ir.TensorIRTensorDescriptor(gpu_tensor)
-            for gpu_tensor in outputs_gpu
-        ]
+        desc_outputs = [nv_tensor_ir.TensorIRTensorDescriptor(gpu_tensor) for gpu_tensor in outputs_gpu]
         all_desc = desc_inputs + desc_outputs
 
         with ir.Context() as ctx, ir.Location.unknown():
             nv_tensor_ir.register_dialect()
 
             best_perf = float("inf")
-            best_config = dict(
-                tile_size=[], mma_shape=[], cluster_shape=[], cta_count=[]
-            )
+            best_config = dict(tile_size=[], mma_shape=[], cluster_shape=[], cta_count=[])
             finished_cnt = 0
 
             if compiler_backend == "Collective":
@@ -1480,25 +1337,17 @@ class test_tensor_ir:
                         nv_tensor_ir.MmaShape(tile_size[0], tile_size[1], tile_size[2]),
                         cta_count,
                         matmul_element_bits,
-                        nv_tensor_ir.MmaShape(
-                            cluster_shape[0], cluster_shape[1], cluster_shape[2]
-                        ),
+                        nv_tensor_ir.MmaShape(cluster_shape[0], cluster_shape[1], cluster_shape[2]),
                     ):
-                        print(
-                            f"#### Invalid configuration: {tile_size}, {mma_shape}, {cluster_shape}, {cta_count}"
-                        )
+                        print(f"#### Invalid configuration: {tile_size}, {mma_shape}, {cluster_shape}, {cta_count}")
                         print(f"#### Skip this config")
                         continue
-                    print(
-                        f"\n#### Valid configuration: {tile_size}, {mma_shape}, {cluster_shape}, {cta_count}"
-                    )
+                    print(f"\n#### Valid configuration: {tile_size}, {mma_shape}, {cluster_shape}, {cta_count}")
 
                     cc = self.compiler_with_kernel_cache.get_compute_capability()
                     # TODO: Add enum to support more cubin_chip
                     if self.SUPPORTED_CUBIN_CHIP[cc] != cubin_chip:
-                        print(
-                            f"#### cubin_chip={cubin_chip} is not supported for cc={cc}"
-                        )
+                        print(f"#### cubin_chip={cubin_chip} is not supported for cc={cc}")
                         print(f"#### Skip this config")
                         continue
                     cc = nv_tensor_ir.ComputeCapability(cc)
@@ -1510,39 +1359,27 @@ class test_tensor_ir:
                             mma_shape,
                             cluster_shape,
                             cta_count,
-                            (
-                                nv_tensor_ir.TileSchedulerType.kStreamK
-                                if stream_k
-                                else nv_tensor_ir.TileSchedulerType.kDefault
-                            ),
+                            (nv_tensor_ir.TileSchedulerType.kStreamK if stream_k else nv_tensor_ir.TileSchedulerType.kDefault),
                             cubin_chip,
                         ),
-                        nv_tensor_ir.DebugOptions(
-                            dump_ir_path, load_ir_path, mlir_timing
-                        ),
+                        nv_tensor_ir.DebugOptions(dump_ir_path, load_ir_path, mlir_timing),
                     )
 
                     print(
                         f"#### Running tile_size={tile_size}, mma_shape={mma_shape}, cluster_shape={cluster_shape}, cta_count={cta_count}, stream_k={stream_k}, cubin_chip={cubin_chip}"
                     )
 
-                    if self.compiler_with_kernel_cache.can_compile(
-                        module, compile_options
-                    ):
+                    if self.compiler_with_kernel_cache.can_compile(module, compile_options):
                         print(f"#### Can compile")
                     else:
                         print(f"#### Cannot compile")
                         continue
 
                     cloned_module = ir.Module.parse(str(module))
-                    shader = self.compiler_with_kernel_cache.compile(
-                        cloned_module, compile_options
-                    )
+                    shader = self.compiler_with_kernel_cache.compile(cloned_module, compile_options)
 
                     for node, tensor_desc in node_overwrite_stride_tensor_map.items():
-                        overwrite_stride_func = self.node_overwrite_stride_func_map[
-                            node
-                        ]
+                        overwrite_stride_func = self.node_overwrite_stride_func_map[node]
                         overwrite_stride = overwrite_stride_func(tile_size)
                         tensor_desc.overwrite_strides(overwrite_stride)
 
@@ -1551,19 +1388,11 @@ class test_tensor_ir:
                     except Exception as e:
                         print(f"#### Failed to create execution plan: {e}")
                         continue
-                    device_workspace_size = (
-                        execution_plan.query_max_device_workspace_size()
-                    )
+                    device_workspace_size = execution_plan.query_max_device_workspace_size()
                     print(f"#### Device workspace size: {device_workspace_size}")
-                    device_workspace_mem_cpu = torch.zeros(
-                        device_workspace_size, dtype=torch.int8, device="cpu"
-                    )
-                    device_workspace_mem_gpu = (
-                        device_workspace_mem_cpu.clone().detach().to("cuda")
-                    )
-                    device_workspace = nv_tensor_ir.DeviceWorkspace(
-                        device_workspace_mem_gpu.data_ptr(), device_workspace_size
-                    )
+                    device_workspace_mem_cpu = torch.zeros(device_workspace_size, dtype=torch.int8, device="cpu")
+                    device_workspace_mem_gpu = device_workspace_mem_cpu.clone().detach().to("cuda")
+                    device_workspace = nv_tensor_ir.DeviceWorkspace(device_workspace_mem_gpu.data_ptr(), device_workspace_size)
                     # TODO: Do we need to dump the launch config for debugging?
                     # execution_plan.dump_launch_config()
                     if timing_loop == 0:
@@ -1583,9 +1412,7 @@ class test_tensor_ir:
                         import utils
 
                         # TODO: Shall we use median instead of average?
-                        avg_rt = utils.measure_gpu_runtime_with_events(
-                            lambda: execution_plan.launch(device_workspace), timing_loop
-                        )
+                        avg_rt = utils.measure_gpu_runtime_with_events(lambda: execution_plan.launch(device_workspace), timing_loop)
                         if avg_rt < best_perf:
                             best_perf = avg_rt
                             best_config = {
@@ -1611,30 +1438,16 @@ class test_tensor_ir:
                         10,  # Hardcoded for blackwell
                         nv_tensor_ir.CompilerBackend.Tile,
                         conversion_options,
-                        nv_tensor_ir.DebugOptions(
-                            dump_ir_path, load_ir_path, enable_timing
-                        ),
+                        nv_tensor_ir.DebugOptions(dump_ir_path, load_ir_path, enable_timing),
                     )
-                    print(
-                        f"#### Running tile_size={conversion_options.tileSize}, compiler_backend={compiler_backend}"
-                    )
-                    shader = self.compiler_with_kernel_cache.compile(
-                        cloned_module, compile_options
-                    )
+                    print(f"#### Running tile_size={conversion_options.tileSize}, compiler_backend={compiler_backend}")
+                    shader = self.compiler_with_kernel_cache.compile(cloned_module, compile_options)
                     execution_plan = nv_tensor_ir.ExecutionPlan(shader, *all_desc)
-                    device_workspace_size = (
-                        execution_plan.query_max_device_workspace_size()
-                    )
+                    device_workspace_size = execution_plan.query_max_device_workspace_size()
                     print(f"#### Device workspace size: {device_workspace_size}")
-                    device_workspace_mem_cpu = torch.zeros(
-                        device_workspace_size, dtype=torch.int8, device="cpu"
-                    )
-                    device_workspace_mem_gpu = (
-                        device_workspace_mem_cpu.clone().detach().to("cuda")
-                    )
-                    device_workspace = nv_tensor_ir.DeviceWorkspace(
-                        device_workspace_mem_gpu.data_ptr(), device_workspace_size
-                    )
+                    device_workspace_mem_cpu = torch.zeros(device_workspace_size, dtype=torch.int8, device="cpu")
+                    device_workspace_mem_gpu = device_workspace_mem_cpu.clone().detach().to("cuda")
+                    device_workspace = nv_tensor_ir.DeviceWorkspace(device_workspace_mem_gpu.data_ptr(), device_workspace_size)
                     if timing_loop == 0:
                         execution_plan.launch(device_workspace)
                         self.outputs = outputs_gpu
@@ -1651,21 +1464,15 @@ class test_tensor_ir:
                         execution_plan.launch(device_workspace)
                         import utils
 
-                        avg_rt = utils.measure_gpu_runtime_with_events(
-                            lambda: execution_plan.launch(device_workspace), timing_loop
-                        )
+                        avg_rt = utils.measure_gpu_runtime_with_events(lambda: execution_plan.launch(device_workspace), timing_loop)
                         if avg_rt < best_perf:
                             best_perf = avg_rt
                             best_config = {
                                 "tile_size": tile_size,
                             }
                         torch.cuda.synchronize()
-            print(
-                f"@@@@ Best perf achieved is {best_perf / 1000} msec with kernel config: {best_config}"
-            )
-        print(
-            f"@@@@ Run {finished_cnt} kernels successfully from {len(kernel_configs)} configs"
-        )
+            print(f"@@@@ Best perf achieved is {best_perf / 1000} msec with kernel config: {best_config}")
+        print(f"@@@@ Run {finished_cnt} kernels successfully from {len(kernel_configs)} configs")
         if finished_cnt > 0:
             return StatusCode.PASSED
         return StatusCode.WAIVED
@@ -1674,9 +1481,7 @@ class test_tensor_ir:
         input_tensors = []
         for node in self.test_graph.entrance_nodes:
             input_tensors.append(node)
-        output_tensors = [
-            node for node in self.test_graph.nodes if node.is_output_node()
-        ]
+        output_tensors = [node for node in self.test_graph.nodes if node.is_output_node()]
 
         align_name = "nv_tensor_ir.alignment"
         stride_name = "nv_tensor_ir.stride"
@@ -1689,17 +1494,12 @@ class test_tensor_ir:
             # Convert a stride list to string format, replacing -1 with '?'.
             # E.g. stride =[1, -1, 1] and stride_div = [1, 8, 1] -> "(1,?{div=8},1)"
             def stride_list_to_string(stride, stride_div):
-                stride_elements = [
-                    "?{div=" + str(div) + "}" if s == -1 else str(s)
-                    for s, div in zip(stride, stride_div)
-                ]
+                stride_elements = ["?{div=" + str(div) + "}" if s == -1 else str(s) for s, div in zip(stride, stride_div)]
                 return f"({','.join(stride_elements)})"
 
             input_tensor_infos = list(
                 map(
-                    lambda x: self.determine_tensor_ir_inout_tensor_type(
-                        x, keep_divisibility=True
-                    ),
+                    lambda x: self.determine_tensor_ir_inout_tensor_type(x, keep_divisibility=True),
                     input_tensors,
                 )
             )
@@ -1710,31 +1510,19 @@ class test_tensor_ir:
                 input_types.append(tensor_info.tensor_type)
                 # Add stride and alignment attributes if it's a tensor not a scalar passed by value
                 if tensor_info.tensor_type != tensor_info.dtype:
-                    stride_str = ir.StringAttr.get(
-                        stride_list_to_string(
-                            tensor_info.stride, tensor_info.stride_div
-                        )
-                    )
-                    assert (
-                        tensor_info.alignment is not None
-                    ), "Alignment is required for tensor inputs"
+                    stride_str = ir.StringAttr.get(stride_list_to_string(tensor_info.stride, tensor_info.stride_div))
+                    assert tensor_info.alignment is not None, "Alignment is required for tensor inputs"
                     align_attr = ir.IntegerAttr.get(
                         ir.IntegerType.get_signless(64),
                         tensor_info.alignment,  # use stored alignment
                     )
-                    arg_attrs.append(
-                        ir.DictAttr.get(
-                            {stride_name: stride_str, align_name: align_attr}
-                        )
-                    )
+                    arg_attrs.append(ir.DictAttr.get({stride_name: stride_str, align_name: align_attr}))
                 else:
                     arg_attrs.append(ir.DictAttr.get({}))
 
             output_tensor_infos = list(
                 map(
-                    lambda x: self.determine_tensor_ir_inout_tensor_type(
-                        x, keep_divisibility=True
-                    ),
+                    lambda x: self.determine_tensor_ir_inout_tensor_type(x, keep_divisibility=True),
                     output_tensors,
                 )
             )
@@ -1745,35 +1533,20 @@ class test_tensor_ir:
                 output_types.append(tensor_info.tensor_type)
                 # Add stride and alignment attributes if it's a tensor not a scalar passed by value
                 if tensor_info.tensor_type != tensor_info.dtype:
-                    stride_str = ir.StringAttr.get(
-                        stride_list_to_string(
-                            tensor_info.stride, tensor_info.stride_div
-                        )
-                    )
+                    stride_str = ir.StringAttr.get(stride_list_to_string(tensor_info.stride, tensor_info.stride_div))
                     align_attr = ir.IntegerAttr.get(
                         ir.IntegerType.get_signless(64),
                         tensor_info.alignment,  # use stored alignment
                     )
-                    res_attrs.append(
-                        ir.DictAttr.get(
-                            {stride_name: stride_str, align_name: align_attr}
-                        )
-                    )
+                    res_attrs.append(ir.DictAttr.get({stride_name: stride_str, align_name: align_attr}))
                 else:
                     res_attrs.append(ir.DictAttr.get({}))
 
             # Create a mlir function signature for the kernel.
-            function_type = ir.TypeAttr.get(
-                T.function(inputs=input_types, results=output_types)
-            )
+            function_type = ir.TypeAttr.get(T.function(inputs=input_types, results=output_types))
             function_name = json_test_name
             # Add a random string to the function name to avoid module collision
-            function_name += "_" + str(
-                "".join(
-                    random.choice(string.ascii_letters + string.digits)
-                    for _ in range(20)
-                )
-            )
+            function_name += "_" + str("".join(random.choice(string.ascii_letters + string.digits) for _ in range(20)))
 
             # Create tensor ir graph
             graph = nv_tensor_ir.graph(
@@ -1784,9 +1557,7 @@ class test_tensor_ir:
                 ip=ir.InsertionPoint(module.body),
             )
 
-            node_map = (
-                {}
-            )  # nodes -> tensor_ir values (Do python semantics mess with this?)
+            node_map = {}  # nodes -> tensor_ir values (Do python semantics mess with this?)
 
             # Generate arguments
             graph.regions[0].blocks.append(*input_types)
@@ -1796,16 +1567,10 @@ class test_tensor_ir:
                 node_map[node] = graph.regions[0].blocks[0].arguments[i]
 
             with ir.InsertionPoint(graph.regions[0].blocks[0]) as ip:
-                for (
-                    node
-                ) in output_tensors:  # This should be built from output nodes no?
+                for node in output_tensors:  # This should be built from output nodes no?
                     # Recursively lower ops
                     keep_divisibility = True
-                    if (
-                        "compute_data_type" in node.kwargs
-                        and node.output[0]._data_type
-                        != node.kwargs["compute_data_type"]
-                    ):
+                    if "compute_data_type" in node.kwargs and node.output[0]._data_type != node.kwargs["compute_data_type"]:
                         # If we will convert the data type, we don't need to keep the divisibility for
                         # the producer nodes
                         keep_divisibility = False
@@ -1821,14 +1586,8 @@ class test_tensor_ir:
                 # Generate return op
                 result = []
                 for node in output_tensors:
-                    if (
-                        "compute_data_type" in node.kwargs
-                        and node.output[0]._data_type
-                        != node.kwargs["compute_data_type"]
-                    ):
-                        tensor_info = self.determine_tensor_ir_inout_tensor_type(
-                            node, node.output[0]._data_type, keep_divisibility=True
-                        )
+                    if "compute_data_type" in node.kwargs and node.output[0]._data_type != node.kwargs["compute_data_type"]:
+                        tensor_info = self.determine_tensor_ir_inout_tensor_type(node, node.output[0]._data_type, keep_divisibility=True)
                         node_map[node] = nv_tensor_ir.convert(
                             tensor_info.tensor_type,
                             node_map[node],
@@ -1842,24 +1601,18 @@ class test_tensor_ir:
 
     def convert_and_splat_for_binary_pointwise(self, lsh, rsh, tensor_info):
         if lsh is not None and rsh is not None:
-            if isinstance(lsh.type, (ir.IntegerType, ir.FloatType)) and isinstance(
-                rsh.type, nv_tensor_ir.TensorType
-            ):
+            if isinstance(lsh.type, (ir.IntegerType, ir.FloatType)) and isinstance(rsh.type, nv_tensor_ir.TensorType):
                 lsh = nv_tensor_ir.splat(
                     nv_tensor_ir.TensorType.get_from_tensor_type(rsh.type, lsh.type),
                     lsh,
                 )
-            elif isinstance(rsh.type, (ir.IntegerType, ir.FloatType)) and isinstance(
-                lsh.type, nv_tensor_ir.TensorType
-            ):
+            elif isinstance(rsh.type, (ir.IntegerType, ir.FloatType)) and isinstance(lsh.type, nv_tensor_ir.TensorType):
                 rsh = nv_tensor_ir.splat(
                     nv_tensor_ir.TensorType.get_from_tensor_type(lsh.type, rsh.type),
                     rsh,
                 )
         out_type_datatype = nv_tensor_ir.get_tensor_datatype(tensor_info.tensor_type)
-        if lsh is not None and out_type_datatype != nv_tensor_ir.get_tensor_datatype(
-            lsh.type
-        ):
+        if lsh is not None and out_type_datatype != nv_tensor_ir.get_tensor_datatype(lsh.type):
             convert_value0 = nv_tensor_ir.convert(
                 nv_tensor_ir.TensorType.get(
                     shape=tensor_info.shape,
@@ -1870,9 +1623,7 @@ class test_tensor_ir:
             )
         else:
             convert_value0 = lsh
-        if rsh is not None and out_type_datatype != nv_tensor_ir.get_tensor_datatype(
-            rsh.type
-        ):
+        if rsh is not None and out_type_datatype != nv_tensor_ir.get_tensor_datatype(rsh.type):
             convert_value1 = nv_tensor_ir.convert(
                 nv_tensor_ir.TensorType.get(
                     shape=tensor_info.shape,
@@ -1886,21 +1637,15 @@ class test_tensor_ir:
         return convert_value0, convert_value1
 
     def convert_scalar_tensor(self, scalar_tensor, target_type):
-        if nv_tensor_ir.get_tensor_datatype(
-            target_type
-        ) != nv_tensor_ir.get_tensor_datatype(scalar_tensor.type):
+        if nv_tensor_ir.get_tensor_datatype(target_type) != nv_tensor_ir.get_tensor_datatype(scalar_tensor.type):
             return nv_tensor_ir.convert(
-                nv_tensor_ir.TensorType.get_from_tensor_type(
-                    scalar_tensor.type, nv_tensor_ir.get_tensor_datatype(target_type)
-                ),
+                nv_tensor_ir.TensorType.get_from_tensor_type(scalar_tensor.type, nv_tensor_ir.get_tensor_datatype(target_type)),
                 scalar_tensor,
             )
         else:
             return scalar_tensor
 
-    def build_tensor_ir_recursive(
-        self, node, node_map, ip, output_tensor_type, keep_divisibility=False
-    ):
+    def build_tensor_ir_recursive(self, node, node_map, ip, output_tensor_type, keep_divisibility=False):
         """Build tensor IR representation recursively for the given node."""
 
         # for node in input_tensors:
@@ -1913,9 +1658,7 @@ class test_tensor_ir:
             if keep_divisibility:
                 # Need to keep the same divisibility with the output tensor
                 # Broadcast the input tensor to make them same
-                if nv_tensor_ir.get_tensor_datatype(
-                    output_tensor_type
-                ) == nv_tensor_ir.get_tensor_datatype(input_tensor.type):
+                if nv_tensor_ir.get_tensor_datatype(output_tensor_type) == nv_tensor_ir.get_tensor_datatype(input_tensor.type):
                     broadcast_tensor_type = output_tensor_type
                 else:
                     # If the data type is the different, we don't need to broadcast.
@@ -1935,9 +1678,7 @@ class test_tensor_ir:
                     datatype=nv_tensor_ir.get_tensor_datatype(tensor_type),
                 )
 
-            if (broadcast_tensor_type is not None) and (
-                broadcast_tensor_type != input_tensor.type
-            ):
+            if (broadcast_tensor_type is not None) and (broadcast_tensor_type != input_tensor.type):
                 broadcast_tensor = nv_tensor_ir.broadcast(
                     broadcast_tensor_type,
                     input_tensor,
@@ -1950,20 +1691,14 @@ class test_tensor_ir:
 
         def get_result_type(node):
             if "compute_data_type" in node.kwargs and node.op_name != "identity":
-                result_type = eval(
-                    convert_datatype(node.kwargs["compute_data_type"], "tensorir")
-                )
+                result_type = eval(convert_datatype(node.kwargs["compute_data_type"], "tensorir"))
             else:
-                result_type = eval(
-                    convert_datatype(node.output[0].data_type, "tensorir")
-                )
+                result_type = eval(convert_datatype(node.output[0].data_type, "tensorir"))
             return result_type
 
         # Check if there is implicit data type conversion between the node and the output tensor
         if keep_divisibility:
-            final_output_data_type = nv_tensor_ir.get_tensor_datatype(
-                output_tensor_type
-            )
+            final_output_data_type = nv_tensor_ir.get_tensor_datatype(output_tensor_type)
             compute_data_type = get_result_type(node)
             if compute_data_type != final_output_data_type:
                 keep_divisibility = False
@@ -2029,14 +1764,9 @@ class test_tensor_ir:
             #   (elements per 128x4_interleave_block) * (number of 128x4_interleave_blocks)
             #   i.e.,                       (128 * 4) * (shape_K / tile_size_K)
             self.node_overwrite_stride_func_map[sfA_node] = (
-                lambda tile_size: sfA_stride[:1]
-                + [128 * 4 * ((sfA_shape[2] * 32) // tile_size[2])]
-                + sfA_stride[2:]
+                lambda tile_size: sfA_stride[:1] + [128 * 4 * ((sfA_shape[2] * 32) // tile_size[2])] + sfA_stride[2:]
             )
-            self.node_overwrite_stride_func_map[sfB_node] = (
-                lambda tile_size: sfB_stride[:2]
-                + [128 * 4 * ((sfB_shape[1] * 32) // tile_size[2])]
-            )
+            self.node_overwrite_stride_func_map[sfB_node] = lambda tile_size: sfB_stride[:2] + [128 * 4 * ((sfB_shape[1] * 32) // tile_size[2])]
 
         # Create and run the node
         ir_node = node_class(

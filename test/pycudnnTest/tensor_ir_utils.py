@@ -33,9 +33,7 @@ class CompilerWithKernelCache:
             return self.compile_with_cache(module, compile_options)
 
     def compile_with_cache(self, module, compile_options):
-        cache_key = self.base_compiler.compiler.get_shader_cache_key(
-            module, compile_options
-        )
+        cache_key = self.base_compiler.compiler.get_shader_cache_key(module, compile_options)
         # First check if the shader is in the cache
         with self.lock_kernel_cache:
             shader = self.cached_shaders.get(cache_key, None)
@@ -68,9 +66,7 @@ class CompilerWithKernelCache:
         return self.miss_cnt
 
     def can_compile(self, module, compile_options):
-        cache_key = self.base_compiler.compiler.get_shader_cache_key(
-            module, compile_options
-        )
+        cache_key = self.base_compiler.compiler.get_shader_cache_key(module, compile_options)
         with self.lock_kernel_cache:
             can_compile = self.cached_can_compile_results.get(cache_key, None)
             if can_compile is not None:

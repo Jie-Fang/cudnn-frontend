@@ -13,9 +13,7 @@ import sys
 
 def check_log(log_str):
     ret = []
-    matches = re.finditer(
-        r"function \S+ called:\s+e!\s+Error: (CUDNN_STATUS_\S+); Reason:(.*)", log_str
-    )
+    matches = re.finditer(r"function \S+ called:\s+e!\s+Error: (CUDNN_STATUS_\S+); Reason:(.*)", log_str)
     for m in matches:
         ret.append([m.group(1).strip(), m.group(2).strip()])
     return ret
@@ -43,9 +41,7 @@ def test_negative_graph(graph_builder_fptr, jparams):
             tester()
         else:
             reraise = Reraise()
-            threads = [
-                threading.Thread(target=reraise.wrap(tester)) for i in range(thread_num)
-            ]
+            threads = [threading.Thread(target=reraise.wrap(tester)) for i in range(thread_num)]
             for thread in threads:
                 thread.start()
             for thread in threads:
@@ -80,6 +76,4 @@ def test_negative_graph(graph_builder_fptr, jparams):
         if "expected_err_code" in verification:
             assert last_err_code == verification["expected_err_code"]
     else:
-        print(
-            "Skip error code and error message checking, as the error was not thrown by the backend API."
-        )
+        print("Skip error code and error message checking, as the error was not thrown by the backend API.")

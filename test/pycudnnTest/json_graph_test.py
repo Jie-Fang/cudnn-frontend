@@ -70,9 +70,7 @@ def replace_single_param(json_test_def, abstract_params):
         elif abstract_param in SKIPABLE:
             return json_test_def
         else:
-            raise ImplementationError(
-                "CLI parameter {} not provided".format(abstract_param)
-            )
+            raise ImplementationError("CLI parameter {} not provided".format(abstract_param))
 
         # Now that we have found the concrete parameter, we may need to do some post processing
         if isinstance(concrete_param, str) and abstract_param in INT_LISTS:
@@ -90,12 +88,8 @@ def replace_single_param(json_test_def, abstract_params):
 def replace_abstract_test_params(json_test_def, abstract_params):
     if isinstance(json_test_def, dict):
         for key in json_test_def.keys():
-            if not isinstance(json_test_def[key], dict) and not isinstance(
-                json_test_def[key], list
-            ):
-                json_test_def[key] = replace_single_param(
-                    json_test_def[key], abstract_params
-                )
+            if not isinstance(json_test_def[key], dict) and not isinstance(json_test_def[key], list):
+                json_test_def[key] = replace_single_param(json_test_def[key], abstract_params)
             else:
                 replace_abstract_test_params(json_test_def[key], abstract_params)
     elif isinstance(json_test_def, list):
@@ -117,9 +111,7 @@ def run_tensor_ir_from_legacy_args(parent_args, unknown_args):
         is_integer_dtype,
     )
 
-    tensorir_parser = argparse.ArgumentParser(
-        "tensorir_graph_runner", allow_abbrev=False
-    )
+    tensorir_parser = argparse.ArgumentParser("tensorir_graph_runner", allow_abbrev=False)
     tensorir_parser.add_argument("-tile_size", action="store")
     tensorir_parser.add_argument("-mma_shape", action="store")
     tensorir_parser.add_argument("-cluster_shape", action="store")
@@ -127,9 +119,7 @@ def run_tensor_ir_from_legacy_args(parent_args, unknown_args):
     tensorir_parser.add_argument("-stream_k", action="store_true")
     tensorir_parser.add_argument("-cubin_chip", action="store", default="sm_100a")
     tensorir_parser.add_argument("-sweep_tile_configs", action="store_true")
-    tensorir_parser.add_argument(
-        "-random_sweep_tile_configs", action="store", type=int, default=0
-    )
+    tensorir_parser.add_argument("-random_sweep_tile_configs", action="store", type=int, default=0)
     tensorir_parser.add_argument("-dump_ir_path", action="store", default="")
     tensorir_parser.add_argument("-load_ir_path", action="store", default="")
     tensorir_parser.add_argument("-mlir_timing", action="store_true")
@@ -153,9 +143,7 @@ def run_tensor_ir_from_legacy_args(parent_args, unknown_args):
         -1,
     )
 
-    compiler_backend = (
-        tensorir_args.compiler_backend if tensorir_args.compiler_backend else "Tile"
-    )
+    compiler_backend = tensorir_args.compiler_backend if tensorir_args.compiler_backend else "Tile"
 
     is8BitTransposeB = False
     isUTCHMMA = False
@@ -164,15 +152,11 @@ def run_tensor_ir_from_legacy_args(parent_args, unknown_args):
 
     if compiler_backend == "Tile":
         m, n, k = 256, 256, 256
-        matmul_element_bits = get_element_bits(
-            get_input_dataTypes(concrete_test_dict)[0]
-        )
+        matmul_element_bits = get_element_bits(get_input_dataTypes(concrete_test_dict)[0])
     elif compiler_backend == "Collective":
         flag_matmul = False
         for node in testGraph.nodes:
-            if isinstance(node, operation) and (
-                node.op_name == "matmul" or node.op_name == "scaled_matmul"
-            ):
+            if isinstance(node, operation) and (node.op_name == "matmul" or node.op_name == "scaled_matmul"):
                 tensor_A = node.producer_nodes[0].output[0]
                 tensor_B = node.producer_nodes[1].output[0]
 
@@ -194,19 +178,12 @@ def run_tensor_ir_from_legacy_args(parent_args, unknown_args):
                 break
 
         if not flag_matmul:
-            raise ValueError(
-                "No matmul or scaled_matmul found in the graph for collective backend"
-            )
+            raise ValueError("No matmul or scaled_matmul found in the graph for collective backend")
     else:
         raise ValueError("Invalid compiler backend: {}".format(compiler_backend))
 
-    if tensorir_args.sweep_tile_configs or (
-        tensorir_args.random_sweep_tile_configs
-        and tensorir_args.random_sweep_tile_configs > 0
-    ):
-        assert not (
-            isUTCHMMA and isUTCIMMA
-        ), "isUTCHMMA and isUTCIMMA cannot be True at the same time"
+    if tensorir_args.sweep_tile_configs or (tensorir_args.random_sweep_tile_configs and tensorir_args.random_sweep_tile_configs > 0):
+        assert not (isUTCHMMA and isUTCIMMA), "isUTCHMMA and isUTCIMMA cannot be True at the same time"
         kernel_config = generate_tensorir_compilation_configs(
             m,
             n,
@@ -219,9 +196,7 @@ def run_tensor_ir_from_legacy_args(parent_args, unknown_args):
             isBlockScaled,
         )
     else:
-        kernel_config = [
-            get_tensorir_compilation_config(m, n, k, matmul_element_bits, tensorir_args)
-        ]
+        kernel_config = [get_tensorir_compilation_config(m, n, k, matmul_element_bits, tensorir_args)]
 
     status = run_tensor_ir_test_from_json_definition(
         testGraph,
@@ -327,22 +302,12 @@ def parse_legacy_args(parent_args, unparsed_graphRunner_args):
 
     l_parser.add_argument("-u", action="store", default=1)
     l_parser.add_argument("-v", action="store", default=1)
-    l_parser.add_argument(
-        "-dimA", default=None
-    )  # Alterantively we can use nargs='+' and specify as -dimA 1 2 3 4 (without comma's)
+    l_parser.add_argument("-dimA", default=None)  # Alterantively we can use nargs='+' and specify as -dimA 1 2 3 4 (without comma's)
     l_parser.add_argument("-filtA", default=None)
-    l_parser.add_argument(
-        "-dimOut", default=None
-    )  # Don't specify a default as there is special logic for it in replace_implicit_params
-    l_parser.add_argument(
-        "-convStrideA"
-    )  # DO NOT SPECIFY A DEFAULT. It will get taken care of in the second parsing pass
-    l_parser.add_argument(
-        "-dilationA"
-    )  # DO NOT SPECIFY A DEFAULT. It will get taken care of in the second parsing pass
-    l_parser.add_argument(
-        "-padA"
-    )  # DO NOT SPECIFY A DEFAULT. It will get taken care of in the second parsing pass
+    l_parser.add_argument("-dimOut", default=None)  # Don't specify a default as there is special logic for it in replace_implicit_params
+    l_parser.add_argument("-convStrideA")  # DO NOT SPECIFY A DEFAULT. It will get taken care of in the second parsing pass
+    l_parser.add_argument("-dilationA")  # DO NOT SPECIFY A DEFAULT. It will get taken care of in the second parsing pass
+    l_parser.add_argument("-padA")  # DO NOT SPECIFY A DEFAULT. It will get taken care of in the second parsing pass
     l_parser.add_argument(
         "-A",
         type=int,
@@ -355,9 +320,7 @@ def parse_legacy_args(parent_args, unparsed_graphRunner_args):
         choices=[0],
         help="Dummy argument to support default convolution with beta=0",
     )
-    l_parser.add_argument(
-        "-n", help="Deprecated. This overrides the N dimension of a convolution."
-    )
+    l_parser.add_argument("-n", help="Deprecated. This overrides the N dimension of a convolution.")
     # GEMM related params
     l_parser.add_argument("-gemm_B", type=int, action="store")
     l_parser.add_argument("-gemm_M", type=int, action="store")
@@ -406,18 +369,10 @@ def parse_legacy_args(parent_args, unparsed_graphRunner_args):
     ignored_args.add_argument("-b", action="store_true", default=None)
     ignored_args.add_argument("-S", action="store_true", default=None)
     ignored_args.add_argument("-gpuRef", action="store_true", default=None)
-    ignored_args.add_argument(
-        "-engineCfgSweep", action="store", default=None, required=False
-    )
-    ignored_args.add_argument(
-        "-knobSplitKSlices", action="store", default=None, required=False
-    )
-    ignored_args.add_argument(
-        "-knobKernelCfg", action="store", default=None, required=False
-    )
-    ignored_args.add_argument(
-        "-serialization", action="store", default=None, required=False
-    )
+    ignored_args.add_argument("-engineCfgSweep", action="store", default=None, required=False)
+    ignored_args.add_argument("-knobSplitKSlices", action="store", default=None, required=False)
+    ignored_args.add_argument("-knobKernelCfg", action="store", default=None, required=False)
+    ignored_args.add_argument("-serialization", action="store", default=None, required=False)
     ignored_args.add_argument("-pref", action="store", default=None, required=False)
     ignored_args.add_argument("-Pmath", action="store", default=None, required=False)
 
@@ -495,11 +450,7 @@ def parse_legacy_args(parent_args, unparsed_graphRunner_args):
     # that use convolution-style dimension inference, even though the test does not have a convolution operator.
     # To avoid confusions with this, we should redefine these tests (e.g., ScaleBiasReductionCol2D_abstract, ScaleBiasReductionCol3D_abstract)
     # In addition, the code below should only be present in replace_implicit_params, when we know that a convolution operator is used.
-    if (
-        abstract_params.get("dimA")
-        and abstract_params.get("filtA")
-        and (not abstract_params.get("dimOut"))
-    ):
+    if abstract_params.get("dimA") and abstract_params.get("filtA") and (not abstract_params.get("dimOut")):
         dimA = list(eval(abstract_params["dimA"]))
 
         def get_integer_list(param):
@@ -511,9 +462,7 @@ def parse_legacy_args(parent_args, unparsed_graphRunner_args):
         padA = get_integer_list(abstract_params["padA"])
         convStrideA = get_integer_list(abstract_params["convStrideA"])
         dilationA = get_integer_list(abstract_params["dilationA"])
-        inferred_params = get_conv_dim_placeholders(
-            dimA, filtA, padA, convStrideA, dilationA
-        )
+        inferred_params = get_conv_dim_placeholders(dimA, filtA, padA, convStrideA, dilationA)
         abstract_params["dimOut"] = inferred_params["dimOut"]
         abstract_params["n"] = inferred_params["n"]
         abstract_params["c"] = inferred_params["c"]
@@ -553,9 +502,7 @@ def parse_legacy_args(parent_args, unparsed_graphRunner_args):
     assert json_test_name in json_tests
     abstract_test_dict = json_tests[json_test_name]
     try:
-        concrete_test_dict = replace_abstract_test_params(
-            abstract_test_dict, abstract_params
-        )
+        concrete_test_dict = replace_abstract_test_params(abstract_test_dict, abstract_params)
         reportCurrentTime("replace_abstract_test_params")
 
     except ImplementationError as e:
@@ -570,16 +517,12 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
     import cudnn
     from cudnn_test_graph import cudnn_test_graph
 
-    concrete_test_dict, legacy_args = parse_legacy_args(
-        parent_args, unparsed_graphRunner_args
-    )
+    concrete_test_dict, legacy_args = parse_legacy_args(parent_args, unparsed_graphRunner_args)
     force_jit_env_before = os.environ.get("CUDNN_FORCE_JIT_DBG", None)
     if "Dforce_jit_dbg" in legacy_args:
         os.environ["CUDNN_FORCE_JIT_DBG"] = str(legacy_args.Dforce_jit_dbg)
 
-    testGraph = setup_test_graph_from_json(
-        cudnn_test_graph(), concrete_test_dict, legacy_args.backendEngine
-    )
+    testGraph = setup_test_graph_from_json(cudnn_test_graph(), concrete_test_dict, legacy_args.backendEngine)
     if legacy_args.timing_loop == 0:
         run_test_from_json_definition(testGraph, concrete_test_dict)
     else:
@@ -658,10 +601,7 @@ class Legacy_operation:
         return outputs
 
     def translate_to_pycudnn_value(self, leg_prop, leg_value):
-        if (
-            Legacy_operation.VAL_MAP in self.operation_mapping
-            and leg_prop in self.operation_mapping[Legacy_operation.VAL_MAP]
-        ):
+        if Legacy_operation.VAL_MAP in self.operation_mapping and leg_prop in self.operation_mapping[Legacy_operation.VAL_MAP]:
             # TODO(@mbreughe): can we get rid of the eval?
             return self.operation_mapping[Legacy_operation.VAL_MAP][leg_prop][leg_value]
 
@@ -670,21 +610,15 @@ class Legacy_operation:
 
     def get_operation_properties(self):
         property_map = {}
-        for leg_prop, pycudnn_prop in self.operation_mapping[
-            Legacy_operation.PROPS
-        ].items():
+        for leg_prop, pycudnn_prop in self.operation_mapping[Legacy_operation.PROPS].items():
             leg_value = self.jnode[leg_prop]
-            property_map[pycudnn_prop] = self.translate_to_pycudnn_value(
-                leg_prop, leg_value
-            )
+            property_map[pycudnn_prop] = self.translate_to_pycudnn_value(leg_prop, leg_value)
 
         return property_map
 
     def get_input_name_mapping(self):
         input_map = {}
-        for leg_input, pycudnn_input in self.operation_mapping[
-            Legacy_operation.INPUT
-        ].items():
+        for leg_input, pycudnn_input in self.operation_mapping[Legacy_operation.INPUT].items():
             if leg_input in self.jnode:
                 input_map[pycudnn_input] = self.jnode[leg_input]
             else:
@@ -727,9 +661,7 @@ class Legacy_tensor:
         self.jtensor = jtensor
 
     def get_data_type(self):
-        return Legacy_value.translate_to_pycudnn_value(
-            "dataType", self.jtensor["dataType"]
-        )
+        return Legacy_value.translate_to_pycudnn_value("dataType", self.jtensor["dataType"])
 
     def get_dim(self):
         return Legacy_value.translate_to_pycudnn_value("dim", self.jtensor["dim"])
@@ -779,14 +711,10 @@ class Legacy_tensor:
             elif key in Legacy_tensor.mapping:
                 new_key = Legacy_tensor.mapping[key]
 
-                pycudnn_props[new_key] = Legacy_value.translate_to_pycudnn_value(
-                    key, value
-                )
+                pycudnn_props[new_key] = Legacy_value.translate_to_pycudnn_value(key, value)
 
             else:
-                raise ImplementationError(
-                    'Unsupported tensor property "{}"'.format(key)
-                )
+                raise ImplementationError('Unsupported tensor property "{}"'.format(key))
 
         return pycudnn_props
 
@@ -817,9 +745,7 @@ class Legacy_value:
         if legacy_key_name in Legacy_value.mapping:
             return Legacy_value.mapping[legacy_key_name][legacy_value]
         elif legacy_key_name in Legacy_value.indirection:
-            return Legacy_value.translate_to_pycudnn_value(
-                Legacy_value.indirection[legacy_key_name], legacy_value
-            )
+            return Legacy_value.translate_to_pycudnn_value(Legacy_value.indirection[legacy_key_name], legacy_value)
 
         return legacy_value
 
@@ -833,9 +759,7 @@ def get_conv_dim_placeholders(X_tensor_dim, filter_tensor_dim, padA, stdA, dilA)
     dimOut[1] = filter_tensor_dim[0]
 
     for d in range(0, spatial_dims):
-        dimOut[d + 2] = getFwdConvOutputDim(
-            X_tensor_dim[d + 2], padA[d], filter_tensor_dim[d + 2], stdA[d], dilA[d]
-        )
+        dimOut[d + 2] = getFwdConvOutputDim(X_tensor_dim[d + 2], padA[d], filter_tensor_dim[d + 2], stdA[d], dilA[d])
 
     input_nbDims = len(X_tensor_dim)
     filter_nbDims = len(filter_tensor_dim)
@@ -893,9 +817,7 @@ def replace_implicit_params(legacy_ops, jtensor_dict):
         stdA = legacy_op.jnode["stride"]
         dilA = legacy_op.jnode["dilation"]
 
-        inferred_params = get_conv_dim_placeholders(
-            X_tensor_dim, filter_tensor_dim, padA, stdA, dilA
-        )
+        inferred_params = get_conv_dim_placeholders(X_tensor_dim, filter_tensor_dim, padA, stdA, dilA)
         implicit_params.update(inferred_params)
 
     # Skip any property inferencing for matmuls
@@ -924,17 +846,11 @@ def replace_implicit_params(legacy_ops, jtensor_dict):
 
 
 def get_input_dataTypes(json_dict):
-    input_tensors = [
-        tensor
-        for tensor in json_dict["tensors"]
-        if not tensor["name"] in [output["name"] for output in json_dict["nodes"]]
-    ]
+    input_tensors = [tensor for tensor in json_dict["tensors"] if not tensor["name"] in [output["name"] for output in json_dict["nodes"]]]
     if not input_tensors:
         raise ValueError("No input tensors found in the JSON dictionary.")
 
-    input_data_types = [
-        Legacy_tensor(tensor).get_data_type() for tensor in input_tensors
-    ]
+    input_data_types = [Legacy_tensor(tensor).get_data_type() for tensor in input_tensors]
 
     return input_data_types
 
@@ -987,9 +903,7 @@ def setup_test_graph_from_json(testGraph, json_dict, backendEngine=-1):
             tg_tensor.set_is_virtual(jtensor["isVirtual"])
 
     # Identify all tensors in jtensor_dict that are not output tensors
-    input_tensors = [
-        tensor for tensor in jtensor_dict if not tensor["name"] in TGTensors
-    ]
+    input_tensors = [tensor for tensor in jtensor_dict if not tensor["name"] in TGTensors]
 
     # Create a TestTensor for every input tensor
     for jtensor in input_tensors:
@@ -1036,16 +950,10 @@ def run_test_from_json_definition(testGraph, json_dict):
     testGraph.cudnn_execute_and_compare_to_reference(atol=atol, rtol=rtol)
 
 
-def run_tensor_ir_test_from_json_definition(
-    testGraph, kernel_config, tensorir_args, concrete_test_dict, legacy_args
-):
+def run_tensor_ir_test_from_json_definition(testGraph, kernel_config, tensorir_args, concrete_test_dict, legacy_args):
 
-    static_shapes_only = (
-        tensorir_args.staticShapesOnly if tensorir_args.staticShapesOnly else False
-    )
-    compiler_backend = (
-        tensorir_args.compiler_backend if tensorir_args.compiler_backend else "Tile"
-    )
+    static_shapes_only = tensorir_args.staticShapesOnly if tensorir_args.staticShapesOnly else False
+    compiler_backend = tensorir_args.compiler_backend if tensorir_args.compiler_backend else "Tile"
 
     from test_tensor_ir import test_tensor_ir
 

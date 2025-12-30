@@ -21,9 +21,7 @@ def convert_strides(torch_tensor, cudnn_tensor):
     cudnn_stride = tuple(cudnn_tensor.get_stride())
 
     # Ensure we setup the correct strides
-    torch_tensor = torch.as_strided(
-        torch_tensor, torch_tensor.size(), tuple(cudnn_stride)
-    )
+    torch_tensor = torch.as_strided(torch_tensor, torch_tensor.size(), tuple(cudnn_stride))
 
     return torch_tensor
 
@@ -53,11 +51,7 @@ class cudnn_test_graph(test_graph):
         elif engine == "-3":
             self.set_heuristics([cudnn.heur_mode.FALLBACK])
         else:
-            print(
-                "MB Unkown heuristic for backendEngine {} (type {}), trying A and FALLBACK".format(
-                    engine, type(engine)
-                )
-            )
+            print("MB Unkown heuristic for backendEngine {} (type {}), trying A and FALLBACK".format(engine, type(engine)))
             self.set_heuristics([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
 
     def set_heuristics(self, heuristics):
@@ -132,9 +126,7 @@ class cudnn_test_graph(test_graph):
         node_dim_mapping = {}
         for node in self.nodes:
             for output_tensor in node.output:
-                node_dim_mapping[output_tensor.name] = (
-                    output_tensor.cudnn_tensor.get_dim()
-                )
+                node_dim_mapping[output_tensor.name] = output_tensor.cudnn_tensor.get_dim()
 
         # For every output we wish to check, check it
         for name in expected_dims:
@@ -189,13 +181,9 @@ class cudnn_test_graph(test_graph):
     def create_workspace_and_variantpack(self):
         # Creating workspace
         try:
-            workspace = torch.empty(
-                self.cudnn_graph.get_workspace_size(), device="cuda", dtype=torch.uint8
-            )
+            workspace = torch.empty(self.cudnn_graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
         except Exception as error:
-            workspace = torch.empty(
-                self.cudnn_graph.get_workspace_size(), device="cpu", dtype=torch.uint8
-            )
+            workspace = torch.empty(self.cudnn_graph.get_workspace_size(), device="cpu", dtype=torch.uint8)
 
         variant_pack = {}
         for node in self.entrance_nodes:
@@ -208,21 +196,13 @@ class cudnn_test_graph(test_graph):
                     try:
                         output_tensor = torch.zeros(
                             *output.cudnn_tensor.get_dim(),
-                            dtype=eval(
-                                convert_to_torch_type(
-                                    output.cudnn_tensor.get_data_type()
-                                )
-                            ),
+                            dtype=eval(convert_to_torch_type(output.cudnn_tensor.get_data_type())),
                             device="cuda",
                         )
                     except Exception as error:
                         output_tensor = torch.zeros(
                             *output.cudnn_tensor.get_dim(),
-                            dtype=eval(
-                                convert_to_torch_type(
-                                    output.cudnn_tensor.get_data_type()
-                                )
-                            ),
+                            dtype=eval(convert_to_torch_type(output.cudnn_tensor.get_data_type())),
                             device="cpu",
                         )
 
@@ -254,9 +234,7 @@ class cudnn_test_graph(test_graph):
         # TODO(@mbreughe:) Handle the case for -T1. Right now, -T1 and -T0 both run the graph only once, without timing
         if timingLoop > 1:
             # TODO(@mbreughe): Support cold caches by using multiple variant_packs
-            (min_rt, avg_rt, max_rt) = utils.measure_gpu_runtime(
-                lambda: self.cudnn_graph.execute(variant_pack, workspace), timingLoop
-            )
+            (min_rt, avg_rt, max_rt) = utils.measure_gpu_runtime(lambda: self.cudnn_graph.execute(variant_pack, workspace), timingLoop)
 
         utils.reportCurrentTime("graph.execute")
 
@@ -275,6 +253,4 @@ class cudnn_test_graph(test_graph):
         print("Computing reference")
 
         # Use the static method from the base class
-        test_graph.compare_to_reference(
-            self.calc_reference(), self.getOutputs(), atol=atol, rtol=rtol
-        )
+        test_graph.compare_to_reference(self.calc_reference(), self.getOutputs(), atol=atol, rtol=rtol)

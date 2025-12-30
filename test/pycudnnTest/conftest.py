@@ -20,9 +20,7 @@ def get_python_graph_defs(path, module_name):
 
     filename = os.path.join(path, "{}.py".format(module_name))
     if os.path.exists(filename):
-        spec = importlib.util.spec_from_file_location(
-            name=module_name, location=filename
-        )
+        spec = importlib.util.spec_from_file_location(name=module_name, location=filename)
         my_module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(my_module)
     else:
@@ -70,11 +68,7 @@ def createTestParamNameTuples(test_funcs, test_names, params_path, wanted_tests)
             test_ids.extend(cur_ids)
         else:
             error = FileNotFoundError(filename)
-            error.add_note(
-                "Please make sure your test ({}) has an associated file with input params".format(
-                    test_name
-                )
-            )
+            error.add_note("Please make sure your test ({}) has an associated file with input params".format(test_name))
             raise error
 
     return tuples, test_ids
@@ -94,29 +88,19 @@ def pytest_generate_tests(metafunc):
         or metafunc.function.__name__ == "test_tensor_ir_pygraph"
     ):
         # Find all the functions that define testgraphs in location testPath
-        base_path = os.path.dirname(
-            os.path.abspath(metafunc.config.getoption("testPath"))
-        )
-        filename = os.path.basename(metafunc.config.getoption("testPath")).split(".")[
-            -2
-        ]
+        base_path = os.path.dirname(os.path.abspath(metafunc.config.getoption("testPath")))
+        filename = os.path.basename(metafunc.config.getoption("testPath")).split(".")[-2]
         test_funcs, test_names = get_python_graph_defs(base_path, filename)
 
         params_path = metafunc.config.getoption("testInput")
 
-        param_tuples, test_ids = createTestParamNameTuples(
-            test_funcs, test_names, params_path, metafunc.config.getoption("testName")
-        )
+        param_tuples, test_ids = createTestParamNameTuples(test_funcs, test_names, params_path, metafunc.config.getoption("testName"))
 
-        metafunc.parametrize(
-            GRAPH_PYTHON_FPTR + "," + JSON_TEST_LIST_PARAM, param_tuples, ids=test_ids
-        )
+        metafunc.parametrize(GRAPH_PYTHON_FPTR + "," + JSON_TEST_LIST_PARAM, param_tuples, ids=test_ids)
 
         # Add graph_category parameter fixture for tensor_ir_pygraph
         if metafunc.function.__name__ == "test_tensor_ir_pygraph":
-            metafunc.parametrize(
-                GRAPH_CATEGORY_PARAM, [metafunc.config.getoption("graph_category")]
-            )
+            metafunc.parametrize(GRAPH_CATEGORY_PARAM, [metafunc.config.getoption("graph_category")])
 
     # Run a test from a json dictionary
     elif metafunc.function.__name__ == "test_json_graph":

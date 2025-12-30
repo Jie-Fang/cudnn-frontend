@@ -125,18 +125,14 @@ def _execute(self, tensor_to_device_buffer, workspace, handle=None):
         None
     """
     uid_to_tensor_pointer = {
-        x if type(x) is int else x.get_uid(): _library_device_pointer(pointer)
-        for x, pointer in tensor_to_device_buffer.items()
-        if x is not None
+        x if type(x) is int else x.get_uid(): _library_device_pointer(pointer) for x, pointer in tensor_to_device_buffer.items() if x is not None
     }
 
     workspace_pointer = _library_device_pointer(workspace)
     self._execute(uid_to_tensor_pointer, workspace_pointer, handle)
 
 
-def _execute_plan_at_index(
-    self, tensor_to_device_buffer, workspace, index, handle=None
-):
+def _execute_plan_at_index(self, tensor_to_device_buffer, workspace, index, handle=None):
     """
     Execute a cudnn graph.
 
@@ -149,9 +145,7 @@ def _execute_plan_at_index(
         None
     """
     uid_to_tensor_pointer = {
-        x if type(x) is int else x.get_uid(): _library_device_pointer(pointer)
-        for x, pointer in tensor_to_device_buffer.items()
-        if x is not None
+        x if type(x) is int else x.get_uid(): _library_device_pointer(pointer) for x, pointer in tensor_to_device_buffer.items() if x is not None
     }
 
     workspace_pointer = _library_device_pointer(workspace)
@@ -164,14 +158,10 @@ pygraph.execute_plan_at_index = _execute_plan_at_index
 
 def load_cudnn():
     # First look at python site packages
-    lib_path = glob.glob(
-        os.path.join(sysconfig.get_path("purelib"), "nvidia/cudnn/bin/cudnn64_9.dll")
-    )
+    lib_path = glob.glob(os.path.join(sysconfig.get_path("purelib"), "nvidia/cudnn/bin/cudnn64_9.dll"))
 
     if lib_path:
-        assert (
-            len(lib_path) == 1
-        ), f"Found {len(lib_path)} libcudnn.dll.x in nvidia-cudnn-cuXX."
+        assert len(lib_path) == 1, f"Found {len(lib_path)} libcudnn.dll.x in nvidia-cudnn-cuXX."
         lib = ctypes.windll.LoadLibrary(lib_path[0])
     else:  # Fallback
         lib = ctypes.windll.LoadLibrary("cudnn64_9.dll")
@@ -182,23 +172,13 @@ def load_cudnn():
 
 def _dlopen_cudnn():
     # First look at python site packages
-    lib_path = glob.glob(
-        os.path.join(
-            sysconfig.get_path("purelib"), "nvidia/cudnn/lib/libcudnn.so.*[0-9]"
-        )
-    )
+    lib_path = glob.glob(os.path.join(sysconfig.get_path("purelib"), "nvidia/cudnn/lib/libcudnn.so.*[0-9]"))
 
     if not lib_path:
-        lib_path = glob.glob(
-            os.path.join(
-                sysconfig.get_path("purelib"), "nvidia/cudnn_jit/lib/libcudnn.so.*[0-9]"
-            )
-        )
+        lib_path = glob.glob(os.path.join(sysconfig.get_path("purelib"), "nvidia/cudnn_jit/lib/libcudnn.so.*[0-9]"))
 
     if lib_path:
-        assert (
-            len(lib_path) == 1
-        ), f"Found {len(lib_path)} libcudnn.so.x in nvidia-cudnn-cuXX."
+        assert len(lib_path) == 1, f"Found {len(lib_path)} libcudnn.so.x in nvidia-cudnn-cuXX."
         lib = ctypes.CDLL(lib_path[0])
     else:  # Fallback
         try:
@@ -232,9 +212,7 @@ def __getattr__(name: str) -> Any:
 
             return _NSA
         except Exception as e:
-            raise ImportError(
-                f"NSA requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]': {e}"
-            ) from e
+            raise ImportError(f"NSA requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]': {e}") from e
 
     elif name == "GemmSwigluSm100":
         try:
@@ -242,9 +220,7 @@ def __getattr__(name: str) -> Any:
 
             return _GemmSwigluSm100
         except Exception as e:
-            raise ImportError(
-                f"GemmSwigluSm100 requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]': {e}"
-            ) from e
+            raise ImportError(f"GemmSwigluSm100 requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]': {e}") from e
 
     elif name == "gemm_swiglu_wrapper_sm100":
         try:
@@ -264,9 +240,7 @@ def __getattr__(name: str) -> Any:
 
             return _GemmAmaxSm100
         except Exception as e:
-            raise ImportError(
-                f"GemmAmaxSm100 requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]': {e}"
-            ) from e
+            raise ImportError(f"GemmAmaxSm100 requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]': {e}") from e
 
     elif name == "gemm_amax_wrapper_sm100":
         try:
@@ -276,8 +250,6 @@ def __getattr__(name: str) -> Any:
 
             return _gemm_amax_wrapper_sm100
         except Exception as e:
-            raise ImportError(
-                f"gemm_amax_wrapper_sm100 requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]': {e}"
-            ) from e
+            raise ImportError(f"gemm_amax_wrapper_sm100 requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]': {e}") from e
     else:
         raise AttributeError(name)
