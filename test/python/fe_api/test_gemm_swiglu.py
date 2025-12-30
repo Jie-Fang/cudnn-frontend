@@ -39,9 +39,7 @@ def test_gemm_swiglu_compile_execute(
         from cuda.bindings import driver as cuda
     except ImportError as e:
         # raise e
-        pytest.skip(
-            "Environment not supported: cudnn optional dependencies not installed"
-        )
+        pytest.skip("Environment not supported: cudnn optional dependencies not installed")
     cfg = gemm_swiglu_init(
         request,
         a_major,
@@ -65,9 +63,7 @@ def test_gemm_swiglu_compile_execute(
         cfg["a_major"],
         cfg["b_major"],
     )
-    ab12_torch, c_torch, _, _, _ = allocate_output_tensors(
-        cfg["m"], cfg["n"], cfg["l"], cfg["ab12_dtype"], cfg["c_dtype"], cfg["c_major"]
-    )
+    ab12_torch, c_torch, _, _, _ = allocate_output_tensors(cfg["m"], cfg["n"], cfg["l"], cfg["ab12_dtype"], cfg["c_dtype"], cfg["c_major"])
 
     gemm_swiglu = GemmSwigluSm100(
         sample_a=a_torch,
@@ -130,9 +126,7 @@ def test_gemm_swiglu_wrapper(
         from cuda.bindings import driver as cuda
     except ImportError as e:
         print(f"ImportError: {e}")
-        pytest.skip(
-            "Environment not supported: cudnn optional dependencies not installed"
-        )
+        pytest.skip("Environment not supported: cudnn optional dependencies not installed")
     cfg = gemm_swiglu_init(
         request,
         a_major,
@@ -206,9 +200,7 @@ def test_gemm_swiglu_compile_execute_quantize(
         from cudnn import GemmSwigluSm100
         from cuda.bindings import driver as cuda
     except ImportError as e:
-        pytest.skip(
-            "Environment not supported: cudnn optional dependencies not installed"
-        )
+        pytest.skip("Environment not supported: cudnn optional dependencies not installed")
     cfg = gemm_swiglu_init(
         request,
         a_major,
@@ -340,9 +332,7 @@ def test_gemm_swiglu_wrapper_quantize(
         from cudnn import gemm_swiglu_wrapper_sm100
         from cuda.bindings import driver as cuda
     except ImportError as e:
-        pytest.skip(
-            "Environment not supported: cudnn optional dependencies not installed"
-        )
+        pytest.skip("Environment not supported: cudnn optional dependencies not installed")
     cfg = gemm_swiglu_init(
         request,
         a_major,

@@ -52,13 +52,9 @@ def processTestFileLine_graphRunner(args, unknown_args, line_count, line):
 
 if __name__ == "__main__":
     # We disable help here, as each specific mode has it's own set of options and associated help
-    pct_parser = argparse.ArgumentParser(
-        prog="pycudnnTest", add_help=False, allow_abbrev=False
-    )
+    pct_parser = argparse.ArgumentParser(prog="pycudnnTest", add_help=False, allow_abbrev=False)
 
-    pct_parser.add_argument(
-        "--R", "-R", choices=["graphRunner", "grStream", "tensor_ir", "irStream"]
-    )
+    pct_parser.add_argument("--R", "-R", choices=["graphRunner", "grStream", "tensor_ir", "irStream"])
 
     # TODO(@mbreughe): move to grStream mode
     pct_parser.add_argument(
@@ -92,8 +88,7 @@ if __name__ == "__main__":
     pct_parser.add_argument(
         "--testPath",
         default="json_graph_defs/graphTests.json",
-        help="This can be a json file or python file with graph definitions. "
-        "e.g. json_graph_defs/graphTests.json, python_graph_defs/basic_tests.py",
+        help="This can be a json file or python file with graph definitions. " "e.g. json_graph_defs/graphTests.json, python_graph_defs/basic_tests.py",
     )
     pct_parser.add_argument(
         "--testName",
@@ -107,15 +102,9 @@ if __name__ == "__main__":
         action="store",
         help="Dir that contains parameters in Json format",
     )
-    pct_parser.add_argument(
-        "--negative", action="store_true", default=False, help="run negative tests"
-    )
-    pct_parser.add_argument(
-        "--verbose", action="store_true", default=False, help="Verbose output"
-    )
-    pct_parser.add_argument(
-        "--vverbose", action="store_true", default=False, help="Very verbose output"
-    )
+    pct_parser.add_argument("--negative", action="store_true", default=False, help="run negative tests")
+    pct_parser.add_argument("--verbose", action="store_true", default=False, help="Verbose output")
+    pct_parser.add_argument("--vverbose", action="store_true", default=False, help="Very verbose output")
     pct_parser.add_argument(
         "--threads",
         action="store",
@@ -167,24 +156,16 @@ if __name__ == "__main__":
                 continue
 
             # End at the line number indicated by the user
-            if (args.num_lines is not None) and (
-                line_count >= args.start_line + args.num_lines
-            ):
+            if (args.num_lines is not None) and (line_count >= args.start_line + args.num_lines):
                 break
 
             print("Running in stream mode: ", line.strip())
-            args_stream, unknown_args_stream = pct_parser.parse_known_args(
-                shlex.split(line)
-            )
+            args_stream, unknown_args_stream = pct_parser.parse_known_args(shlex.split(line))
 
             if args.R == "irStream":
-                error_count += processTestFileLine_TensorIR(
-                    args_stream, unknown_args_stream, line_count, line
-                )
+                error_count += processTestFileLine_TensorIR(args_stream, unknown_args_stream, line_count, line)
             elif args.R == "grStream":
-                error_count += processTestFileLine_graphRunner(
-                    args_stream, unknown_args_stream, line_count, line
-                )
+                error_count += processTestFileLine_graphRunner(args_stream, unknown_args_stream, line_count, line)
         if args.R == "irStream":
             compiler_with_kernel_cache.print_stats()
         if error_count > 0:
@@ -225,9 +206,7 @@ if __name__ == "__main__":
     if args.testInput is None:
         base_path = os.path.dirname(os.path.abspath(__file__))
         if args.negative:
-            args.testInput = os.path.join(
-                base_path, "python_graph_defs", "negative_test_input"
-            )
+            args.testInput = os.path.join(base_path, "python_graph_defs", "negative_test_input")
         else:
             args.testInput = os.path.join(base_path, "python_graph_defs", "graph_input")
 

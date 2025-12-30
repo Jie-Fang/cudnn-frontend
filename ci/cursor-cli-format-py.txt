@@ -1,0 +1,33 @@
+Format Python files to look clean and readable. Read and submit changes one file at a time.
+
+INCLUDE (modify files in them):
+- python/cudnn/
+
+EXCLUDE (do not touch):
+- python/cudnn/gemm_amax
+- python/cudnn/native_sparse_attention
+- python/cudnn/gemm_swiglu
+
+Formatting rules:
+- Preserve the structure: if a dict/list is multi-line, keep it multi-line. If it's single-line, keep it single-line.
+- Each dict/list entry should be on ONE line (do not split an entry across multiple lines)
+- Function calls with a single argument should be on ONE line (do not split across lines)
+- Long lines are fine (160+ chars) - do NOT break working single-line entries
+- Consistency: format entries to match adjacent/surrounding entries. If nearby entries use a certain style, match that style.
+
+Example - BAD (dict entry split):
+    getattr(torch, 'float16', torch.half): getattr(
+        cutlass, 'Float16', None
+    ),
+Example - GOOD:
+    getattr(torch, 'float16', torch.half): getattr(cutlass, 'Float16', None),
+
+Example - BAD (function call split):
+    self._logger.critical(
+        f'tensor {name} has shape: {tensor.shape}'
+    )
+Example - GOOD:
+    self._logger.critical(f'tensor {name} has shape: {tensor.shape}')
+
+Restrictions:
+- ONLY modify whitespace - no changes to code, names, strings, comments

@@ -125,16 +125,12 @@ class RandomizationContext:
         randoms_.h_q, randoms_.h_k, randoms_.h_v = randoms["head_count"]
 
         randoms_.is_ragged = randoms["is_q_ragged_or_padded_or_full"] == "ragged"
-        randoms_.is_padding = (
-            randoms["is_q_ragged_or_padded_or_full"] == "padded" or randoms["is_q_ragged_or_padded_or_full"] == "ragged"
-        )
+        randoms_.is_padding = randoms["is_q_ragged_or_padded_or_full"] == "padded" or randoms["is_q_ragged_or_padded_or_full"] == "ragged"
 
         if randoms["is_q_ragged_or_padded_or_full"] != "full":
             randoms_.seq_len_q = [rng.randint(1, randoms_.s_q) for _ in range(randoms_.batches)]
             if randoms_.seq_len_q is not None:
-                randoms_.seq_len_kv = [
-                    rng.randint(randoms_.seq_len_q[i], randoms_.s_kv) for i in range(randoms_.batches)
-                ]
+                randoms_.seq_len_kv = [rng.randint(randoms_.seq_len_q[i], randoms_.s_kv) for i in range(randoms_.batches)]
             else:
                 randoms_.seq_len_kv = [rng.randint(randoms_.s_q, randoms_.s_kv) for _ in range(randoms_.batches)]
 
@@ -179,12 +175,8 @@ class RandomizationContext:
                 gaps_q.append(elem_align * rng.randint(0, 2))
                 gaps_o.append(elem_align * rng.randint(0, 2))
 
-            (randoms_.stride_q, randoms_.gaps_q, randoms_.elems_q) = get_strides_from_indices(
-                randoms_.shape_q, indices, gaps_q, rng
-            )
-            (randoms_.stride_o, randoms_.gaps_o, randoms_.elems_o) = get_strides_from_indices(
-                randoms_.shape_o, indices, gaps_o, rng
-            )
+            (randoms_.stride_q, randoms_.gaps_q, randoms_.elems_q) = get_strides_from_indices(randoms_.shape_q, indices, gaps_q, rng)
+            (randoms_.stride_o, randoms_.gaps_o, randoms_.elems_o) = get_strides_from_indices(randoms_.shape_o, indices, gaps_o, rng)
 
         # Decide K, V
         randoms_.shape_k = (
@@ -212,12 +204,8 @@ class RandomizationContext:
                 gaps_k.append(elem_align * rng.randint(0, 2))
                 gaps_v.append(elem_align * rng.randint(0, 2))
 
-            (randoms_.stride_k, randoms_.gaps_k, randoms_.elems_k) = get_strides_from_indices(
-                randoms_.shape_k, indices, gaps_k, rng
-            )
-            (randoms_.stride_v, randoms_.gaps_v, randoms_.elems_v) = get_strides_from_indices(
-                randoms_.shape_v, indices, gaps_v, rng
-            )
+            (randoms_.stride_k, randoms_.gaps_k, randoms_.elems_k) = get_strides_from_indices(randoms_.shape_k, indices, gaps_k, rng)
+            (randoms_.stride_v, randoms_.gaps_v, randoms_.elems_v) = get_strides_from_indices(randoms_.shape_v, indices, gaps_v, rng)
 
         return randoms_
 
@@ -259,11 +247,7 @@ class RandomIntValue:
             max_exp = math.floor(math.log2(self.max))
             if min_exp > max_exp:
                 raise ValueError(f"No power of two in range [{self.min}, {self.max}]")
-            exp = (
-                rng.randint(min_exp, max_exp)
-                if dice == 0
-                else self.with_high_probability[rng.randint(0, len(self.with_high_probability) - 1)]
-            )
+            exp = rng.randint(min_exp, max_exp) if dice == 0 else self.with_high_probability[rng.randint(0, len(self.with_high_probability) - 1)]
             return 1 << exp if dice == 0 else exp
         elif self.multiple_of:
             # compute the first and last valid multiples, then pick randomly
@@ -272,18 +256,10 @@ class RandomIntValue:
             if first > self.max:
                 raise ValueError(f"No multiples of {self.multiple_of} in range [{self.min}, {self.max}]")
             count = ((last - first) // self.multiple_of) + 1
-            idx = (
-                rng.randint(0, count - 1)
-                if dice == 0
-                else self.with_high_probability[rng.randint(0, len(self.with_high_probability) - 1)]
-            )
+            idx = rng.randint(0, count - 1) if dice == 0 else self.with_high_probability[rng.randint(0, len(self.with_high_probability) - 1)]
             return first + idx * self.multiple_of
         else:
-            return (
-                rng.randint(self.min, self.max)
-                if dice == 0
-                else self.with_high_probability[rng.randint(0, len(self.with_high_probability) - 1)]
-            )
+            return rng.randint(self.min, self.max) if dice == 0 else self.with_high_probability[rng.randint(0, len(self.with_high_probability) - 1)]
 
 
 class RandomHeadGenerator:

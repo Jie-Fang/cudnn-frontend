@@ -114,9 +114,7 @@ class PytorchReference:
         relu_output = torch.nn.functional.relu(input_tensor)
         relu_output.backward(loss_tensor)
         dX = input_tensor.grad
-        dX = dX.to(
-            eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
-        )
+        dX = dX.to(eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type)))
         return [dX]
 
     @staticmethod
@@ -140,9 +138,7 @@ class PytorchReference:
         elu_output = torch.nn.functional.elu(input_tensor, alpha=alpha_tensor)
         elu_output.backward(loss_tensor)
         dX = input_tensor.grad
-        dX = dX.to(
-            eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
-        )
+        dX = dX.to(eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type)))
         return [dX]
 
     @staticmethod
@@ -158,9 +154,7 @@ class PytorchReference:
         gelu_output = torch.nn.functional.gelu(input_tensor)
         gelu_output.backward(loss_tensor)
         dX = input_tensor.grad
-        dX = dX.to(
-            eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
-        )
+        dX = dX.to(eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type)))
         return [dX]
 
     @staticmethod
@@ -184,9 +178,7 @@ class PytorchReference:
         sigmoid_output = torch.nn.functional.sigmoid(input_tensor)
         sigmoid_output.backward(loss_tensor)
         dX = input_tensor.grad
-        dX = dX.to(
-            eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
-        )
+        dX = dX.to(eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type)))
         return [dX]
 
     @staticmethod
@@ -204,13 +196,9 @@ class PytorchReference:
         beta = kwargs["b"] if "b" in kwargs else 1.0
         sigmoid_beta_x = torch.sigmoid(beta * input_tensor)
         # Compute derivative of Swish: sigma(beta * x) + beta * x * sigma(beta * x) * (1 - sigma(beta * x))
-        swish_grad = sigmoid_beta_x + beta * input_tensor * sigmoid_beta_x * (
-            1 - sigmoid_beta_x
-        )
+        swish_grad = sigmoid_beta_x + beta * input_tensor * sigmoid_beta_x * (1 - sigmoid_beta_x)
         dX = loss_tensor * swish_grad
-        dX = dX.to(
-            eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
-        )
+        dX = dX.to(eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type)))
         return [dX]
 
     @staticmethod
@@ -233,9 +221,7 @@ class PytorchReference:
         softplus_output = torch.nn.functional.softplus(beta * input_tensor) / beta
         softplus_output.backward(loss_tensor)
         dX = input_tensor.grad
-        dX = dX.to(
-            eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
-        )
+        dX = dX.to(eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type)))
         return [dX]
 
     @staticmethod
@@ -273,25 +259,13 @@ class PytorchReference:
 
     @staticmethod
     def _get_computation_types(kwargs, test_tensor_out_list):
-        compute_type = eval(
-            convert_to_torch_type_wrapper(
-                kwargs["compute_data_type"]
-                if "compute_data_type" in kwargs
-                else test_tensor_out_list[0].data_type
-            )
-        )
+        compute_type = eval(convert_to_torch_type_wrapper(kwargs["compute_data_type"] if "compute_data_type" in kwargs else test_tensor_out_list[0].data_type))
 
         # Fall back to float32 for computation if type is FP8
-        compute_type = (
-            compute_type
-            if compute_type not in (torch.float8_e4m3fn, torch.float8_e5m2)
-            else torch.float
-        )
+        compute_type = compute_type if compute_type not in (torch.float8_e4m3fn, torch.float8_e5m2) else torch.float
 
         # Get output type
-        out_type = eval(
-            convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type)
-        )
+        out_type = eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
 
         return compute_type, out_type
 
@@ -303,9 +277,7 @@ class PytorchReference:
 
     @staticmethod
     def _handle_unary_op(kwargs, test_tensor_out_list, op_func, input_key="input"):
-        compute_type, out_type = PytorchReference._get_computation_types(
-            kwargs, test_tensor_out_list
-        )
+        compute_type, out_type = PytorchReference._get_computation_types(kwargs, test_tensor_out_list)
 
         # Convert input tensor to computation type
         input_tensor = kwargs[input_key].to(dtype=compute_type)
@@ -313,32 +285,22 @@ class PytorchReference:
         # Apply operation
         compute_result = op_func(input_tensor).to(dtype=compute_type)
 
-        return PytorchReference._store_results(
-            test_tensor_out_list, compute_result, out_type
-        )
+        return PytorchReference._store_results(test_tensor_out_list, compute_result, out_type)
 
     @staticmethod
-    def _handle_binary_op(
-        kwargs, test_tensor_out_list, op_func, lhs_key="a", rhs_key="b"
-    ):
-        compute_type, out_type = PytorchReference._get_computation_types(
-            kwargs, test_tensor_out_list
-        )
+    def _handle_binary_op(kwargs, test_tensor_out_list, op_func, lhs_key="a", rhs_key="b"):
+        compute_type, out_type = PytorchReference._get_computation_types(kwargs, test_tensor_out_list)
 
         # Convert input tensors to computation type
         lhs = kwargs[lhs_key].to(dtype=compute_type)
         rhs = kwargs[rhs_key].to(dtype=compute_type)
 
-        compute_type, out_type = PytorchReference._get_computation_types(
-            kwargs, test_tensor_out_list
-        )
+        compute_type, out_type = PytorchReference._get_computation_types(kwargs, test_tensor_out_list)
 
         # Apply operation
         compute_result = op_func(lhs, rhs).to(dtype=compute_type)
 
-        return PytorchReference._store_results(
-            test_tensor_out_list, compute_result, out_type
-        )
+        return PytorchReference._store_results(test_tensor_out_list, compute_result, out_type)
 
     @staticmethod
     def matmul(kwargs, test_tensor_out_list):
@@ -356,9 +318,7 @@ class PytorchReference:
         kwargs.update({"A": lhs, "B": rhs})
 
         # Use the binary operation handler with torch.bmm
-        return PytorchReference._handle_binary_op(
-            kwargs, test_tensor_out_list, torch.bmm, "A", "B"
-        )
+        return PytorchReference._handle_binary_op(kwargs, test_tensor_out_list, torch.bmm, "A", "B")
 
     @staticmethod
     def scaled_matmul(kwargs, test_tensor_out_list):
@@ -375,13 +335,9 @@ class PytorchReference:
             kwargs["sfB"].to(device="cpu"),
         )
 
-        comp_type, ref_type = PytorchReference._get_computation_types(
-            kwargs, test_tensor_out_list
-        )
+        comp_type, ref_type = PytorchReference._get_computation_types(kwargs, test_tensor_out_list)
 
-        test_tensor_out_list[0].compute_data = torch.empty(
-            test_tensor_out_list[0].dim, dtype=comp_type, device=A.device
-        )
+        test_tensor_out_list[0].compute_data = torch.empty(test_tensor_out_list[0].dim, dtype=comp_type, device=A.device)
 
         M, N, K, L = A.shape[1], B.shape[2], A.shape[2], A.shape[0]
         batch_stride = 1
@@ -413,80 +369,54 @@ class PytorchReference:
                 batch_stride,
             )
         else:
-            raise ValueError(
-                f"Not supported data types for scaled matmul: {A.dtype} and {B.dtype}"
-            )
-        test_tensor_out_list[0].ref_data = test_tensor_out_list[0].compute_data.to(
-            dtype=ref_type
-        )
+            raise ValueError(f"Not supported data types for scaled matmul: {A.dtype} and {B.dtype}")
+        test_tensor_out_list[0].ref_data = test_tensor_out_list[0].compute_data.to(dtype=ref_type)
 
         return [test_tensor_out_list[0].ref_data]
 
     @staticmethod
     def add(kwargs, test_tensor_out_list):
-        return PytorchReference._handle_binary_op(
-            kwargs, test_tensor_out_list, torch.add
-        )
+        return PytorchReference._handle_binary_op(kwargs, test_tensor_out_list, torch.add)
 
     @staticmethod
     def bias(kwargs, test_tensor_out_list):
-        return PytorchReference._handle_binary_op(
-            kwargs, test_tensor_out_list, torch.add, "input", "bias"
-        )
+        return PytorchReference._handle_binary_op(kwargs, test_tensor_out_list, torch.add, "input", "bias")
 
     @staticmethod
     def sub(kwargs, test_tensor_out_list):
-        return PytorchReference._handle_binary_op(
-            kwargs, test_tensor_out_list, torch.sub
-        )
+        return PytorchReference._handle_binary_op(kwargs, test_tensor_out_list, torch.sub)
 
     @staticmethod
     def mul(kwargs, test_tensor_out_list):
-        return PytorchReference._handle_binary_op(
-            kwargs, test_tensor_out_list, torch.mul
-        )
+        return PytorchReference._handle_binary_op(kwargs, test_tensor_out_list, torch.mul)
 
     @staticmethod
     def div(kwargs, test_tensor_out_list):
-        return PytorchReference._handle_binary_op(
-            kwargs, test_tensor_out_list, torch.div
-        )
+        return PytorchReference._handle_binary_op(kwargs, test_tensor_out_list, torch.div)
 
     @staticmethod
     def max(kwargs, test_tensor_out_list):
-        return PytorchReference._handle_binary_op(
-            kwargs, test_tensor_out_list, torch.max, "input0", "input1"
-        )
+        return PytorchReference._handle_binary_op(kwargs, test_tensor_out_list, torch.max, "input0", "input1")
 
     @staticmethod
     def min(kwargs, test_tensor_out_list):
-        return PytorchReference._handle_binary_op(
-            kwargs, test_tensor_out_list, torch.min, "input0", "input1"
-        )
+        return PytorchReference._handle_binary_op(kwargs, test_tensor_out_list, torch.min, "input0", "input1")
 
     @staticmethod
     def pow(kwargs, test_tensor_out_list):
-        return PytorchReference._handle_binary_op(
-            kwargs, test_tensor_out_list, torch.pow, "input0", "input1"
-        )
+        return PytorchReference._handle_binary_op(kwargs, test_tensor_out_list, torch.pow, "input0", "input1")
 
     @staticmethod
     def mod(kwargs, test_tensor_out_list):
-        return PytorchReference._handle_binary_op(
-            kwargs, test_tensor_out_list, torch.fmod, "input0", "input1"
-        )
+        return PytorchReference._handle_binary_op(kwargs, test_tensor_out_list, torch.fmod, "input0", "input1")
 
     @staticmethod
     def add_square(kwargs, test_tensor_out_list):
-        return PytorchReference._handle_binary_op(
-            kwargs, test_tensor_out_list, lambda a, b: torch.add(a, torch.square(b))
-        )
+        return PytorchReference._handle_binary_op(kwargs, test_tensor_out_list, lambda a, b: torch.add(a, torch.square(b)))
 
     @staticmethod
     def tanh(kwargs, test_tensor_out_list):
-        return PytorchReference._handle_unary_op(
-            kwargs, test_tensor_out_list, torch.tanh
-        )
+        return PytorchReference._handle_unary_op(kwargs, test_tensor_out_list, torch.tanh)
 
     @staticmethod
     def tanh_backward(kwargs, test_tensor_out_list):
@@ -496,82 +426,56 @@ class PytorchReference:
         tanh_output = torch.tanh(input_tensor)
         tanh_output.backward(loss_tensor)
         dX = input_tensor.grad
-        dX = dX.to(
-            eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
-        )
+        dX = dX.to(eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type)))
         return [dX]
 
     @staticmethod
     def abs(kwargs, test_tensor_out_list):
-        return PytorchReference._handle_unary_op(
-            kwargs, test_tensor_out_list, torch.abs
-        )
+        return PytorchReference._handle_unary_op(kwargs, test_tensor_out_list, torch.abs)
 
     @staticmethod
     def ceil(kwargs, test_tensor_out_list):
-        return PytorchReference._handle_unary_op(
-            kwargs, test_tensor_out_list, torch.ceil
-        )
+        return PytorchReference._handle_unary_op(kwargs, test_tensor_out_list, torch.ceil)
 
     @staticmethod
     def floor(kwargs, test_tensor_out_list):
-        return PytorchReference._handle_unary_op(
-            kwargs, test_tensor_out_list, torch.floor
-        )
+        return PytorchReference._handle_unary_op(kwargs, test_tensor_out_list, torch.floor)
 
     @staticmethod
     def cos(kwargs, test_tensor_out_list):
-        return PytorchReference._handle_unary_op(
-            kwargs, test_tensor_out_list, torch.cos
-        )
+        return PytorchReference._handle_unary_op(kwargs, test_tensor_out_list, torch.cos)
 
     @staticmethod
     def sin(kwargs, test_tensor_out_list):
-        return PytorchReference._handle_unary_op(
-            kwargs, test_tensor_out_list, torch.sin
-        )
+        return PytorchReference._handle_unary_op(kwargs, test_tensor_out_list, torch.sin)
 
     @staticmethod
     def tan(kwargs, test_tensor_out_list):
-        return PytorchReference._handle_unary_op(
-            kwargs, test_tensor_out_list, torch.tan
-        )
+        return PytorchReference._handle_unary_op(kwargs, test_tensor_out_list, torch.tan)
 
     @staticmethod
     def exp(kwargs, test_tensor_out_list):
-        return PytorchReference._handle_unary_op(
-            kwargs, test_tensor_out_list, torch.exp
-        )
+        return PytorchReference._handle_unary_op(kwargs, test_tensor_out_list, torch.exp)
 
     @staticmethod
     def log(kwargs, test_tensor_out_list):
-        return PytorchReference._handle_unary_op(
-            kwargs, test_tensor_out_list, torch.log
-        )
+        return PytorchReference._handle_unary_op(kwargs, test_tensor_out_list, torch.log)
 
     @staticmethod
     def neg(kwargs, test_tensor_out_list):
-        return PytorchReference._handle_unary_op(
-            kwargs, test_tensor_out_list, torch.neg
-        )
+        return PytorchReference._handle_unary_op(kwargs, test_tensor_out_list, torch.neg)
 
     @staticmethod
     def sqrt(kwargs, test_tensor_out_list):
-        return PytorchReference._handle_unary_op(
-            kwargs, test_tensor_out_list, torch.sqrt
-        )
+        return PytorchReference._handle_unary_op(kwargs, test_tensor_out_list, torch.sqrt)
 
     @staticmethod
     def rsqrt(kwargs, test_tensor_out_list):
-        return PytorchReference._handle_unary_op(
-            kwargs, test_tensor_out_list, torch.rsqrt
-        )
+        return PytorchReference._handle_unary_op(kwargs, test_tensor_out_list, torch.rsqrt)
 
     @staticmethod
     def erf(kwargs, test_tensor_out_list):
-        return PytorchReference._handle_unary_op(
-            kwargs, test_tensor_out_list, torch.erf
-        )
+        return PytorchReference._handle_unary_op(kwargs, test_tensor_out_list, torch.erf)
 
     @staticmethod
     def cmp_lt(kwargs, test_tensor_out_list):
@@ -654,9 +558,7 @@ class PytorchReference:
     @staticmethod
     def relu_backward(kwargs, test_tensor_out_list):
         dX = torch.where(kwargs["input"] > 0, kwargs["loss"], 0)
-        dX = dX.to(
-            eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
-        )
+        dX = dX.to(eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type)))
         return [dX]
 
 
@@ -761,29 +663,17 @@ class operation(test_node):
             return
         import cudnn
 
-        new_kwargs = {
-            x: self.kwargs[x]
-            for x in self.kwargs
-            if not isinstance(self.kwargs[x], test_tensor)
-        }
+        new_kwargs = {x: self.kwargs[x] for x in self.kwargs if not isinstance(self.kwargs[x], test_tensor)}
         for x in self.kwargs:
             if isinstance(self.kwargs[x], test_tensor):
                 new_kwargs[x] = self.kwargs[x].cudnn_tensor
 
-        if "compute_data_type" in new_kwargs and isinstance(
-            new_kwargs["compute_data_type"], DataType
-        ):
-            new_kwargs["compute_data_type"] = eval(
-                convert_datatype(new_kwargs["compute_data_type"], "cudnn")
-            )
+        if "compute_data_type" in new_kwargs and isinstance(new_kwargs["compute_data_type"], DataType):
+            new_kwargs["compute_data_type"] = eval(convert_datatype(new_kwargs["compute_data_type"], "cudnn"))
         if new_kwargs.get("compute_data_type", None) == cudnn.data_type.INT8:
             new_kwargs["compute_data_type"] = cudnn.data_type.INT32
 
-        if (
-            self.cudnn_op.__name__ == "reduction"
-            and "mode" in new_kwargs
-            and isinstance(new_kwargs["mode"], str)
-        ):
+        if self.cudnn_op.__name__ == "reduction" and "mode" in new_kwargs and isinstance(new_kwargs["mode"], str):
             new_kwargs["mode"] = eval(new_kwargs["mode"])
         cudnn_res = self.cudnn_op(cudnn_graph, **new_kwargs)
         if self.cudnn_op.__name__ == "reduction" and "mode" in new_kwargs:
@@ -798,18 +688,10 @@ class operation(test_node):
             self.output[0].cudnn_tensor = cudnn_res
 
     def run_ref(self):
-        new_kwargs = {
-            x: self.kwargs[x]
-            for x in self.kwargs
-            if not isinstance(self.kwargs[x], test_tensor)
-        }
+        new_kwargs = {x: self.kwargs[x] for x in self.kwargs if not isinstance(self.kwargs[x], test_tensor)}
         for x in self.kwargs:
             if isinstance(self.kwargs[x], test_tensor):
-                tensor_data = (
-                    self.kwargs[x].compute_data
-                    if self.kwargs[x].compute_data is not None
-                    else self.kwargs[x].ref_data
-                )
+                tensor_data = self.kwargs[x].compute_data if self.kwargs[x].compute_data is not None else self.kwargs[x].ref_data
                 new_kwargs[x] = tensor_data
         # Note: we could choose to have the ref func set the output
         ref_output = self.ref_func(new_kwargs, self.output)
@@ -831,9 +713,7 @@ class random_tensor_generator(test_node):
             self.is_by_value = self.kwargs["isByValue"]
             self.output[0].set_is_by_value(self.is_by_value)
 
-        data_type = (
-            io_data_type if not "data_type" in self.kwargs else self.kwargs["data_type"]
-        )
+        data_type = io_data_type if not "data_type" in self.kwargs else self.kwargs["data_type"]
         self.output[0].set_data_type(data_type)
         self.dist_mean = None
         self.dist_sd = None
@@ -926,11 +806,7 @@ class random_tensor_generator(test_node):
                     device=device,
                     dtype=torch_dtype,
                 )
-        if (
-            "stride" in self.kwargs
-            and "is_tensor_ir" in self.kwargs
-            and self.kwargs["is_tensor_ir"]
-        ):
+        if "stride" in self.kwargs and "is_tensor_ir" in self.kwargs and self.kwargs["is_tensor_ir"]:
             self.output[0].ref_data = torch.as_strided(
                 self.output[0].ref_data,
                 self.output[0].ref_data.size(),
@@ -951,23 +827,17 @@ class random_tensor_generator(test_node):
             # TODO: refactor this once PyTorch natively supports FP8_E8M0
             if self.output[0].data_type == DataType.FP8_E8M0:
                 rand_float_tensor = self.output[0].ref_data.to(dtype=torch.float32)
-                rand_tensor_exponent = (
-                    rand_float_tensor.view(torch.int32) >> 23
-                ) & 0xFF
+                rand_tensor_exponent = (rand_float_tensor.view(torch.int32) >> 23) & 0xFF
                 self.output[0].ref_data = rand_tensor_exponent.to(torch.uint8)
 
             if self.get_layout() == "NHWC":
                 size = self.output[0].ref_data.size()
                 if len(size) == 4:
-                    self.output[0].ref_data = self.output[0].ref_data.to(
-                        memory_format=torch.channels_last
-                    )
+                    self.output[0].ref_data = self.output[0].ref_data.to(memory_format=torch.channels_last)
                 elif len(size) == 5:
                     # Technically we could reuse this for len(size) == 4, but some tests are showing small numerical errors
                     stride = utils.create_nhwc_strides(size)
-                    self.output[0].ref_data = torch.as_strided(
-                        self.output[0].ref_data, size, stride
-                    )
+                    self.output[0].ref_data = torch.as_strided(self.output[0].ref_data, size, stride)
                 else:
                     assert len(size) < 6 and len(size) > 3
 
@@ -980,11 +850,7 @@ class random_tensor_generator(test_node):
         return "NCHW" if not "layout" in self.kwargs else self.kwargs["layout"]
 
     def get_reordering(self):
-        return (
-            "CUDNN_TENSOR_REORDERING_NONE"
-            if not "reordering" in self.kwargs
-            else self.kwargs["reordering"]
-        )
+        return "CUDNN_TENSOR_REORDERING_NONE" if not "reordering" in self.kwargs else self.kwargs["reordering"]
 
     def run_cudnn_code(self, cudnn_graph):
         if "cudnn" not in sys.modules:
@@ -998,9 +864,7 @@ class random_tensor_generator(test_node):
             dim=self.output[0].ref_data.size(),
             stride=self.output[0].ref_data.stride(),
             data_type=(
-                eval(convert_datatype(self.output[0].data_type, "cudnn"))
-                if isinstance(self.output[0].data_type, DataType)
-                else self.output[0].data_type
+                eval(convert_datatype(self.output[0].data_type, "cudnn")) if isinstance(self.output[0].data_type, DataType) else self.output[0].data_type
             ),
         )
 
@@ -1017,9 +881,7 @@ class ConstantTensor(test_node):
 
         self.output = [test_tensor(name + "_out", self)]
 
-        data_type = (
-            io_data_type if not "data_type" in self.kwargs else self.kwargs["data_type"]
-        )
+        data_type = io_data_type if not "data_type" in self.kwargs else self.kwargs["data_type"]
         self.output[0].set_data_type(data_type)
 
         self.value = value
@@ -1035,9 +897,7 @@ class ConstantTensor(test_node):
             )
 
             if self.get_layout == "NHWC":
-                self.output[0].ref_data = self.output.ref_data.to(
-                    memory_format=torch.channels_last
-                )
+                self.output[0].ref_data = self.output.ref_data.to(memory_format=torch.channels_last)
 
     def get_value(self):
         self.instantiate()
@@ -1048,11 +908,7 @@ class ConstantTensor(test_node):
         return "NCHW" if not "layout" in self.kwargs else self.kwargs["layout"]
 
     def get_reordering(self):
-        return (
-            "CUDNN_TENSOR_REORDERING_NONE"
-            if not "reordering" in self.kwargs
-            else self.kwargs["reordering"]
-        )
+        return "CUDNN_TENSOR_REORDERING_NONE" if not "reordering" in self.kwargs else self.kwargs["reordering"]
 
     def run_cudnn_code(self, cudnn_graph):
         if "cudnn" not in sys.modules:
@@ -1066,9 +922,7 @@ class ConstantTensor(test_node):
             dim=self.output[0].ref_data.size(),
             stride=self.output[0].ref_data.stride(),
             data_type=(
-                eval(convert_datatype(self.output[0].data_type, "cudnn"))
-                if isinstance(self.output[0].data_type, DataType)
-                else self.output[0].data_type
+                eval(convert_datatype(self.output[0].data_type, "cudnn")) if isinstance(self.output[0].data_type, DataType) else self.output[0].data_type
             ),
             is_pass_by_value=True,
         )
@@ -1143,11 +997,7 @@ class test_tensor:
         if self.data_type is not None and self.cudnn_tensor is not None:
             import cudnn
 
-            self.cudnn_tensor.set_data_type(
-                eval(convert_datatype(self.data_type, "cudnn"))
-                if isinstance(self.data_type, DataType)
-                else self.data_type
-            )
+            self.cudnn_tensor.set_data_type(eval(convert_datatype(self.data_type, "cudnn")) if isinstance(self.data_type, DataType) else self.data_type)
 
         if "dim" in dir(self) and self.cudnn_tensor is not None:
             self.cudnn_tensor.set_dim(self.dim)
@@ -1376,11 +1226,7 @@ class test_graph:
         # Compare with reference
         for Y_expected, Y_actual in zip(ref_outputs, outputs):
             # Handle device differences
-            if (
-                hasattr(Y_expected, "device")
-                and hasattr(Y_actual, "device")
-                and Y_expected.device.type != Y_actual.device.type
-            ):
+            if hasattr(Y_expected, "device") and hasattr(Y_actual, "device") and Y_expected.device.type != Y_actual.device.type:
                 if Y_expected.device.type == "cuda":
                     Y_expected = Y_expected.to("cpu")
                 else:
@@ -1394,27 +1240,17 @@ class test_graph:
                 continue
 
             if Y_expected.dtype != Y_actual.dtype:
-                print(
-                    "WARNING: reference and actual output types differ ({} resp., {})".format(
-                        Y_expected.dtype, Y_actual.dtype
-                    )
-                )
+                print("WARNING: reference and actual output types differ ({} resp., {})".format(Y_expected.dtype, Y_actual.dtype))
                 # For comparison purposes, convert expected to actual's dtype
                 Y_expected = Y_expected.to(Y_actual.dtype)
 
             if Y_expected.shape != Y_actual.shape:
-                print(
-                    "WARNING: reference and actual output shapes differ ({} resp., {})".format(
-                        Y_expected.shape, Y_actual.shape
-                    )
-                )
+                print("WARNING: reference and actual output shapes differ ({} resp., {})".format(Y_expected.shape, Y_actual.shape))
 
             try:
                 # Special handling for boolean tensors
                 if Y_expected.dtype == torch.bool and Y_actual.dtype == torch.bool:
-                    assert torch.equal(
-                        Y_expected, Y_actual
-                    ), "Boolean tensors do not match"
+                    assert torch.equal(Y_expected, Y_actual), "Boolean tensors do not match"
                 # Special handling for FP8 tensors
                 elif (
                     Y_expected.dtype == torch.float8_e4m3fn
@@ -1425,13 +1261,9 @@ class test_graph:
                     # Convert FP8 tensors to float32 for comparison
                     Y_expected_float = Y_expected.to(torch.float32)
                     Y_actual_float = Y_actual.to(torch.float32)
-                    torch.testing.assert_close(
-                        Y_expected_float, Y_actual_float, atol=atol, rtol=rtol
-                    )
+                    torch.testing.assert_close(Y_expected_float, Y_actual_float, atol=atol, rtol=rtol)
                 else:
-                    torch.testing.assert_close(
-                        Y_expected, Y_actual, atol=atol, rtol=rtol
-                    )
+                    torch.testing.assert_close(Y_expected, Y_actual, atol=atol, rtol=rtol)
             except Exception as e:
                 # Note: assert_close will raise an unexpected exception if run with rubin amodel, so add this branch to skip it
                 if (

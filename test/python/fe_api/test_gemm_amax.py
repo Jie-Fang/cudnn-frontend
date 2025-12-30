@@ -39,9 +39,7 @@ def test_gemm_amax_compile_execute(
             gemm_amax_init,
         )
     except ImportError as e:
-        pytest.skip(
-            "Environment not supported: cudnn optional dependencies not installed"
-        )
+        pytest.skip("Environment not supported: cudnn optional dependencies not installed")
     cfg = gemm_amax_init(
         request,
         a_major,
@@ -56,22 +54,18 @@ def test_gemm_amax_compile_execute(
         cluster_shape_mn,
     )
     stream = cuda.CUstream(torch.cuda.current_stream().cuda_stream)
-    a_torch, a_ref, b_torch, b_ref, sfa_torch, sfa_ref, sfb_torch, sfb_ref = (
-        allocate_input_tensors(
-            cfg["m"],
-            cfg["n"],
-            cfg["k"],
-            cfg["l"],
-            cfg["ab_dtype"],
-            cfg["sf_dtype"],
-            cfg["sf_vec_size"],
-            cfg["a_major"],
-            cfg["b_major"],
-        )
+    a_torch, a_ref, b_torch, b_ref, sfa_torch, sfa_ref, sfb_torch, sfb_ref = allocate_input_tensors(
+        cfg["m"],
+        cfg["n"],
+        cfg["k"],
+        cfg["l"],
+        cfg["ab_dtype"],
+        cfg["sf_dtype"],
+        cfg["sf_vec_size"],
+        cfg["a_major"],
+        cfg["b_major"],
     )
-    c_torch, amax_torch = allocate_output_tensors(
-        cfg["m"], cfg["n"], cfg["l"], cfg["c_dtype"], cfg["c_major"]
-    )
+    c_torch, amax_torch = allocate_output_tensors(cfg["m"], cfg["n"], cfg["l"], cfg["c_dtype"], cfg["c_major"])
 
     gemm = GemmAmaxSm100(
         sample_a=a_torch,
@@ -100,9 +94,7 @@ def test_gemm_amax_compile_execute(
         current_stream=stream,
     )
 
-    check_ref_gemm_amax(
-        a_ref, b_ref, sfa_ref, sfb_ref, c_torch, amax_torch, skip_ref=cfg["skip_ref"]
-    )
+    check_ref_gemm_amax(a_ref, b_ref, sfa_ref, sfb_ref, c_torch, amax_torch, skip_ref=cfg["skip_ref"])
 
 
 """
@@ -137,9 +129,7 @@ def test_gemm_amax_wrapper(
             gemm_amax_init,
         )
     except ImportError as e:
-        pytest.skip(
-            "Environment not supported: cudnn optional dependencies not installed"
-        )
+        pytest.skip("Environment not supported: cudnn optional dependencies not installed")
     cfg = gemm_amax_init(
         request,
         a_major,
@@ -154,18 +144,16 @@ def test_gemm_amax_wrapper(
         cluster_shape_mn,
     )
     stream = cuda.CUstream(torch.cuda.current_stream().cuda_stream)
-    a_torch, a_ref, b_torch, b_ref, sfa_torch, sfa_ref, sfb_torch, sfb_ref = (
-        allocate_input_tensors(
-            cfg["m"],
-            cfg["n"],
-            cfg["k"],
-            cfg["l"],
-            cfg["ab_dtype"],
-            cfg["sf_dtype"],
-            cfg["sf_vec_size"],
-            cfg["a_major"],
-            cfg["b_major"],
-        )
+    a_torch, a_ref, b_torch, b_ref, sfa_torch, sfa_ref, sfb_torch, sfb_ref = allocate_input_tensors(
+        cfg["m"],
+        cfg["n"],
+        cfg["k"],
+        cfg["l"],
+        cfg["ab_dtype"],
+        cfg["sf_dtype"],
+        cfg["sf_vec_size"],
+        cfg["a_major"],
+        cfg["b_major"],
     )
 
     try:
@@ -186,6 +174,4 @@ def test_gemm_amax_wrapper(
     except (ValueError, NotImplementedError) as e:
         pytest.skip(f"Unsupported testcase: {e}")
 
-    check_ref_gemm_amax(
-        a_ref, b_ref, sfa_ref, sfb_ref, c_torch, amax_torch, skip_ref=cfg["skip_ref"]
-    )
+    check_ref_gemm_amax(a_ref, b_ref, sfa_ref, sfb_ref, c_torch, amax_torch, skip_ref=cfg["skip_ref"])

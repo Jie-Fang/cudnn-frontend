@@ -41,9 +41,7 @@ def getFwdConvInputDims(outputTensorDim, pad, filterDim, stride, dilation):
 
 
 def getSingleFwdConvInputDim(outputTensorDim, pad, filterDim, stride, dilation):
-    paddedTensorDim = (outputTensorDim - 1) * stride + getSingleFwdConvDilatedFilterDim(
-        filterDim, dilation
-    )
+    paddedTensorDim = (outputTensorDim - 1) * stride + getSingleFwdConvDilatedFilterDim(filterDim, dilation)
     inputTensorDim = getSingleFwdConvImageDimFromPadded(paddedTensorDim, pad)
     return int(inputTensorDim)
 
@@ -66,10 +64,7 @@ def getFwdConvPaddedImageDim(tensorDim, pad):
 
 
 def getFwdConvOutputDim(tensorDim, pad, filterDim, stride, dilation):
-    p = (
-        getFwdConvPaddedImageDim(tensorDim, pad)
-        - getFwdConvDilatedFilterDim(filterDim, dilation)
-    ) / stride + 1
+    p = (getFwdConvPaddedImageDim(tensorDim, pad) - getFwdConvDilatedFilterDim(filterDim, dilation)) / stride + 1
     return int(p)
 
 
@@ -81,9 +76,7 @@ def computeStrideNdTransposedPacked(nbDims, dims, axesOrder):
     strides = [1] * nbDims
     strides[inverseTranspose[nbDims - 1]] = 1
     for dim in range(nbDims - 2, -1, -1):
-        strides[inverseTranspose[dim]] = (
-            dims[inverseTranspose[dim + 1]] * strides[inverseTranspose[dim + 1]]
-        )
+        strides[inverseTranspose[dim]] = dims[inverseTranspose[dim + 1]] * strides[inverseTranspose[dim + 1]]
 
     return strides
 
@@ -218,12 +211,8 @@ def measure_gpu_runtime_with_events(execution_callback, timingLoop):
         remaining = timingLoop - batch_idx * batch_size
         current_batch_size = min(batch_size, remaining)
 
-        start_event_batch = [
-            torch.cuda.Event(enable_timing=True) for _ in range(current_batch_size)
-        ]
-        end_event_batch = [
-            torch.cuda.Event(enable_timing=True) for _ in range(current_batch_size)
-        ]
+        start_event_batch = [torch.cuda.Event(enable_timing=True) for _ in range(current_batch_size)]
+        end_event_batch = [torch.cuda.Event(enable_timing=True) for _ in range(current_batch_size)]
 
         # Submit all kernels in the batch without intermediate synchronization
         for i in range(current_batch_size):
@@ -251,25 +240,17 @@ def measure_gpu_runtime_with_events(execution_callback, timingLoop):
             gpu_name = torch.cuda.get_device_name(0)
             gpu_capability = torch.cuda.get_device_capability(0)
             print(f"[CUDA_EVENT] GPU: {gpu_name}, Compute Capability: {gpu_capability}")
-            print(
-                f"[CUDA_EVENT] PyTorch: {torch.__version__}, CUDA: {torch.version.cuda}"
-            )
+            print(f"[CUDA_EVENT] PyTorch: {torch.__version__}, CUDA: {torch.version.cuda}")
             print(f"[CUDA_EVENT] Runs: {timingLoop}")
         except Exception as e:
             print(f"[CUDA_EVENT] Warning: Could not log environment info: {e}")
         measure_gpu_runtime_with_events._env_logged = True
     # Apply IQR filtering to remove outliers
-    filtered_list, removed_count, lower_bound, upper_bound = filter_outliers_iqr(
-        time_list, multiplier=1.5
-    )
+    filtered_list, removed_count, lower_bound, upper_bound = filter_outliers_iqr(time_list, multiplier=1.5)
 
     if removed_count > 0:
-        print(
-            f"[CUDA_EVENT] IQR filtering: removed {removed_count} outliers (lower={lower_bound*1000:.3f} us, upper={upper_bound*1000:.3f} us)"
-        )
-        print(
-            f"[CUDA_EVENT] Filtered data: {len(filtered_list)}/{len(time_list)} measurements retained"
-        )
+        print(f"[CUDA_EVENT] IQR filtering: removed {removed_count} outliers (lower={lower_bound*1000:.3f} us, upper={upper_bound*1000:.3f} us)")
+        print(f"[CUDA_EVENT] Filtered data: {len(filtered_list)}/{len(time_list)} measurements retained")
     else:
         print(f"[CUDA_EVENT] IQR filtering: no outliers detected")
         filtered_list = time_list
@@ -348,9 +329,7 @@ def measure_gpu_runtime(execution_callback, timingLoop):
     skip_first = 2
     active = 1
     total_runs = timingLoop + skip_first
-    prof_schedule = torch.profiler.schedule(
-        wait=0, skip_first=skip_first, warmup=warmup, active=active
-    )
+    prof_schedule = torch.profiler.schedule(wait=0, skip_first=skip_first, warmup=warmup, active=active)
 
     # We need to have at least 2 non-skipped cycles.
     # Otherwise the profile will be empty
@@ -366,23 +345,11 @@ def measure_gpu_runtime(execution_callback, timingLoop):
             prof.step()
 
     # lambda function for quick stats
-    min_avg_max_ratio = lambda L: (
-        (min(L), sum(L) / len(L), max(L), (max(L) - min(L)) / max(L))
-        if L
-        else (0, 0, 0, 0)
-    )
+    min_avg_max_ratio = lambda L: ((min(L), sum(L) / len(L), max(L), (max(L) - min(L)) / max(L)) if L else (0, 0, 0, 0))
 
     cupti_runtime_stats = min_avg_max_ratio(cupti_runtimes)
-    print(
-        "[MB_TIME] Summary (num kernels, min (us), avg (us), max (us), (max-min)/max): {}, {}, {}, {}, {}".format(
-            len(kernel_times), *cupti_runtime_stats
-        )
-    )
-    print(
-        "[MB_TIME] Found {} kernels found in this cudnn graph. Min/Avg/Max/Ratio (including overlapped times):".format(
-            len(kernel_times)
-        )
-    )
+    print("[MB_TIME] Summary (num kernels, min (us), avg (us), max (us), (max-min)/max): {}, {}, {}, {}, {}".format(len(kernel_times), *cupti_runtime_stats))
+    print("[MB_TIME] Found {} kernels found in this cudnn graph. Min/Avg/Max/Ratio (including overlapped times):".format(len(kernel_times)))
     for kernel in kernel_times:
         print("[MB_TIME]", kernel, min_avg_max_ratio(kernel_times[kernel]))
     return (cupti_runtime_stats[0], cupti_runtime_stats[1], cupti_runtime_stats[2])
