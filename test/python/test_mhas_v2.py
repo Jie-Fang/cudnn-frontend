@@ -1271,7 +1271,7 @@ def test_sdpa_random_fwd_unified_L0(env_info, test_no, request, cudnn_handle):
 # # L0 bprop tests
 # # ==================================
 
-@pytest.mark.parametrize("test_no", tlist(num_tests=128, rng_seed=844), ids=lambda p: f"test{p[0]}")
+@pytest.mark.parametrize("test_no", tlist(num_tests=256, rng_seed=844), ids=lambda p: f"test{p[0]}")
 @pytest.mark.L0
 def test_sdpa_random_bwd_L0(env_info, test_no, request, cudnn_handle):
 
@@ -1286,16 +1286,16 @@ def test_sdpa_random_bwd_L0(env_info, test_no, request, cudnn_handle):
 
     # Create the randomization context within the test
     with RandomizationContext(
-        batches=RandomBatchSize(min=1, max=8, with_high_probability=[1,4]),
+        batches=RandomBatchSize(min=8, max=16),
         s_q_s_kv = RandomSequenceLength(s_q_min=1, s_q_max=1024, s_kv_min=1, s_kv_max=1024, s_q_distribution={"s_q=1":0, "s_q=s_kv":5, "s_q=random":10}),
-        d_qk_d_v=RandomHiddenDimSize(d_qk_min=1, d_qk_max=128, d_v_min=1, d_v_max=128, head_dim_distribution={"d_qk=d_v":1, "d_qk=random":1}, with_high_probability=[(64,64), (128,128), (192,128)]),
+        d_qk_d_v=RandomHiddenDimSize(d_qk_min=1, d_qk_max=192, d_v_min=1, d_v_max=128, head_dim_distribution={"d_qk=d_v":5, "d_qk=random":1}, with_high_probability=[(64,64), (128,128), (192,128)]),
         head_count=RandomHeadGenerator(min=1, max=8, head_group_options=(1, 4, 1)),
         data_type=RandomChoice({torch.float16 : 1, torch.bfloat16 : 2}),
         with_sliding_mask=SlidingWindowMaskGenerator(causal=10, left_window_only=5, right_window_only=5, band_around_diag=10, no_mask=10),
         diag_align=RandomChoice({cudnn.diagonal_alignment.TOP_LEFT : 1, cudnn.diagonal_alignment.BOTTOM_RIGHT : 1}),
-        is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 0, "padded" : 1, "full" : 1}),
+        is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 0, "padded" : 4, "full" : 1}),
         stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "disabled" : 1}),
-        is_deterministic=RandomChoice({True : 1, False : 1}),
+        is_deterministic=RandomChoice({True : 3, False : 1}),
     ) as randomization_ctx:
         test.cfg = randomization_ctx(rng, data_seed)
 
@@ -1511,7 +1511,7 @@ def test_sdpa_random_fwd_ragged_unified_L0(env_info, test_no, request, cudnn_han
     exec_sdpa(test.cfg, request, cudnn_handle)
 
 
-@pytest.mark.parametrize("test_no", tlist(num_tests=128, rng_seed=888), ids=lambda p: f"test{p[0]}")
+@pytest.mark.parametrize("test_no", tlist(num_tests=256, rng_seed=888), ids=lambda p: f"test{p[0]}")
 @pytest.mark.L0
 def test_sdpa_random_bwd_ragged_L0(env_info, test_no, request, cudnn_handle):
 
@@ -1526,15 +1526,16 @@ def test_sdpa_random_bwd_ragged_L0(env_info, test_no, request, cudnn_handle):
 
     # Create the randomization context within the test
     with RandomizationContext(
-        batches=RandomBatchSize(min=1, max=8, with_high_probability=[1,4]),
+        batches=RandomBatchSize(min=8, max=16),
         s_q_s_kv = RandomSequenceLength(s_q_min=1, s_q_max=1024, s_kv_min=1, s_kv_max=1024, s_q_distribution={"s_q=1":0, "s_q=s_kv":5, "s_q=random":10}),
-        d_qk_d_v=RandomHiddenDimSize(d_qk_min=1, d_qk_max=128, d_v_min=1, d_v_max=128, head_dim_distribution={"d_qk=d_v":1, "d_qk=random":1}, with_high_probability=[(64,64), (128,128), (192,128)]),
+        d_qk_d_v=RandomHiddenDimSize(d_qk_min=1, d_qk_max=192, d_v_min=1, d_v_max=128, head_dim_distribution={"d_qk=d_v":5, "d_qk=random":1}, with_high_probability=[(64,64), (128,128), (192,128)]),
         head_count=RandomHeadGenerator(min=1, max=8, head_group_options=(1, 4, 1)),
         data_type=RandomChoice({torch.float16 : 1, torch.bfloat16 : 2}),
         with_sliding_mask=SlidingWindowMaskGenerator(causal=10, left_window_only=5, right_window_only=5, band_around_diag=10, no_mask=10),
         diag_align=RandomChoice({cudnn.diagonal_alignment.TOP_LEFT : 1, cudnn.diagonal_alignment.BOTTOM_RIGHT : 1}),
         is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 1, "padded" : 0, "full" : 0}),
         stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "disabled" : 1}),
+        is_deterministic=RandomChoice({True : 3, False : 1}),
     ) as randomization_ctx:
         test.cfg = randomization_ctx(rng, data_seed)
 
