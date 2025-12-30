@@ -10,14 +10,8 @@ from dataclasses import dataclass, field, asdict
 INVALID_BOUND = 99999
 
 
-def get_strides_from_indices(
-    shape, indices=[0, 1, 2, 3], gaps=[0, 0, 0, 0], rng_geom=None
-):
-    assert (
-        len(shape) == len(gaps) == 4
-        and sorted(indices) == [0, 1, 2, 3]
-        and indices[3] == 3
-    ), "wrong input"
+def get_strides_from_indices(shape, indices=[0, 1, 2, 3], gaps=[0, 0, 0, 0], rng_geom=None):
+    assert len(shape) == len(gaps) == 4 and sorted(indices) == [0, 1, 2, 3] and indices[3] == 3, "wrong input"
     strides = [0, 0, 0, 1]  # d should always have stride 1
     curr_stride = 1
 
@@ -120,14 +114,8 @@ class RandomizationContext:
 
         self.rng_data = torch.Generator(device="cuda").manual_seed(rng_data_seed)
 
-        randoms = {
-            k: v(rng) for k, v in self.kwargs.items() if not hasattr(randoms_, k)
-        }
-        [
-            setattr(randoms_, k, v(rng))
-            for k, v in self.kwargs.items()
-            if hasattr(randoms_, k)
-        ]
+        randoms = {k: v(rng) for k, v in self.kwargs.items() if not hasattr(randoms_, k)}
+        [setattr(randoms_, k, v(rng)) for k, v in self.kwargs.items() if hasattr(randoms_, k)]
 
         if "is_deterministic" in randoms:
             randoms_.is_determin = randoms["is_deterministic"] == True
@@ -138,24 +126,17 @@ class RandomizationContext:
 
         randoms_.is_ragged = randoms["is_q_ragged_or_padded_or_full"] == "ragged"
         randoms_.is_padding = (
-            randoms["is_q_ragged_or_padded_or_full"] == "padded"
-            or randoms["is_q_ragged_or_padded_or_full"] == "ragged"
+            randoms["is_q_ragged_or_padded_or_full"] == "padded" or randoms["is_q_ragged_or_padded_or_full"] == "ragged"
         )
 
         if randoms["is_q_ragged_or_padded_or_full"] != "full":
-            randoms_.seq_len_q = [
-                rng.randint(1, randoms_.s_q) for _ in range(randoms_.batches)
-            ]
+            randoms_.seq_len_q = [rng.randint(1, randoms_.s_q) for _ in range(randoms_.batches)]
             if randoms_.seq_len_q is not None:
                 randoms_.seq_len_kv = [
-                    rng.randint(randoms_.seq_len_q[i], randoms_.s_kv)
-                    for i in range(randoms_.batches)
+                    rng.randint(randoms_.seq_len_q[i], randoms_.s_kv) for i in range(randoms_.batches)
                 ]
             else:
-                randoms_.seq_len_kv = [
-                    rng.randint(randoms_.s_q, randoms_.s_kv)
-                    for _ in range(randoms_.batches)
-                ]
+                randoms_.seq_len_kv = [rng.randint(randoms_.s_q, randoms_.s_kv) for _ in range(randoms_.batches)]
 
         # Decide the left and right bounds for the sliding window mask
         randoms_.left_bound = INVALID_BOUND
@@ -165,14 +146,10 @@ class RandomizationContext:
             randoms_.left_bound = INVALID_BOUND
             randoms_.right_bound = INVALID_BOUND
         elif randoms["with_sliding_mask"] == "left_window_only":
-            randoms_.left_bound = rng.randint(0, randoms_.s_kv // 2)
+            randoms_.left_bound = rng.randint(1, max(1, randoms_.s_kv // 2))
             randoms_.right_bound = 0
         elif randoms["with_sliding_mask"] == "right_window_only":
-            randoms_.left_bound = (
-                INVALID_BOUND
-                if randoms_.diag_align == cudnn.diagonal_alignment.BOTTOM_RIGHT
-                else 1
-            )
+            randoms_.left_bound = INVALID_BOUND if randoms_.diag_align == cudnn.diagonal_alignment.BOTTOM_RIGHT else 1
             randoms_.right_bound = rng.randint(0, randoms_.s_kv // 2)
         elif randoms["with_sliding_mask"] == "band_around_diag":
             randoms_.left_bound = rng.randint(1, randoms_.s_kv // 2)
@@ -186,12 +163,8 @@ class RandomizationContext:
         randoms_.shape_o = (randoms_.batches, randoms_.h_q, randoms_.s_q, randoms_.d_v)
 
         if randoms_.is_ragged:  # Ideally Q ragged and O ragged
-            randoms_.stride_q, _, randoms_.elems_q = get_strides_from_layout(
-                randoms_.shape_q, "bshd"
-            )
-            randoms_.stride_o, _, randoms_.elems_o = get_strides_from_layout(
-                randoms_.shape_o, "bshd"
-            )
+            randoms_.stride_q, _, randoms_.elems_q = get_strides_from_layout(randoms_.shape_q, "bshd")
+            randoms_.stride_o, _, randoms_.elems_o = get_strides_from_layout(randoms_.shape_o, "bshd")
 
         else:
             indices = [0, 1, 2]
@@ -206,11 +179,11 @@ class RandomizationContext:
                 gaps_q.append(elem_align * rng.randint(0, 2))
                 gaps_o.append(elem_align * rng.randint(0, 2))
 
-            (randoms_.stride_q, randoms_.gaps_q, randoms_.elems_q) = (
-                get_strides_from_indices(randoms_.shape_q, indices, gaps_q, rng)
+            (randoms_.stride_q, randoms_.gaps_q, randoms_.elems_q) = get_strides_from_indices(
+                randoms_.shape_q, indices, gaps_q, rng
             )
-            (randoms_.stride_o, randoms_.gaps_o, randoms_.elems_o) = (
-                get_strides_from_indices(randoms_.shape_o, indices, gaps_o, rng)
+            (randoms_.stride_o, randoms_.gaps_o, randoms_.elems_o) = get_strides_from_indices(
+                randoms_.shape_o, indices, gaps_o, rng
             )
 
         # Decide K, V
@@ -223,12 +196,8 @@ class RandomizationContext:
         randoms_.shape_v = (randoms_.batches, randoms_.h_v, randoms_.s_kv, randoms_.d_v)
 
         if randoms_.is_ragged:  # Ideally K ragged and V ragged
-            randoms_.stride_k, _, randoms_.elems_k = get_strides_from_layout(
-                randoms_.shape_k, "bshd"
-            )
-            randoms_.stride_v, _, randoms_.elems_v = get_strides_from_layout(
-                randoms_.shape_v, "bshd"
-            )
+            randoms_.stride_k, _, randoms_.elems_k = get_strides_from_layout(randoms_.shape_k, "bshd")
+            randoms_.stride_v, _, randoms_.elems_v = get_strides_from_layout(randoms_.shape_v, "bshd")
 
         else:
             indices = [0, 1, 2]
@@ -243,11 +212,11 @@ class RandomizationContext:
                 gaps_k.append(elem_align * rng.randint(0, 2))
                 gaps_v.append(elem_align * rng.randint(0, 2))
 
-            (randoms_.stride_k, randoms_.gaps_k, randoms_.elems_k) = (
-                get_strides_from_indices(randoms_.shape_k, indices, gaps_k, rng)
+            (randoms_.stride_k, randoms_.gaps_k, randoms_.elems_k) = get_strides_from_indices(
+                randoms_.shape_k, indices, gaps_k, rng
             )
-            (randoms_.stride_v, randoms_.gaps_v, randoms_.elems_v) = (
-                get_strides_from_indices(randoms_.shape_v, indices, gaps_v, rng)
+            (randoms_.stride_v, randoms_.gaps_v, randoms_.elems_v) = get_strides_from_indices(
+                randoms_.shape_v, indices, gaps_v, rng
             )
 
         return randoms_
@@ -293,37 +262,27 @@ class RandomIntValue:
             exp = (
                 rng.randint(min_exp, max_exp)
                 if dice == 0
-                else self.with_high_probability[
-                    rng.randint(0, len(self.with_high_probability) - 1)
-                ]
+                else self.with_high_probability[rng.randint(0, len(self.with_high_probability) - 1)]
             )
             return 1 << exp if dice == 0 else exp
         elif self.multiple_of:
             # compute the first and last valid multiples, then pick randomly
-            first = (
-                (self.min + self.multiple_of - 1) // self.multiple_of
-            ) * self.multiple_of
+            first = ((self.min + self.multiple_of - 1) // self.multiple_of) * self.multiple_of
             last = (self.max // self.multiple_of) * self.multiple_of
             if first > self.max:
-                raise ValueError(
-                    f"No multiples of {self.multiple_of} in range [{self.min}, {self.max}]"
-                )
+                raise ValueError(f"No multiples of {self.multiple_of} in range [{self.min}, {self.max}]")
             count = ((last - first) // self.multiple_of) + 1
             idx = (
                 rng.randint(0, count - 1)
                 if dice == 0
-                else self.with_high_probability[
-                    rng.randint(0, len(self.with_high_probability) - 1)
-                ]
+                else self.with_high_probability[rng.randint(0, len(self.with_high_probability) - 1)]
             )
             return first + idx * self.multiple_of
         else:
             return (
                 rng.randint(self.min, self.max)
                 if dice == 0
-                else self.with_high_probability[
-                    rng.randint(0, len(self.with_high_probability) - 1)
-                ]
+                else self.with_high_probability[rng.randint(0, len(self.with_high_probability) - 1)]
             )
 
 
@@ -401,9 +360,7 @@ class RandomHiddenDimSize:
             if d_qk < d_v:
                 d_qk = d_v
         else:
-            d_qk, d_v = self.with_high_probability[
-                rng.randint(0, len(self.with_high_probability) - 1)
-            ]
+            d_qk, d_v = self.with_high_probability[rng.randint(0, len(self.with_high_probability) - 1)]
 
         return d_qk, d_v
 
@@ -440,9 +397,7 @@ class RandomSequenceLength:
 
 
 class RandomBatchSize(RandomIntValue):
-    def __init__(
-        self, min: int, max: int, with_high_probability: Optional[List[int]] = None
-    ):
+    def __init__(self, min: int, max: int, with_high_probability: Optional[List[int]] = None):
         super().__init__(min, max, with_high_probability=with_high_probability)
 
     def __call__(self, rng):
@@ -450,12 +405,8 @@ class RandomBatchSize(RandomIntValue):
 
 
 class RandomBlockSize(RandomIntValue):
-    def __init__(
-        self, min: int, max: int, with_high_probability: Optional[List[int]] = None
-    ):
-        super().__init__(
-            min, max, with_high_probability=with_high_probability, power_of_two=True
-        )
+    def __init__(self, min: int, max: int, with_high_probability: Optional[List[int]] = None):
+        super().__init__(min, max, with_high_probability=with_high_probability, power_of_two=True)
 
     def __call__(self, rng):
         return super().__call__(rng)
@@ -494,12 +445,8 @@ def test_randomization_context(seed):
                 cudnn.diagonal_alignment.BOTTOM_RIGHT: 1,
             }
         ),
-        is_q_ragged_or_padded_or_full=RandomChoice(
-            {"ragged": 1, "padded": 1, "full": 1}
-        ),
-        is_kv_ragged_or_paged_or_padded_or_full=RandomChoice(
-            {"ragged": 1, "paged": 1, "padded": 1, "full": 1}
-        ),
+        is_q_ragged_or_padded_or_full=RandomChoice({"ragged": 1, "padded": 1, "full": 1}),
+        is_kv_ragged_or_paged_or_padded_or_full=RandomChoice({"ragged": 1, "paged": 1, "padded": 1, "full": 1}),
         stats_layout=RandomChoice({"ragged": 1, "full": 1, "disabled": 2}),
     ) as ctx:
         return ctx
@@ -541,9 +488,7 @@ def profile_execution(fn, *args, trace_dir=None):
         record_shapes=True,
         profile_memory=True,
         with_stack=True,
-        on_trace_ready=(
-            torch.profiler.tensorboard_trace_handler(trace_dir) if trace_dir else None
-        ),
+        on_trace_ready=(torch.profiler.tensorboard_trace_handler(trace_dir) if trace_dir else None),
     ) as prof:
         fn(*args)
         torch.cuda.synchronize()
