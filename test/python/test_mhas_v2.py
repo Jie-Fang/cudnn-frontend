@@ -70,6 +70,31 @@ def convert_to_cudnn_type(torch_type):
     else:
         assert False, "unsupported tensor data type"
 
+def exact_equal(actual, expected, tag, disp_elems):
+    # Handle NaN: NaN == NaN should be considered a match for determinism
+    both_nan = torch.isnan(actual) & torch.isnan(expected)
+    mismatches = torch.where((actual != expected) & ~both_nan)
+    mismatch_cnt = mismatches[0].numel()
+    num_elements = torch.numel(actual)
+    if mismatch_cnt != 0:
+        percentage = 100 * mismatch_cnt / num_elements
+        if disp_elems > 0:
+            print(f"Comparing '{tag}' for exact (bitwise) equality")
+            combined = torch.stack(mismatches, dim=-1).tolist()
+            count = 0
+            for index in combined:
+                diff = actual[tuple(index)].float() - expected[tuple(index)].float()
+                print(f"idx{index}: {tag}_run1={actual[tuple(index)]}, {tag}_run2={expected[tuple(index)]}, diff={diff:+.2e}")
+                count += 1
+                if count >= disp_elems:
+                    break
+            print(f"%%%% Total {mismatch_cnt:,} mismatches ({percentage:.1f}%) when validating '{tag}' for exact equality (first {count} mismatches displayed)")
+        else:
+            print(f"%%%% Total {mismatch_cnt:,} mismatches ({percentage:.1f}%) when validating '{tag}' for exact equality")
+    else:
+        print(f"%%%% Exact (bitwise) equality of '{tag}' verified")
+    return mismatch_cnt
+
 def approx_equal(actual, expected, sepbuf, rawbuf, rtol, atol, tag, disp_elems):
     mismatches = torch.where(torch.isclose(actual.float(), expected, rtol=rtol, atol=atol) == False)
     mismatch_cnt = mismatches[0].numel()
@@ -863,6 +888,8 @@ def exec_sdpa(cfg, request, cudnn_handle):
         print(ws_sep)
         pytest.fail("forward workspace overwritten outside boundaries", pytrace=False)
 
+    diffs = int_cli_option(10, request, "--diffs")
+
     if not cfg.is_infer:
         if cudnn_version < "8.9.6" and cfg.is_padding:
             # zero out padded region of the output and stats
@@ -1012,6 +1039,33 @@ def exec_sdpa(cfg, request, cudnn_handle):
             print(ws_sep)
             pytest.fail("backward workspace overwritten outside boundaries", pytrace=False)
 
+        # create fresh output tensors and rerun the backward graph
+        # For deterministic algorithm, the grads should bitwise match the original grads
+        if cfg.is_determin:
+            dQ_gpu_rerun = dQ_gpu.clone().detach()
+            dK_gpu_rerun = dK_gpu.clone().detach()
+            dV_gpu_rerun = dV_gpu.clone().detach()
+            
+            dQ_gpu = torch.fill_(dQ_gpu, float("nan"))
+            dK_gpu = torch.fill_(dK_gpu, float("nan"))
+            dV_gpu = torch.fill_(dV_gpu, float("nan"))
+            graph.execute(variant_pack, workspace, cudnn_handle)
+            torch.cuda.synchronize()
+            if ws_sep is not None and not torch.all(ws_sep==-1).item():
+                print("@@@@ Overall result: FAILED, backward workspace overwritten outside its boundaries.")
+                print(ws_sep)
+                pytest.fail("backward workspace overwritten outside boundaries", pytrace=False)
+            
+            determin_err_count = 0
+            determin_err_count += exact_equal(dQ_gpu, dQ_gpu_rerun, tag="dQ_determin", disp_elems=diffs)
+            determin_err_count += exact_equal(dK_gpu, dK_gpu_rerun, tag="dK_determin", disp_elems=diffs)
+            determin_err_count += exact_equal(dV_gpu, dV_gpu_rerun, tag="dV_determin", disp_elems=diffs)
+            
+            if determin_err_count != 0:
+                print("@@@@ Overall result: FAILED, determinism check failed - outputs differ between runs.")
+                pytest.fail("determinism check failed", pytrace=False)
+            print("@@@@ Determinism check: PASSED, dQ, dK, dV bitwise match between runs.")
+
     bias_ref = None
     rng_dump_ref = None
 
@@ -1085,8 +1139,6 @@ def exec_sdpa(cfg, request, cudnn_handle):
                     stats_gpu[i, :, m:, :] = 0
                 else:
                     stats_ref[i, :, m:, :] = -float("inf")
-
-    diffs = int_cli_option(10, request, "--diffs")
 
     err_count += approx_equal(o_gpu, o_ref, o_sep, o_raw, atol=2e-2, rtol=2e-2, tag="o", disp_elems=diffs)
 
