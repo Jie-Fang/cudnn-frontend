@@ -419,11 +419,6 @@ def compute_ref(
         v = v.expand(-1, -1, h_q // h_v, -1, -1)
         v = v.reshape(v.size(0), -1, v.size(3), v.size(4))
 
-    if left_bound != INVALID_BOUND:
-        swa_mask_zero = torch.ones(1, 1, s_q, 1, dtype=torch.bool, device=device)
-        swa_mask_zero[:, :, s_kv + left_bound - 1 :, :] = False
-        q = q * swa_mask_zero
-
     # generate masks to compute reference values for padding mask (also called variable sequence length)
     if padding is not None:
         q_mask = torch.zeros(b, 1, s_q, 1, dtype=torch.bool, device=device)
@@ -516,7 +511,6 @@ def compute_ref(
             else:
                 swa_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=device)
                 swa_mask.tril_(diagonal=-1 * left_bound + (s_kv - s_q))
-        swa_mask &= swa_mask_zero.view(s_q, 1)
         s = s.masked_fill(swa_mask, float("-inf"))
 
     if block_mask is not None:
@@ -533,13 +527,10 @@ def compute_ref(
 
     p = torch.softmax(s, dim=-1)
 
-    if block_mask is not None:
-        all_inf = torch.isneginf(s).all(dim=-1, keepdim=True)
-        if torch.any(all_inf):
-            p = torch.where(all_inf, torch.zeros_like(p), p)
+    all_inf = torch.isneginf(s).all(dim=-1, keepdim=True)
+    if torch.any(all_inf):
+        p = torch.where(all_inf, torch.zeros_like(p), p)
 
-    if left_bound != INVALID_BOUND:
-        p = p * swa_mask_zero
     if padding is not None:
         p = p.masked_fill(p_mask, 0.0)
 
@@ -552,11 +543,7 @@ def compute_ref(
 
     # softmax stats is used for backwards computation
     if generate_stats:
-        # amax (NOT absolute max) is used here to evenly distribute gradient
-        row_max = torch.amax(s, -1, True)
-        row_exp = torch.exp(s - row_max)
-        row_sum = torch.sum(row_exp, -1, True)
-        stats = row_max + torch.log(row_sum)
+        stats = torch.logsumexp(s, dim=-1, keepdim=True)
         return o, stats
 
     return o
