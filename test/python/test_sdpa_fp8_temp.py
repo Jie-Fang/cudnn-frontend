@@ -87,6 +87,10 @@ TEST_CONFIGS_FWD = {
     "sq65_skv256_f16":     {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 65,  "s_kv": 256,  "d_qk": 128, "d_vo": 128, "itype": "fp8_e4m3", "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
     "sq65_skv256_f8e4m3":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 65,  "s_kv": 256,  "d_qk": 128, "d_vo": 128, "itype": "fp8_e4m3", "otype": "fp8_e4m3", "atol": 0.08, "rtol": 0.2},
     "sq65_skv256_f8e5m2":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 65,  "s_kv": 256,  "d_qk": 128, "d_vo": 128, "itype": "fp8_e5m2", "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.4},
+
+    "sq256_skv256_f16":     {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 256,  "s_kv": 256,  "d_qk": 192, "d_vo": 128, "itype": "fp8_e4m3", "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
+    "sq256_skv256_f8e4m3":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 256,  "s_kv": 256,  "d_qk": 192, "d_vo": 128, "itype": "fp8_e4m3", "otype": "fp8_e4m3", "atol": 0.08, "rtol": 0.2},
+    "sq256_skv256_f8e5m2":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 256,  "s_kv": 256,  "d_qk": 192, "d_vo": 128, "itype": "fp8_e5m2", "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.4},
 }
 
 TEST_CONFIGS_BWD = {
@@ -98,6 +102,12 @@ TEST_CONFIGS_BWD = {
     "d128_f8e4m3_gqa":       {"b": 2, "h_q": 4,  "h_k": 2, "h_v": 2, "s_qo": 256, "s_kv": 256,  "d_qk": 128, "d_vo": 128, "itype": "fp8_e4m3", "otype": "fp8_e4m3", "atol": 0.08, "rtol": 0.2},
     "d128_f8e4m3_o-f16":     {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 256, "s_kv": 256,  "d_qk": 128, "d_vo": 128, "itype": "fp8_e4m3", "otype": "fp16",     "atol": 0.08, "rtol": 0.2},
     "d128_f8e4m3_o-f16_gqa": {"b": 2, "h_q": 4,  "h_k": 2, "h_v": 2, "s_qo": 256, "s_kv": 256,  "d_qk": 128, "d_vo": 128, "itype": "fp8_e4m3", "otype": "fp16",     "atol": 0.08, "rtol": 0.2},
+
+    "d64_f8e4m3-deterministic":          {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 256, "s_kv": 256,  "d_qk": 64,  "d_vo": 64,  "itype": "fp8_e4m3", "otype": "fp8_e4m3", "atol": 0.08, "rtol": 0.2, "deterministic": True},
+    "d64_f8e4m3_gqa-deterministic":      {"b": 2, "h_q": 4,  "h_k": 2, "h_v": 2, "s_qo": 256, "s_kv": 256,  "d_qk": 64,  "d_vo": 64,  "itype": "fp8_e4m3", "otype": "fp8_e4m3", "atol": 0.08, "rtol": 0.2, "deterministic": True},
+    "d128_f8e4m3-deterministic":         {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 256, "s_kv": 256,  "d_qk": 128, "d_vo": 128, "itype": "fp8_e4m3", "otype": "fp8_e4m3", "atol": 0.08, "rtol": 0.2, "deterministic": True},
+    "d128_f8e4m3_gqa-deterministic":     {"b": 2, "h_q": 4,  "h_k": 2, "h_v": 2, "s_qo": 256, "s_kv": 256,  "d_qk": 128, "d_vo": 128, "itype": "fp8_e4m3", "otype": "fp8_e4m3", "atol": 0.08, "rtol": 0.2, "deterministic": True},
+    "dqk192_dv128_f8e4m3-deterministic": {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 256, "s_kv": 256,  "d_qk": 192, "d_vo": 128, "itype": "fp8_e4m3", "otype": "fp8_e4m3", "atol": 0.24, "rtol": 0.2, "deterministic": True},
 }
 
 BLOCKED_CONFIGS_FWD = [
@@ -258,7 +268,7 @@ def generate_graph_fwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d
 
     return graph_fwd
 
-def generate_graph_bwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale):
+def generate_graph_bwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, deterministic):
     graph_bwd = cudnn.pygraph(io_data_type=cudnn_itype, intermediate_data_type=cudnn.data_type.FLOAT, compute_data_type=cudnn.data_type.FLOAT)
 
     q = graph_bwd.tensor(uid=GraphBwdUid.q, dim=(b, h_q, s_qo, d_qk), stride=(s_qo * h_q * d_qk, d_qk, h_q * d_qk, 1), data_type=cudnn_itype)
@@ -303,6 +313,7 @@ def generate_graph_bwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d
         scale_dP=dP_scale,
         attn_scale=attn_scale,
         use_padding_mask=False,
+        use_deterministic_algorithm=deterministic,
     )
 
     dQ.set_uid(GraphBwdUid.dQ).set_output(True).set_dim((b, h_q, s_qo, d_qk)).set_stride((s_qo * h_q * d_qk, d_qk, h_q * d_qk, 1)).set_data_type(cudnn_itype)
@@ -578,12 +589,13 @@ def test_sdpa_bwd_fp8(name):
     s_kv = config["s_kv"]
     d_qk = config["d_qk"]
     d_vo = config["d_vo"]
+    deterministic = config.get("deterministic", False)
 
     attn_scale = 0.125
 
     section_begin("Build Graphs")
     graph_fwd = generate_graph_fwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, 0)
-    graph_bwd = generate_graph_bwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale)
+    graph_bwd = generate_graph_bwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, deterministic)
 
     try:
         graph_fwd.validate(); graph_fwd.build_operation_graph(); graph_fwd.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK]); graph_fwd.check_support(); graph_fwd.build_plans()
