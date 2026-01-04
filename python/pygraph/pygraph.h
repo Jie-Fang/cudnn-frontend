@@ -475,6 +475,7 @@ class PyGraph {
                       std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_kv,
                       bool const use_causal_mask,
                       bool const use_causal_mask_bottom_right,
+                      bool const use_deterministic_algorithm,
                       py::object const& dropout,
                       cudnn_frontend::DataType_t const& compute_data_type,
                       std::string const& name);
