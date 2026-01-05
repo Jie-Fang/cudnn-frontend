@@ -543,13 +543,21 @@ class PyGraph {
                       std::intptr_t cuda_graph);
 
     void
-    execute(std::unordered_map<int64_t, int64_t> var_pack, int64_t workspace, std::optional<std::intptr_t>);
+    execute(std::unordered_map<int64_t, int64_t> var_pack,
+            int64_t workspace,
+            std::optional<std::intptr_t>,
+            py::object override_uids    = py::none(),
+            py::object override_shapes  = py::none(),
+            py::object override_strides = py::none());
 
     void
     execute_plan_at_index(std::unordered_map<int64_t, int64_t> var_pack,
                           int64_t workspace,
                           int64_t index,
-                          std::optional<std::intptr_t>);
+                          std::optional<std::intptr_t>,
+                          py::object override_uids    = py::none(),
+                          py::object override_shapes  = py::none(),
+                          py::object override_strides = py::none());
 
     std::vector<BehaviorNote_t>
     get_behavior_notes();

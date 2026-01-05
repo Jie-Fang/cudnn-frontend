@@ -113,7 +113,15 @@ def _library_device_pointer(input_tensor):
         return _pybind_module._get_data_ptr(input_tensor)
 
 
-def _execute(self, tensor_to_device_buffer, workspace, handle=None):
+def _execute(
+    self,
+    tensor_to_device_buffer,
+    workspace,
+    handle=None,
+    override_uids=None,
+    override_shapes=None,
+    override_strides=None,
+):
     """
     Execute a cudnn graph.
 
@@ -132,7 +140,16 @@ def _execute(self, tensor_to_device_buffer, workspace, handle=None):
     self._execute(uid_to_tensor_pointer, workspace_pointer, handle)
 
 
-def _execute_plan_at_index(self, tensor_to_device_buffer, workspace, index, handle=None):
+def _execute_plan_at_index(
+    self,
+    tensor_to_device_buffer,
+    workspace,
+    index,
+    handle=None,
+    override_uids=None,
+    override_shapes=None,
+    override_strides=None,
+):
     """
     Execute a cudnn graph.
 
@@ -149,7 +166,15 @@ def _execute_plan_at_index(self, tensor_to_device_buffer, workspace, index, hand
     }
 
     workspace_pointer = _library_device_pointer(workspace)
-    self._execute_plan_at_index(uid_to_tensor_pointer, workspace_pointer, index, handle)
+    self._execute_plan_at_index(
+        uid_to_tensor_pointer,
+        workspace_pointer,
+        index,
+        handle,
+        override_uids,
+        override_shapes,
+        override_strides,
+    )
 
 
 pygraph.execute = _execute
