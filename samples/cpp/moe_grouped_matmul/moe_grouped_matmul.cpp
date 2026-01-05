@@ -29,7 +29,9 @@
 #include <cudnn_frontend.h>
 
 TEST_CASE("WoQ MoeGroupedMatmul", "[MoeGroupedMatmul][graph]") {
-    SKIP("Backend implementation is not finished yet");
+#if (CUDNN_VERSION < 91900)
+    SKIP("MoE is not supported in cudnn versions prior to 9.19.0");
+#endif
 
     if (is_arch_supported_by_cudnn() == false) {
         SKIP("Architecture is not supported by current cudnn version");
@@ -37,12 +39,12 @@ TEST_CASE("WoQ MoeGroupedMatmul", "[MoeGroupedMatmul][graph]") {
     namespace fe = cudnn_frontend;
 
     // problem size
-    int64_t const batch_size  = 4;
-    int64_t const num_experts = 4;
+    int64_t const batch_size  = 2;
+    int64_t const num_experts = 3;
     int64_t const top_k       = 2;
-    int64_t const token_num   = 128;
+    int64_t const token_num   = 512;
     int64_t const weight_size = 256;
-    int64_t const hidden_size = 128;
+    int64_t const hidden_size = 512;
     int64_t const block_size  = 128;
 
     // Initialize input tensors
@@ -63,7 +65,7 @@ TEST_CASE("WoQ MoeGroupedMatmul", "[MoeGroupedMatmul][graph]") {
         false);
     Surface<int8_t> first_token_offset_gpu(
         div_up(batch_size * num_experts *
-                   cudnn_frontend::detail::get_element_size_in_bits(cudnn_frontend::DataType_t::INT64),
+                   cudnn_frontend::detail::get_element_size_in_bits(cudnn_frontend::DataType_t::INT32),
                8),
         false);
     Surface<int8_t> moe_grouped_matmul_gpu(
@@ -71,6 +73,12 @@ TEST_CASE("WoQ MoeGroupedMatmul", "[MoeGroupedMatmul][graph]") {
                    cudnn_frontend::detail::get_element_size_in_bits(cudnn_frontend::DataType_t::HALF),
                8),
         false);
+
+    std::vector<int32_t> first_token_offset_cpu({0, 128, 512, 768, 1152, 1536});
+    CUDA_CHECK(cudaMemcpy(first_token_offset_gpu.devPtr,
+                          first_token_offset_cpu.data(),
+                          first_token_offset_cpu.size() * sizeof(int32_t),
+                          cudaMemcpyHostToDevice));
 
     // Make cudnn graph
     fe::graph::Graph graph{};
@@ -101,7 +109,7 @@ TEST_CASE("WoQ MoeGroupedMatmul", "[MoeGroupedMatmul][graph]") {
                                                       .set_name("first_token_offset")
                                                       .set_dim({batch_size * num_experts, 1, 1})
                                                       .set_stride({1, 1, 1})
-                                                      .set_data_type(fe::DataType_t::INT64));
+                                                      .set_data_type(fe::DataType_t::INT32));
 
     auto dequantize_weight_attr = fe::graph::Block_scale_dequantize_attributes()
                                       .set_block_size({block_size, 1})
