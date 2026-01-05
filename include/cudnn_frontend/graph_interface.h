@@ -840,12 +840,14 @@ class Graph : public ICudnn, public INode {
 
         return execute(handle, tensor_uid_to_pointer_map, workspace);
     }
-
     error_t
     execute_plan_at_index(cudnnHandle_t handle,
                           std::unordered_map<int64_t, void *> &tensor_uid_to_pointer_map,
                           void *workspace,
-                          int64_t plan_index) const {
+                          int64_t plan_index,
+                          std::vector<int64_t> const &override_uids,
+                          std::vector<std::vector<int64_t>> const &override_shapes,
+                          std::vector<std::vector<int64_t>> const &override_strides) const {
         // Add pass_by_value data pointers to uid_to_pointer map
         // object lifetime is controlled by tensor_to_pass_by_value which means the pointer should stay valid during
         // execute.
@@ -890,8 +892,13 @@ class Graph : public ICudnn, public INode {
             }
         }
 
-        CHECK_CUDNN_FRONTEND_ERROR(
-            execute_cudnn_plan_with_uid(handle, tensor_uid_to_pointer_map, cudnn_workspace, plan_index));
+        CHECK_CUDNN_FRONTEND_ERROR(execute_cudnn_plan_with_uid(handle,
+                                                               tensor_uid_to_pointer_map,
+                                                               cudnn_workspace,
+                                                               plan_index,
+                                                               override_uids,
+                                                               override_shapes,
+                                                               override_strides));
 
         CUDNN_FE_LOG_BANNER("  EXECUTE PLAN AT INDEX  ALL OK for plan index " << plan_index << "  ");
         return {error_code_t::OK, ""};
@@ -900,7 +907,10 @@ class Graph : public ICudnn, public INode {
     error_t
     execute(cudnnHandle_t handle,
             std::unordered_map<int64_t, void *> &tensor_uid_to_pointer_map,
-            void *workspace) const {
+            void *workspace,
+            std::vector<int64_t> const &override_uids,
+            std::vector<std::vector<int64_t>> const &override_shapes,
+            std::vector<std::vector<int64_t>> const &override_strides) const {
         // Add pass_by_value data pointers to uid_to_pointer map
         // object lifetime is controlled by tensor_to_pass_by_value which means the pointer should stay valid during
         // execute.
@@ -944,8 +954,61 @@ class Graph : public ICudnn, public INode {
             }
         }
 
+        CHECK_CUDNN_FRONTEND_ERROR(execute_cudnn_plan_with_uid(handle,
+                                                               tensor_uid_to_pointer_map,
+                                                               cudnn_workspace,
+                                                               plans.candidate,
+                                                               override_uids,
+                                                               override_shapes,
+                                                               override_strides));
+
+        CUDNN_FE_LOG_BANNER(" EXECUTE PLAN  ALL OK ");
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    execute_plan_at_index(cudnnHandle_t handle,
+                          std::unordered_map<int64_t, void *> &tensor_uid_to_pointer_map,
+                          void *workspace,
+                          int64_t plan_index) const {
+        // Add pass_by_value data pointers to uid_to_pointer map
+        // object lifetime is controlled by tensor_to_pass_by_value which means the pointer should stay valid during
+        // execute.
         CHECK_CUDNN_FRONTEND_ERROR(
-            execute_cudnn_plan_with_uid(handle, tensor_uid_to_pointer_map, cudnn_workspace, plans.candidate));
+            execute_plan_at_index(handle, tensor_uid_to_pointer_map, workspace, plan_index, {}, {}, {}));
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    execute(cudnnHandle_t handle,
+            std::unordered_map<int64_t, void *> &tensor_uid_to_pointer_map,
+            void *workspace) const {
+        // Add pass_by_value data pointers to uid_to_pointer map
+        // object lifetime is controlled by tensor_to_pass_by_value which means the pointer should stay valid during
+        // execute.
+        CUDNN_FE_LOG_BANNER(" EXECUTE PLAN  ");
+        std::unordered_map<uid_t, pass_by_values_t> tensor_to_pass_by_value;
+        CHECK_CUDNN_FRONTEND_ERROR(collect_pass_by_value_tensors_subtree(tensor_to_pass_by_value));
+
+        CHECK_CUDNN_FRONTEND_ERROR(
+            extend_tensor_map_with_pass_by_value_tensors_(tensor_uid_to_pointer_map, tensor_to_pass_by_value));
+        CHECK_CUDNN_FRONTEND_ERROR(
+            make_variant_pack_replacements(tensor_uid_to_pointer_map, variant_pack_replacements));
+
+        std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>> workspace_modifications;
+        int64_t workspace_offset = 0;
+        CHECK_CUDNN_FRONTEND_ERROR(collect_tensors_in_workspace_subtree(workspace_modifications, workspace_offset));
+
+        CHECK_CUDNN_FRONTEND_ERROR(run_auxiliary_kernels(handle, workspace, workspace_modifications));
+
+        CHECK_CUDNN_FRONTEND_ERROR(
+            extend_tensor_map_with_workspace_tensors_(tensor_uid_to_pointer_map, workspace, workspace_modifications));
+        // offset workspace by the already used fe graph workspace
+        // this is where cudnn backend can start using workspace for its execution plans
+        void *cudnn_workspace = static_cast<char *>(workspace) + fe_workspace_size;
+
+        CHECK_CUDNN_FRONTEND_ERROR(execute_cudnn_plan_with_uid(
+            handle, tensor_uid_to_pointer_map, cudnn_workspace, plans.candidate, {}, {}, {}));
 
         CUDNN_FE_LOG_BANNER(" EXECUTE PLAN  ALL OK ");
         return {error_code_t::OK, ""};

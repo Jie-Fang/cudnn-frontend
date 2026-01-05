@@ -18,8 +18,6 @@ TEST_CONFIGS_FWD = {
     "d64_f16":             {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 256, "s_kv": 256,  "d_qk": 64,  "d_vo": 64,  "itype": "fp8_e4m3", "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
     "d128_f8e4m3":         {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 256, "s_kv": 256,  "d_qk": 128, "d_vo": 128, "itype": "fp8_e4m3", "otype": "fp8_e4m3", "atol": 0.08, "rtol": 0.2},
 
-    # cudnnTest replica:
-    # ./cudnnTest -RgraphRunner -jsonTestName=LLM_paged_attention_fp8 -kv=dim_b:2 -kv=dim_qh:4 -kv=dim_qs:256 -kv=dim_kvs:256 -kv=dim_d:128 -kv=dim_kvh:4 -kv=Tin:CUDNN_DATA_FP8_E4M3 -kv=Tout:CUDNN_DATA_FP8_E4M3 -kv=atol:0.08 -kv=rtol:0.2 -minDevVer800 -backendEngine-1 -b -gpuRef -kv=block_size:16 -kv=table_size:16 -kv=max_block_num:31 -kv=dim_num_blocks:32 
     "d128_f8e4m3_paged":   {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 256, "s_kv": 256,  "d_qk": 128, "d_vo": 128, "itype": "fp8_e4m3", "otype": "fp8_e4m3", "atol": 0.08, "rtol": 0.2, "kv_block_size": 16},
 
     "d64_f8e4m3":          {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 256, "s_kv": 256,  "d_qk": 64,  "d_vo": 64,  "itype": "fp8_e4m3", "otype": "fp8_e4m3", "atol": 0.08, "rtol": 0.2},

@@ -45,7 +45,7 @@ This example shows how to construct a sdpa forward graph.
 #define SEQ_LEN_Q_UID 7
 #define SEQ_LEN_KV_UID 8
 
-std::shared_ptr<fe::graph::Graph>
+static std::shared_ptr<fe::graph::Graph>
 create_sdpa_forward_graph(int64_t const b,
                           int64_t const h_q,
                           int64_t const h_k,
@@ -62,7 +62,8 @@ create_sdpa_forward_graph(int64_t const b,
     auto graph = std::make_shared<fe::graph::Graph>();
     graph->set_io_data_type(fe::DataType_t::BFLOAT16)
         .set_intermediate_data_type(fe::DataType_t::FLOAT)
-        .set_compute_data_type(fe::DataType_t::FLOAT);
+        .set_compute_data_type(fe::DataType_t::FLOAT)
+        .set_dynamic_shape_enabled(true);
 
     auto Q = graph->tensor(fe::graph::Tensor_attributes()
                                .set_name("Q")
@@ -121,8 +122,8 @@ create_sdpa_forward_graph(int64_t const b,
     return graph;
 }
 
-TEST_CASE("Toy sdpa forward", "[graph][sdpa][flash][forward]") {
-    int64_t b           = 3;     // batch size
+TEST_CASE("Toy sdpa forward with dynamic shapes", "[graph][sdpa][flash][forward]") {
+    int64_t b           = 2;     // batch size
     int64_t h_q         = 4;     // head dim
     int64_t h_k         = 4;     // head dim
     int64_t h_v         = 4;     // head dim
@@ -133,12 +134,12 @@ TEST_CASE("Toy sdpa forward", "[graph][sdpa][flash][forward]") {
     bool generate_stats = true;
     float attn_scale    = 0.123f;
     bool causal_mask    = true;
-    bool padding_mask   = (cudnnGetVersion() >= 8903);
+    bool padding_mask   = true;
 
-    if (cudnnGetVersion() < 8903) {
-        SKIP("Test requires cudnn 8.9.3 or above");
-        return;
-    }
+    SKIP("Test is disabled till backend is updated");
+
+    std::cout << "Running size: {" << b << ", " << h_q << ", " << h_k << ", " << h_v << ", " << s_q << ", " << s_kv
+              << ", " << d_qk << ", " << d_v << "}" << std::endl;
 
     // Create a unique_ptr for the cuDNN handle
     auto handle_ptr = create_cudnn_handle();
@@ -158,8 +159,6 @@ TEST_CASE("Toy sdpa forward", "[graph][sdpa][flash][forward]") {
 
     std::unordered_map<fe::graph::Tensor_attributes::uid_t, void*> variant_pack = {
         {Q_UID, q_tensor.devPtr}, {K_UID, k_tensor.devPtr}, {V_UID, v_tensor.devPtr}, {O_UID, o_tensor.devPtr}};
-
-    Surface<half> bias_tensor(b * 1 * s_q * s_kv, false);
 
     Surface<int32_t> devActualSeqlenQ(b, false);
     Surface<int32_t> devActualSeqlenKV(b, false);
@@ -188,9 +187,68 @@ TEST_CASE("Toy sdpa forward", "[graph][sdpa][flash][forward]") {
 
     int64_t workspace_size = 0;
     REQUIRE(graph->get_workspace_size(workspace_size).is_good());
+    workspace_size = 256 * 1024;
     Surface<int8_t> workspace(workspace_size, false);
 
     REQUIRE(graph->execute(handle, variant_pack, workspace.devPtr).is_good());
+
+    // Override shapes
+
+    int64_t override_b = 4;
+    Surface<half> q_tensor_2(override_b * h_q * s_q * d_qk, false);
+    Surface<half> k_tensor_2(override_b * h_k * d_qk * s_kv, false);
+    Surface<half> v_tensor_2(override_b * h_v * d_v * s_kv, false);
+
+    Surface<half> o_tensor_2(override_b * s_q * h_q * d_qk, false);
+
+    std::unordered_map<fe::graph::Tensor_attributes::uid_t, void*> variant_pack_2 = {
+        {Q_UID, q_tensor_2.devPtr}, {K_UID, k_tensor_2.devPtr}, {V_UID, v_tensor_2.devPtr}, {O_UID, o_tensor_2.devPtr}};
+
+    Surface<int32_t> devActualSeqlenQ_2(override_b, false);
+    Surface<int32_t> devActualSeqlenKV_2(override_b, false);
+    if (padding_mask) {
+        std::vector<int32_t> hostActualSeqlenQ(override_b, 20);
+        std::vector<int32_t> hostActualSeqlenKV(override_b, 20);
+
+        CUDA_CHECK(cudaMemcpy(devActualSeqlenQ_2.devPtr,
+                              hostActualSeqlenQ.data(),
+                              sizeof(hostActualSeqlenQ[0]) * override_b,
+                              cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(devActualSeqlenKV_2.devPtr,
+                              hostActualSeqlenKV.data(),
+                              sizeof(hostActualSeqlenKV[0]) * override_b,
+                              cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaDeviceSynchronize());
+
+        variant_pack_2[SEQ_LEN_Q_UID]  = devActualSeqlenQ_2.devPtr;
+        variant_pack_2[SEQ_LEN_KV_UID] = devActualSeqlenKV_2.devPtr;
+    }
+
+    Surface<float> statsTensor_2(override_b * h_q * s_q * 1, false);
+    if (generate_stats == true) {
+        variant_pack_2[STATS_UID] = statsTensor_2.devPtr;
+    }
+
+    std::cout << "Running size: {" << override_b << ", " << h_q << ", " << h_k << ", " << h_v << ", " << s_q << ", "
+              << s_kv << ", " << d_qk << ", " << d_v << "}" << std::endl;
+
+    std::vector<int64_t> override_uids = {Q_UID, K_UID, V_UID, O_UID, SEQ_LEN_Q_UID, SEQ_LEN_KV_UID, STATS_UID};
+    std::vector<std::vector<int64_t>> override_shapes  = {{override_b, h_q, s_q, d_qk},
+                                                          {override_b, h_k, s_kv, d_qk},
+                                                          {override_b, h_v, s_kv, d_v},
+                                                          {override_b, s_q, h_q, d_v},
+                                                          {override_b, 1, 1, 1},
+                                                          {override_b, 1, 1, 1},
+                                                          {override_b, h_q * s_q * 1, 1, 1}};
+    std::vector<std::vector<int64_t>> override_strides = {{h_q * s_q * d_qk, s_q * d_qk, d_qk, 1},
+                                                          {h_k * d_qk * s_kv, d_qk * s_kv, s_kv, 1},
+                                                          {h_v * d_v * s_kv, d_v * s_kv, s_kv, 1},
+                                                          {h_q * d_v, d_v, b * h_q * d_v, 1},
+                                                          {1, 1, 1, 1},
+                                                          {1, 1, 1, 1},
+                                                          {h_q * d_v, d_v, override_b * h_q * d_v, 1}};
+    REQUIRE(graph->execute(handle, variant_pack_2, workspace.devPtr, override_uids, override_shapes, override_strides)
+                .is_good());
 
     CUDA_CHECK(cudaDeviceSynchronize());
 }
