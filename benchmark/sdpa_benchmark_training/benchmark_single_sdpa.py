@@ -82,7 +82,7 @@ parser.add_argument(
 parser.add_argument(
     "--deterministic_bwd",
     action="store_true",
-    help="Use deterministic algorithm for backward pass where supported (cudnn_fe FP16/BF16)",
+    help="Use deterministic algorithm for backward pass where supported (cudnn_fe FP16/BF16/FP8)",
 )
 parser.add_argument(
     "--attn_mask",
@@ -166,9 +166,7 @@ else:
     run_fwd = True
     run_bwd = False
 enable_gqa = num_q_heads != num_kv_heads
-assert (
-    args.attn_mask != "bottom_right" or q_seqlen <= kv_seqlen
-), "Bottom right causal mask not supported when q_seqlen > kv_seqlen"
+assert args.attn_mask != "bottom_right" or q_seqlen <= kv_seqlen, "Bottom right causal mask not supported when q_seqlen > kv_seqlen"
 # if args.sdpa_backend in ["flash_attention", "flash_attention_3", "pyt_flash_attention"]:
 #     assert args.attn_mask != "top_left", "Flash Attention does not support top left causal mask"
 
@@ -345,11 +343,7 @@ if args.sdpa_backend == "cudnn_fe":
             # generate_stats=not is_infer,
             is_inference=is_infer,
             attn_scale=attn_scale,
-            diagonal_alignment=(
-                cudnn.diagonal_alignment.BOTTOM_RIGHT
-                if args.attn_mask == "bottom_right"
-                else cudnn.diagonal_alignment.TOP_LEFT
-            ),
+            diagonal_alignment=(cudnn.diagonal_alignment.BOTTOM_RIGHT if args.attn_mask == "bottom_right" else cudnn.diagonal_alignment.TOP_LEFT),
             right_bound=None if args.attn_mask == "no_mask" else 0,
             # dropout=dropout_tuple if is_dropout else None,
         )
@@ -364,53 +358,27 @@ if args.sdpa_backend == "cudnn_fe":
             # generate_stats=not is_infer,
             is_inference=is_infer,
             attn_scale=attn_scale,
-            diagonal_alignment=(
-                cudnn.diagonal_alignment.BOTTOM_RIGHT
-                if args.attn_mask == "bottom_right"
-                else cudnn.diagonal_alignment.TOP_LEFT
-            ),
+            diagonal_alignment=(cudnn.diagonal_alignment.BOTTOM_RIGHT if args.attn_mask == "bottom_right" else cudnn.diagonal_alignment.TOP_LEFT),
             diagonal_band_right_bound=None if args.attn_mask == "no_mask" else 0,
             dropout=dropout_tuple if is_dropout else None,
         )
 
     if run_bwd:
         if args.data_type == "fp8":
-            o_fwd.set_output(True).set_dim(output.size()).set_stride(output.stride()).set_data_type(
-                cudnn.data_type.FP8_E4M3
-            )
-            (
-                stats_fwd.set_output(True)
-                .set_dim(stats.size())
-                .set_stride(stats.stride())
-                .set_data_type(cudnn.data_type.FLOAT)
-                if not is_infer
-                else None
-            )
+            o_fwd.set_output(True).set_dim(output.size()).set_stride(output.stride()).set_data_type(cudnn.data_type.FP8_E4M3)
+            (stats_fwd.set_output(True).set_dim(stats.size()).set_stride(stats.stride()).set_data_type(cudnn.data_type.FLOAT) if not is_infer else None)
         else:
             o_fwd.set_output(True).set_dim(output.size()).set_stride(output.stride())
-            (
-                stats_fwd.set_output(True)
-                .set_dim(stats.size())
-                .set_stride(stats.stride())
-                .set_data_type(cudnn.data_type.FLOAT)
-                if not is_infer
-                else None
-            )
+            (stats_fwd.set_output(True).set_dim(stats.size()).set_stride(stats.stride()).set_data_type(cudnn.data_type.FLOAT) if not is_infer else None)
     else:
         if args.data_type == "fp8":
-            o_fwd.set_output(True).set_dim(output.size()).set_stride(output.stride()).set_data_type(
-                cudnn.data_type.FP8_E4M3
-            )
+            o_fwd.set_output(True).set_dim(output.size()).set_stride(output.stride()).set_data_type(cudnn.data_type.FP8_E4M3)
         else:
             o_fwd.set_output(True).set_dim(output.size()).set_stride(output.stride())
 
     if args.data_type == "fp8":
-        amax_s_fwd.set_output(True).set_dim(amax_s_gpu.size()).set_stride(amax_s_gpu.stride()).set_data_type(
-            cudnn.data_type.FLOAT
-        )
-        amax_o_fwd.set_output(True).set_dim(amax_o_gpu.size()).set_stride(amax_o_gpu.stride()).set_data_type(
-            cudnn.data_type.FLOAT
-        )
+        amax_s_fwd.set_output(True).set_dim(amax_s_gpu.size()).set_stride(amax_s_gpu.stride()).set_data_type(cudnn.data_type.FLOAT)
+        amax_o_fwd.set_output(True).set_dim(amax_o_gpu.size()).set_stride(amax_o_gpu.stride()).set_data_type(cudnn.data_type.FLOAT)
     graph_fwd.validate()
     graph_fwd.build_operation_graph()
     graph_fwd.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
@@ -482,6 +450,7 @@ if args.sdpa_backend == "cudnn_fe":
                 use_causal_mask=args.attn_mask != "no_mask" and args.attn_mask != "bottom_right",
                 use_causal_mask_bottom_right=args.attn_mask == "bottom_right",
                 dropout=dropout_tuple if is_dropout else None,
+                use_deterministic_algorithm=args.deterministic_bwd,
             )
         else:
             q_bwd = graph_bwd.tensor_like(query)
@@ -498,38 +467,20 @@ if args.sdpa_backend == "cudnn_fe":
                 dO=dO_bwd,
                 stats=stats_bwd,
                 attn_scale=attn_scale,
-                diagonal_alignment=(
-                    cudnn.diagonal_alignment.BOTTOM_RIGHT
-                    if args.attn_mask == "bottom_right"
-                    else cudnn.diagonal_alignment.TOP_LEFT
-                ),
+                diagonal_alignment=(cudnn.diagonal_alignment.BOTTOM_RIGHT if args.attn_mask == "bottom_right" else cudnn.diagonal_alignment.TOP_LEFT),
                 diagonal_band_right_bound=None if args.attn_mask == "no_mask" else 0,
                 dropout=dropout_tuple if is_dropout else None,
                 use_deterministic_algorithm=args.deterministic_bwd,
             )
 
         if args.data_type == "fp8":
-            dQ_bwd.set_output(True).set_dim(dQuery.size()).set_stride(dQuery.stride()).set_data_type(
-                cudnn.data_type.FP8_E4M3
-            )
-            dK_bwd.set_output(True).set_dim(dKey.size()).set_stride(dKey.stride()).set_data_type(
-                cudnn.data_type.FP8_E4M3
-            )
-            dV_bwd.set_output(True).set_dim(dValue.size()).set_stride(dValue.stride()).set_data_type(
-                cudnn.data_type.FP8_E4M3
-            )
-            amax_dQ_bwd.set_output(True).set_dim(amax_dQ_gpu.size()).set_stride(amax_dQ_gpu.stride()).set_data_type(
-                cudnn.data_type.FLOAT
-            )
-            amax_dK_bwd.set_output(True).set_dim(amax_dK_gpu.size()).set_stride(amax_dK_gpu.stride()).set_data_type(
-                cudnn.data_type.FLOAT
-            )
-            amax_dV_bwd.set_output(True).set_dim(amax_dV_gpu.size()).set_stride(amax_dV_gpu.stride()).set_data_type(
-                cudnn.data_type.FLOAT
-            )
-            amax_dP_bwd.set_output(True).set_dim(amax_dP_gpu.size()).set_stride(amax_dP_gpu.stride()).set_data_type(
-                cudnn.data_type.FLOAT
-            )
+            dQ_bwd.set_output(True).set_dim(dQuery.size()).set_stride(dQuery.stride()).set_data_type(cudnn.data_type.FP8_E4M3)
+            dK_bwd.set_output(True).set_dim(dKey.size()).set_stride(dKey.stride()).set_data_type(cudnn.data_type.FP8_E4M3)
+            dV_bwd.set_output(True).set_dim(dValue.size()).set_stride(dValue.stride()).set_data_type(cudnn.data_type.FP8_E4M3)
+            amax_dQ_bwd.set_output(True).set_dim(amax_dQ_gpu.size()).set_stride(amax_dQ_gpu.stride()).set_data_type(cudnn.data_type.FLOAT)
+            amax_dK_bwd.set_output(True).set_dim(amax_dK_gpu.size()).set_stride(amax_dK_gpu.stride()).set_data_type(cudnn.data_type.FLOAT)
+            amax_dV_bwd.set_output(True).set_dim(amax_dV_gpu.size()).set_stride(amax_dV_gpu.stride()).set_data_type(cudnn.data_type.FLOAT)
+            amax_dP_bwd.set_output(True).set_dim(amax_dP_gpu.size()).set_stride(amax_dP_gpu.stride()).set_data_type(cudnn.data_type.FLOAT)
         else:
             dQ_bwd.set_output(True).set_dim(dQuery.size()).set_stride(dQuery.stride())
             dK_bwd.set_output(True).set_dim(dKey.size()).set_stride(dKey.stride())
@@ -1199,11 +1150,7 @@ for i in range(total_iters):
         del query, key, value, output
 
 ## print results
-fwd_median_time = (
-    np.median(np.array(forward_times[5:]))
-    if len(forward_times) > 5
-    else (np.median(np.array(forward_times)) if len(forward_times) > 0 else 0.0)
-)
+fwd_median_time = np.median(np.array(forward_times[5:])) if len(forward_times) > 5 else (np.median(np.array(forward_times)) if len(forward_times) > 0 else 0.0)
 fwd_tflops = 0.0
 if run_fwd and fwd_median_time > 0:
     fwd_tflops = tflops_per_sec(
@@ -1219,9 +1166,7 @@ if run_fwd and fwd_median_time > 0:
     )
 
 bwd_median_time = (
-    np.median(np.array(backward_times[5:]))
-    if len(backward_times) > 5
-    else (np.median(np.array(backward_times)) if len(backward_times) > 0 else 0.0)
+    np.median(np.array(backward_times[5:])) if len(backward_times) > 5 else (np.median(np.array(backward_times)) if len(backward_times) > 0 else 0.0)
 )
 bwd_tflops = 0.0
 if run_bwd and bwd_median_time > 0:
