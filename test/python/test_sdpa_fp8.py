@@ -28,6 +28,13 @@ TEST_CONFIGS_FWD = {
     "gqa_f8e4m3":          {"b": 2, "h_q": 15, "h_k": 5, "h_v": 3, "s_qo": 256, "s_kv": 256,  "d_qk": 128, "d_vo": 128, "itype": "fp8_e4m3", "otype": "fp8_e4m3", "atol": 0.08, "rtol": 0.2},
     "gqa_f8e5m2":          {"b": 2, "h_q": 15, "h_k": 5, "h_v": 3, "s_qo": 256, "s_kv": 256,  "d_qk": 128, "d_vo": 128, "itype": "fp8_e5m2", "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.4},
 
+    "sq1_skv256_d64_f16":      {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 1,   "s_kv": 256,  "d_qk": 64, "d_vo": 64, "itype": "fp8_e4m3", "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
+    "sq1_skv1024_d64_f16":     {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 1,   "s_kv": 1024, "d_qk": 64, "d_vo": 64, "itype": "fp8_e4m3", "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
+    "sq1_skv256_d64_f8e4m3":   {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 1,   "s_kv": 256,  "d_qk": 64, "d_vo": 64, "itype": "fp8_e4m3", "otype": "fp8_e4m3", "atol": 0.08, "rtol": 0.2},
+    "sq1_skv1024_d64_f8e4m3":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 1,   "s_kv": 1024, "d_qk": 64, "d_vo": 64, "itype": "fp8_e4m3", "otype": "fp8_e4m3", "atol": 0.08, "rtol": 0.2},
+    "sq1_skv256_d64_f8e5m2":   {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 1,   "s_kv": 256,  "d_qk": 64, "d_vo": 64, "itype": "fp8_e5m2", "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.2},
+    "sq1_skv1024_d64_f8e5m2":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 1,   "s_kv": 1024, "d_qk": 64, "d_vo": 64, "itype": "fp8_e5m2", "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.2},
+
     "sq1_skv256_f16":      {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 1,   "s_kv": 256,  "d_qk": 128, "d_vo": 128, "itype": "fp8_e4m3", "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
     "sq1_skv1024_f16":     {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 1,   "s_kv": 1024, "d_qk": 128, "d_vo": 128, "itype": "fp8_e4m3", "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
     "sq1_skv256_f8e4m3":   {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 1,   "s_kv": 256,  "d_qk": 128, "d_vo": 128, "itype": "fp8_e4m3", "otype": "fp8_e4m3", "atol": 0.08, "rtol": 0.2},
