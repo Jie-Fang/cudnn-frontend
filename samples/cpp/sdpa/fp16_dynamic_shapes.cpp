@@ -136,7 +136,9 @@ TEST_CASE("Toy sdpa forward with dynamic shapes", "[graph][sdpa][flash][forward]
     bool causal_mask    = true;
     bool padding_mask   = true;
 
+#if (CUDNN_VERSION < 91900)
     SKIP("Test is disabled till backend is updated");
+#endif
 
     std::cout << "Running size: {" << b << ", " << h_q << ", " << h_k << ", " << h_v << ", " << s_q << ", " << s_kv
               << ", " << d_qk << ", " << d_v << "}" << std::endl;
