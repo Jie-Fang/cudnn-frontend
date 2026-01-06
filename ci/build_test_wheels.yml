@@ -78,6 +78,10 @@ deploy:test_bdist_wheels_ga_cudnn_3.12:
     rules:
         - if: $CI_PIPELINE_SOURCE == "schedule"
     script:
+        - apt-get install -y wget
+        - wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
+        - dpkg -i cuda-keyring_1.1-1_all.deb
+        - rm cuda-keyring_1.1-1_all.deb
         - apt-get update
         - apt-get install -y software-properties-common
         - add-apt-repository ppa:deadsnakes/ppa
