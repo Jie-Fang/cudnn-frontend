@@ -60,7 +60,8 @@ class PyGraph {
             py::object sm_count,
             py::object sm_version,
             std::shared_ptr<KernelCache> kernel_cache,
-            std::shared_ptr<cudnn_frontend::DeviceProperties> device_properties)
+            std::shared_ptr<cudnn_frontend::DeviceProperties> device_properties,
+            bool is_dynamic_shape_enabled)
         : graph(std::make_shared<cudnn_frontend::graph::Graph>()) {
         graph->set_compute_data_type(compute_data_type)
             .set_intermediate_data_type(intermediate_data_type)
@@ -82,6 +83,10 @@ class PyGraph {
 
         if (sm_version.is(py::none()) == false) {
             graph->set_sm_version(sm_version.cast<int32_t>());
+        }
+
+        if (is_dynamic_shape_enabled) {
+            graph->set_dynamic_shape_enabled(true);
         }
 
         if (kernel_cache) {
