@@ -25,6 +25,19 @@ from test_utils import torch_fork_set_rng
 # Helper Functions and Data Classes
 # =========================================
 
+from enum import Enum, auto
+
+
+class UIDs(Enum):
+    Q_UID = auto()
+    K_UID = auto()
+    V_UID = auto()
+    O_UID = auto()
+    RAGGED_Q_UID = auto()
+    RAGGED_O_UID = auto()
+    ACTUAL_SEQ_LENS_Q_UID = auto()
+    ACTUAL_SEQ_LENS_KV_UID = auto()
+
 
 @dataclass
 class SDPAConfig:
@@ -378,6 +391,31 @@ def compute_sdpa_reference(
 # cuDNN Graph Builder
 # =========================================
 
+graph_cache = {}
+
+
+def lookup_graph_from_cache(batch_size: int, h_q: int, h_k: int, h_v: int, d_qk: int, d_v: int, max_s_kv: int, causal: bool) -> cudnn.pygraph:
+    """
+    Lookup a graph from the cuDNN graph cache.
+    """
+    key = (batch_size, h_q, h_k, h_v, d_qk, d_v, max_s_kv, causal)
+
+    if key in graph_cache:
+        return graph_cache[key]
+
+    return None
+
+
+def add_to_cudnn_graph_cache(batch_size: int, h_q: int, h_k: int, h_v: int, d_qk: int, d_v: int, max_s_kv: int, causal: bool, graph: cudnn.pygraph) -> None:
+    """
+    Add a graph to the cuDNN graph cache.
+    """
+
+    key = (batch_size, h_q, h_k, h_v, d_qk, d_v, max_s_kv, causal)
+
+    graph_cache[key] = graph
+    return None
+
 
 def build_cudnn_sdpa_thd_graph(
     cudnn_handle,
@@ -408,12 +446,21 @@ def build_cudnn_sdpa_thd_graph(
 
     cudnn_dtype = convert_to_cudnn_type(config.dtype)
 
+    # Look up pre-built graph from cache
+
+    graph = lookup_graph_from_cache(batch_size, h_q, h_k, h_v, d_qk, d_v, max_s_kv, config.is_causal)
+
+    if graph is not None:
+        print("Returning existing graph since it already exists")
+        return graph
+
     # Create the graph
     graph = cudnn.pygraph(
         io_data_type=cudnn_dtype,
         intermediate_data_type=cudnn.data_type.FLOAT,
         compute_data_type=cudnn.data_type.FLOAT,
         handle=cudnn_handle,
+        is_dynamic_shape_enabled=True,
     )
 
     # Q tensor in THD layout with BHSD logical shape
@@ -425,6 +472,7 @@ def build_cudnn_sdpa_thd_graph(
         stride=(h_q * d_qk, d_qk, h_q * d_qk, 1),  # bshd stride order for THD
         data_type=cudnn_dtype,
         name="Q",
+        uid=UIDs.Q_UID.value,
     )
 
     # Q ragged offset tensor
@@ -433,6 +481,7 @@ def build_cudnn_sdpa_thd_graph(
         stride=(1, 1, 1, 1),
         data_type=cudnn.data_type.INT64,
         name="Q_ragged_offset",
+        uid=UIDs.RAGGED_Q_UID.value,
     )
     q.set_ragged_offset(q_ragged)
 
@@ -442,6 +491,7 @@ def build_cudnn_sdpa_thd_graph(
         stride=(h_k * max_s_kv * d_qk, d_qk, h_k * d_qk, 1),  # bshd stride order
         data_type=cudnn_dtype,
         name="K",
+        uid=UIDs.K_UID.value,
     )
 
     # V tensor in BHSD layout
@@ -450,6 +500,7 @@ def build_cudnn_sdpa_thd_graph(
         stride=(h_v * max_s_kv * d_v, d_v, h_v * d_v, 1),  # bshd stride order
         data_type=cudnn_dtype,
         name="V",
+        uid=UIDs.V_UID.value,
     )
 
     # Sequence length tensors
@@ -458,6 +509,7 @@ def build_cudnn_sdpa_thd_graph(
         stride=(1, 1, 1, 1),
         data_type=cudnn.data_type.INT32,
         name="seq_len_q",
+        uid=UIDs.ACTUAL_SEQ_LENS_Q_UID.value,
     )
 
     seq_len_kv_tensor = graph.tensor(
@@ -465,6 +517,7 @@ def build_cudnn_sdpa_thd_graph(
         stride=(1, 1, 1, 1),
         data_type=cudnn.data_type.INT32,
         name="seq_len_kv",
+        uid=UIDs.ACTUAL_SEQ_LENS_KV_UID.value,
     )
 
     # Call SDPA
@@ -485,6 +538,7 @@ def build_cudnn_sdpa_thd_graph(
     o.set_output(True).set_dim((batch_size, h_q, max_s_q, d_v)).set_stride((h_q * d_v, d_v, h_q * d_v, 1)).set_data_type(  # bshd stride order for THD
         cudnn_dtype
     )
+    o.set_uid(UIDs.O_UID.value)
 
     # O ragged offset tensor (reuse Q's ragged offset structure for d_qk == d_v)
     o_ragged = graph.tensor(
@@ -492,19 +546,31 @@ def build_cudnn_sdpa_thd_graph(
         stride=(1, 1, 1, 1),
         data_type=cudnn.data_type.INT64,
         name="O_ragged_offset",
+        uid=UIDs.RAGGED_O_UID.value,
     )
     o.set_ragged_offset(o_ragged)
 
-    return graph, {
-        "q": q,
-        "q_ragged": q_ragged,
-        "k": k,
-        "v": v,
-        "seq_len_q": seq_len_q_tensor,
-        "seq_len_kv": seq_len_kv_tensor,
-        "o": o,
-        "o_ragged": o_ragged,
-    }
+    # Validate and build the graph
+    try:
+        graph.validate()
+    except cudnn.cudnnGraphNotSupportedError as e:
+        pytest.skip(f"Graph not supported: {e}")
+    except Exception as e:
+        pytest.fail(f"Unexpected error during graph validation: {e}")
+
+    try:
+        graph.build_operation_graph()
+        graph.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
+        graph.check_support()
+        graph.build_plans()
+    except cudnn.cudnnGraphNotSupportedError as e:
+        pytest.skip(f"Graph not supported after validation: {e}")
+    except Exception as e:
+        pytest.fail(f"Unexpected error after graph validation: {e}")
+
+    add_to_cudnn_graph_cache(batch_size, h_q, h_k, h_v, d_qk, d_v, max_s_kv, config.is_causal, graph)
+
+    return graph
 
 
 def execute_cudnn_sdpa_thd(
@@ -545,36 +611,18 @@ def execute_cudnn_sdpa_thd(
     seq_len_kv_4d = seq_len_kv.view(-1, 1, 1, 1)
 
     # Build the graph
-    graph, tensors = build_cudnn_sdpa_thd_graph(cudnn_handle, config, seq_len_q, seq_len_kv, q_ragged_offset, o_ragged_offset, q_gpu, k_gpu, v_gpu, o_gpu)
-
-    # Validate and build the graph
-    try:
-        graph.validate()
-    except cudnn.cudnnGraphNotSupportedError as e:
-        pytest.skip(f"Graph not supported: {e}")
-    except Exception as e:
-        pytest.fail(f"Unexpected error during graph validation: {e}")
-
-    try:
-        graph.build_operation_graph()
-        graph.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
-        graph.check_support()
-        graph.build_plans()
-    except cudnn.cudnnGraphNotSupportedError as e:
-        pytest.skip(f"Graph not supported after validation: {e}")
-    except Exception as e:
-        pytest.fail(f"Unexpected error after graph validation: {e}")
+    graph = build_cudnn_sdpa_thd_graph(cudnn_handle, config, seq_len_q, seq_len_kv, q_ragged_offset, o_ragged_offset, q_gpu, k_gpu, v_gpu, o_gpu)
 
     # Create variant pack
     variant_pack = {
-        tensors["q"]: q_gpu,
-        tensors["q_ragged"]: q_ragged_offset,
-        tensors["k"]: k_gpu,
-        tensors["v"]: v_gpu,
-        tensors["seq_len_q"]: seq_len_q_4d,
-        tensors["seq_len_kv"]: seq_len_kv_4d,
-        tensors["o"]: o_gpu,
-        tensors["o_ragged"]: o_ragged_offset,
+        UIDs.Q_UID.value: q_gpu,
+        UIDs.RAGGED_Q_UID.value: q_ragged_offset,
+        UIDs.K_UID.value: k_gpu,
+        UIDs.V_UID.value: v_gpu,
+        UIDs.ACTUAL_SEQ_LENS_Q_UID.value: seq_len_q_4d,
+        UIDs.ACTUAL_SEQ_LENS_KV_UID.value: seq_len_kv_4d,
+        UIDs.O_UID.value: o_gpu,
+        UIDs.RAGGED_O_UID.value: o_ragged_offset,
     }
 
     # Allocate workspace
@@ -584,7 +632,37 @@ def execute_cudnn_sdpa_thd(
     # Execute
     stream = torch.cuda.current_stream().cuda_stream
     cudnn.set_stream(handle=cudnn_handle, stream=stream)
-    graph.execute(variant_pack, workspace, handle=cudnn_handle, override_uids=None, override_shapes=None, override_strides=None)
+    override_uids = [
+        UIDs.Q_UID.value,
+        UIDs.RAGGED_Q_UID.value,
+        UIDs.K_UID.value,
+        UIDs.V_UID.value,
+        UIDs.ACTUAL_SEQ_LENS_Q_UID.value,
+        UIDs.ACTUAL_SEQ_LENS_KV_UID.value,
+        UIDs.O_UID.value,
+        UIDs.RAGGED_O_UID.value,
+    ]
+    override_shapes = [
+        q_gpu.shape,
+        q_ragged_offset.shape,
+        k_gpu.shape,
+        v_gpu.shape,
+        seq_len_q_4d.shape,
+        seq_len_kv_4d.shape,
+        o_gpu.shape,
+        o_ragged_offset.shape,
+    ]
+    override_strides = [
+        q_gpu.stride(),
+        q_ragged_offset.stride(),
+        k_gpu.stride(),
+        v_gpu.stride(),
+        seq_len_q_4d.stride(),
+        seq_len_kv_4d.stride(),
+        o_gpu.stride(),
+        o_ragged_offset.stride(),
+    ]
+    graph.execute(variant_pack, workspace, handle=cudnn_handle, override_uids=override_uids, override_shapes=override_shapes, override_strides=override_strides)
     torch.cuda.synchronize()
 
     return o_gpu
@@ -637,7 +715,7 @@ def compare_outputs(
 
 @pytest.mark.L0
 @torch_fork_set_rng(seed=42)
-def test_sdpa_thd_basic(cudnn_handle):
+def test_sdpa_thd_dynamic_shapes(cudnn_handle):
     """Basic test for SDPA with THD layout."""
     cudnn_version = LooseVersion(cudnn.backend_version_string())
     if cudnn_version < "9.10.0":
@@ -660,7 +738,7 @@ def test_sdpa_thd_basic(cudnn_handle):
             head_dim_qk=128,
             head_dim_v=128,
             max_seq_len_q=256,
-            max_seq_len_kv=256,
+            max_seq_len_kv=512,
             dtype=torch.bfloat16,
             is_causal=False,
         ),
@@ -683,8 +761,8 @@ def test_sdpa_thd_basic(cudnn_handle):
             num_heads_v=8,
             head_dim_qk=128,
             head_dim_v=128,
-            max_seq_len_q=512,
-            max_seq_len_kv=2048,
+            max_seq_len_q=384,
+            max_seq_len_kv=512,
             dtype=torch.bfloat16,
             is_causal=False,
         ),
