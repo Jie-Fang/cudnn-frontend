@@ -413,6 +413,10 @@ SDPA_attributes::verify_sdpa_support_surface_for_implementation(const detail::Co
                                            error_code_t::GRAPH_NOT_SUPPORTED,
                                            "Unified SDPA node requires cuDNN 9.13.1");
 
+            RETURN_CUDNN_FRONTEND_ERROR_IF(context.get_dynamic_shape_enabled(),
+                                           error_code_t::GRAPH_NOT_SUPPORTED,
+                                           "Unified SDPA node doesn't yet support dynamic shape");
+
             // TODO: Provide smarter error messages that provide the required cuDNN version for each input.
             std::unordered_set<SDPA_attributes::input_names> allowed_input_names{
                 input_names::Q, input_names::K, input_names::V, input_names::Attn_scale};

@@ -82,10 +82,10 @@ class Graph : public ICudnn, public INode {
     error_t
     pre_validate_node() const override final {
         RETURN_CUDNN_FRONTEND_ERROR_IF(
-            (is_dynamic_shape_enabled || kernel_cache != nullptr) && detail::get_backend_version() < 90400,
+            (context.get_dynamic_shape_enabled() || kernel_cache != nullptr) && detail::get_backend_version() < 90400,
             error_code_t::GRAPH_NOT_SUPPORTED,
             "Dynamic shapes or kernel caching enabled, but cuDNN version < 9.4!");
-        RETURN_CUDNN_FRONTEND_ERROR_IF(((is_dynamic_shape_enabled == false) && (kernel_cache != nullptr)),
+        RETURN_CUDNN_FRONTEND_ERROR_IF(((context.get_dynamic_shape_enabled() == false) && (kernel_cache != nullptr)),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "Kernel caching enabled but dynamic shapes is disabled");
         if (detail::get_backend_version() != detail::get_compiled_version()) {
@@ -701,7 +701,7 @@ class Graph : public ICudnn, public INode {
         // The method here fuses all operations. There will be 1 operation graph in total.
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_operation_graph(handle));
 
-        if (is_dynamic_shape_enabled && kernel_cache && !kernel_cache->is_finalized()) {
+        if (context.get_dynamic_shape_enabled() && kernel_cache && !kernel_cache->is_finalized()) {
             CUDNN_FE_LOG_BANNER("  BUILD KERNEL CACHE  ");
             CHECK_CUDNN_FRONTEND_ERROR(kernel_cache->build(operation_graph->get_raw_desc()));
         }
@@ -1547,11 +1547,12 @@ class Graph : public ICudnn, public INode {
         // Go over each subnode and serialize them.
         json full_json;
 
-        full_json["context"]["name"]                   = context.get_name();
-        full_json["context"]["compute_data_type"]      = context.get_compute_data_type();
-        full_json["context"]["intermediate_data_type"] = context.get_intermediate_data_type();
-        full_json["context"]["io_data_type"]           = context.get_io_data_type();
-        full_json["context"]["sm_count"]               = context.get_target_sm_count();
+        full_json["context"]["name"]                     = context.get_name();
+        full_json["context"]["compute_data_type"]        = context.get_compute_data_type();
+        full_json["context"]["intermediate_data_type"]   = context.get_intermediate_data_type();
+        full_json["context"]["io_data_type"]             = context.get_io_data_type();
+        full_json["context"]["sm_count"]                 = context.get_target_sm_count();
+        full_json["context"]["is_dynamic_shape_enabled"] = context.get_dynamic_shape_enabled();
 
         full_json.update(R"( {"tag": "GRAPH"})"_json);
         full_json["nodes"];
@@ -1638,7 +1639,7 @@ class Graph : public ICudnn, public INode {
 
     size_t
     key() override final {
-        return key(is_dynamic_shape_enabled);
+        return key(context.get_dynamic_shape_enabled());
     }
 
     // TODO: temparorily placed in graphs class. This function needs to be a free standing function.
@@ -1661,6 +1662,9 @@ class Graph : public ICudnn, public INode {
             }
             if (j_context.contains("sm_count") && !j_context["sm_count"].is_null()) {
                 context.set_target_sm_count(j_context["sm_count"].get<int32_t>());
+            }
+            if (j_context.contains("is_dynamic_shape_enabled") && !j_context["is_dynamic_shape_enabled"].is_null()) {
+                context.set_dynamic_shape_enabled(j_context["is_dynamic_shape_enabled"].get<bool>());
             }
         }
 
@@ -2006,7 +2010,8 @@ Graph::set_compute_data_type(DataType_t const type) {
 
 inline Graph &
 Graph::set_dynamic_shape_enabled(bool is_enabled) {
-    is_dynamic_shape_enabled = is_enabled;
+    context.set_dynamic_shape_enabled(is_enabled);
+    this->is_dynamic_shape_enabled = is_enabled;
     return *this;
 }
 
