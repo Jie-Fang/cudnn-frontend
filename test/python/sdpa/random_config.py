@@ -6,8 +6,11 @@ import cudnn
 
 from dataclasses import dataclass, field, asdict
 
-# Invalid left/right attention bound (negative values may be used in the future).
-INVALID_BOUND = 99999
+# fmt: off
+
+def generate_test_seeds(*, num_tests, rng_seed):
+    rng = random.Random(rng_seed)
+    return [(i+1, num_tests, rng.randint(65536, 2147483647)) for i in range(num_tests)]
 
 
 def get_strides_from_indices(shape, indices=[0, 1, 2, 3], gaps=[0, 0, 0, 0], rng_geom=None):
@@ -37,8 +40,9 @@ def get_strides_from_layout(shape, layout, gaps=[0, 0, 0, 0], rng_geom=None):
 
 
 @dataclass
-class exec_cfg:
+class ExecConfig:
     data_type: torch.dtype = None
+    output_type: torch.dtype = None
     rng_data_seed: int = None
 
     is_alibi: bool = None
@@ -104,7 +108,7 @@ class RandomizationContext:
 
     def __call__(self, rng, rng_data_seed):
 
-        randoms_ = exec_cfg()
+        randoms_ = ExecConfig()
 
         randoms = {}
 
@@ -137,18 +141,17 @@ class RandomizationContext:
                 for i in range(randoms_.batches)
             ]
 
-        # Decide the left and right bounds for the sliding window mask
-        randoms_.left_bound = INVALID_BOUND
-        randoms_.right_bound = INVALID_BOUND
+        # Decide the left and right bounds for the sliding window mask (None = no bound)
+        randoms_.left_bound = None
+        randoms_.right_bound = None
 
         if randoms["with_sliding_mask"] == "no_mask":
-            randoms_.left_bound = INVALID_BOUND
-            randoms_.right_bound = INVALID_BOUND
+            pass  # left_bound and right_bound stay None
         elif randoms["with_sliding_mask"] == "left_window_only":
             randoms_.left_bound = rng.randint(1, max(1, randoms_.s_kv // 2))
             randoms_.right_bound = 0
         elif randoms["with_sliding_mask"] == "right_window_only":
-            randoms_.left_bound = INVALID_BOUND if randoms_.diag_align == cudnn.diagonal_alignment.BOTTOM_RIGHT else 1
+            randoms_.left_bound = None if randoms_.diag_align == cudnn.diagonal_alignment.BOTTOM_RIGHT else 1
             randoms_.right_bound = rng.randint(0, randoms_.s_kv // 2)
         elif randoms["with_sliding_mask"] == "band_around_diag":
             randoms_.left_bound = rng.randint(1, randoms_.s_kv // 2)
@@ -429,57 +432,6 @@ def test_randomization_context(seed):
         stats_layout=RandomChoice({"ragged": 1, "full": 1, "disabled": 2}),
     ) as ctx:
         return ctx
-
-
-def time_execution(
-    fn,
-    *args,
-    num_warmup: int = 3,
-    num_trials: int = 10,
-) -> torch.Tensor:
-    elapsed_times = torch.zeros(num_trials, dtype=torch.float)
-
-    for _ in range(num_warmup):
-        fn(*args)
-        torch.cuda.synchronize()
-
-    for i in range(num_trials):
-        start_event = torch.cuda.Event(enable_timing=True)
-        end_event = torch.cuda.Event(enable_timing=True)
-
-        start_event.record()
-        fn(*args)
-        end_event.record()
-        torch.cuda.synchronize()
-
-        elapsed_times[i] = start_event.elapsed_time(end_event)
-
-    return elapsed_times
-
-
-def profile_execution(fn, *args, trace_dir=None):
-    activities = [torch.profiler.ProfilerActivity.CUDA]
-    if trace_dir:
-        activities.append(torch.profiler.ProfilerActivity.CPU)
-
-    with torch.profiler.profile(
-        activities=activities,
-        record_shapes=True,
-        profile_memory=True,
-        with_stack=True,
-        on_trace_ready=(torch.profiler.tensorboard_trace_handler(trace_dir) if trace_dir else None),
-    ) as prof:
-        fn(*args)
-        torch.cuda.synchronize()
-
-    print("Sorted by CUDA time:")
-    print(prof.key_averages().table(sort_by="self_cuda_time_total", row_limit=10))
-    print()
-
-    if torch.profiler.ProfilerActivity.CPU in activities:
-        print("Sorted by CPU time:")
-        print(prof.key_averages().table(sort_by="self_cpu_time_total", row_limit=10))
-        print()
 
 
 if __name__ == "__main__":

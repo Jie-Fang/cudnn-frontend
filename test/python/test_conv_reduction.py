@@ -46,7 +46,7 @@ def test_reduction(cudnn_handle):
     X_gpu = torch.randn(N, C, H, W, dtype=torch.float16, device="cuda").to(memory_format=torch.channels_last)
     W_gpu = torch.randn(K, C, R, S, dtype=torch.float16, device="cuda").to(memory_format=torch.channels_last)
     # Perform convolution using FP32 computation while input and filter remain in FP16
-    with torch.cuda.amp.autocast(dtype=torch.float32):
+    with torch.amp.autocast("cuda", dtype=torch.float32):
         conv_output = torch.nn.functional.conv2d(X_gpu, W_gpu, padding=padding, stride=stride, dilation=dilation)
         Y_expected = conv_output.sum(dim=1)
 
