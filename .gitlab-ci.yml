@@ -15,13 +15,13 @@ before_script:
     - if: $CI_PIPELINE_SOURCE == "web"
 
 .cudnn_dev_image:template:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_13.0.0
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_13.1.0
 
 .cudnn_rel_image:template:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_13.0.0
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_13.1.0
 
 .cudnn_ga_image:template:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.16.0.29_13.0.0
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.17.1.4_13.1.0
 
 .device_matrix:template:
     parallel:
@@ -32,7 +32,7 @@ before_script:
 
 .fetch_cudnn_dev:template:
     cache:
-        - key: dev_cudnn_9_18_cuda_13_1
+        - key: dev_cudnn_9_19_cuda_13_1
           paths:
               - downloads
     before_script:
@@ -45,7 +45,7 @@ before_script:
 
 .fetch_cudnn_rel:template:
     cache:
-        - key: rel_cudnn_9_17_cuda_13_1
+        - key: rel_cudnn_9_18_cuda_13_1
           paths:
               - downloads
     before_script:
@@ -129,12 +129,12 @@ include:
 #     rules:
 #       - if: $CI_PIPELINE_SOURCE == "schedule"
 
-  - local: ci/job-template.yml
-    inputs:
-        cuda_version: "12.3.1"
-        cudnn_version: "9.0.0.312"
-    rules:
-      - if: $CI_PIPELINE_SOURCE == "schedule"
+#   - local: ci/job-template.yml
+#     inputs:
+#         cuda_version: "12.3.1"
+#         cudnn_version: "9.0.0.312"
+#     rules:
+#       - if: $CI_PIPELINE_SOURCE == "schedule"
 
 #   - local: ci/job-template.yml
 #     inputs:
@@ -174,8 +174,8 @@ include:
 
   - local: ci/job-template.yml
     inputs:
-        cuda_version: "13.0.0"
-        cudnn_version: "9.14.0.64"
+        cuda_version: "13.1.0"
+        cudnn_version: "9.17.1.4"
     rules:
         - if: $CI_PIPELINE_SOURCE == "schedule"
 

@@ -276,7 +276,9 @@ def build_cudnn_sdpa_chunk_graph(cudnn_handle, batch_size, h_q, h_k, h_v, d_qk, 
     return graph
 
 
-def execute_cudnn_sdpa_chunk(cudnn_handle, graph, q_chunk, k_chunk, v_chunk, seq_len_q, seq_len_kv, q_ragged_offset, o_ragged_offset, dtype, h_q, d_v):
+def execute_cudnn_sdpa_chunk(
+    cudnn_handle, graph, q_chunk, k_chunk, v_chunk, seq_len_q, seq_len_kv, q_ragged_offset, o_ragged_offset, dtype, h_q, d_qk, d_v, batch_size, chunk_size
+):
     total_q_tokens = q_chunk.shape[0]
     o_chunk = torch.empty(total_q_tokens, h_q, d_v, dtype=dtype, device="cuda")
 
@@ -297,6 +299,9 @@ def execute_cudnn_sdpa_chunk(cudnn_handle, graph, q_chunk, k_chunk, v_chunk, seq
     workspace = torch.empty(graph.get_workspace_size(), dtype=torch.uint8, device="cuda")
     cudnn.set_stream(handle=cudnn_handle, stream=torch.cuda.current_stream().cuda_stream)
 
+    q_chunk_shape = (batch_size, h_q, chunk_size, d_qk)
+    o_chunk_shape = (batch_size, h_q, chunk_size, d_v)
+
     override_uids = [
         UIDs.Q_UID.value,
         UIDs.RAGGED_Q_UID.value,
@@ -308,13 +313,13 @@ def execute_cudnn_sdpa_chunk(cudnn_handle, graph, q_chunk, k_chunk, v_chunk, seq
         UIDs.RAGGED_O_UID.value,
     ]
     override_shapes = [
-        q_chunk.shape,
+        q_chunk_shape,
         q_ragged_offset.shape,
         k_chunk.shape,
         v_chunk.shape,
         seq_len_q_4d.shape,
         seq_len_kv_4d.shape,
-        o_chunk.shape,
+        o_chunk_shape,
         o_ragged_offset.shape,
     ]
     override_strides = [
@@ -421,7 +426,21 @@ def execute_chunked_prefill_cudnn(cudnn_handle, config, q_full_thd, k_full_bhsd,
             cudnn_handle, batch_size, h_q, h_k, h_v, d_qk, d_v, chunk_size, kv_end, dtype, config.attn_scale, config.is_causal, causal_offset
         )
         o_chunk = execute_cudnn_sdpa_chunk(
-            cudnn_handle, graph, q_chunk, k_chunk_bhsd, v_chunk_bhsd, seq_len_q, seq_len_kv, q_ragged_offset, o_ragged_offset, dtype, h_q, d_v
+            cudnn_handle,
+            graph,
+            q_chunk,
+            k_chunk_bhsd,
+            v_chunk_bhsd,
+            seq_len_q,
+            seq_len_kv,
+            q_ragged_offset,
+            o_ragged_offset,
+            dtype,
+            h_q,
+            d_qk,
+            d_v,
+            batch_size,
+            chunk_size,
         )
 
         # Store output chunk back into full THD tensor

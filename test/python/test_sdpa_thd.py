@@ -613,6 +613,8 @@ def execute_cudnn_sdpa_thd(
     # Build the graph
     graph = build_cudnn_sdpa_thd_graph(cudnn_handle, config, seq_len_q, seq_len_kv, q_ragged_offset, o_ragged_offset, q_gpu, k_gpu, v_gpu, o_gpu)
 
+    q_shape = [config.batch_size, config.num_heads_q, config.max_seq_len_q, config.head_dim_qk]
+    o_shape = [config.batch_size, config.num_heads_q, config.max_seq_len_q, config.head_dim_v]
     # Create variant pack
     variant_pack = {
         UIDs.Q_UID.value: q_gpu,
@@ -643,13 +645,13 @@ def execute_cudnn_sdpa_thd(
         UIDs.RAGGED_O_UID.value,
     ]
     override_shapes = [
-        q_gpu.shape,
+        q_shape,
         q_ragged_offset.shape,
         k_gpu.shape,
         v_gpu.shape,
         seq_len_q_4d.shape,
         seq_len_kv_4d.shape,
-        o_gpu.shape,
+        o_shape,
         o_ragged_offset.shape,
     ]
     override_strides = [
@@ -721,8 +723,8 @@ def test_sdpa_thd_dynamic_shapes(cudnn_handle):
     if cudnn_version < "9.10.0":
         pytest.skip("THD layout requires cuDNN 9.10.0 or higher")
 
-    if torch.cuda.get_device_capability()[0] < 8:
-        pytest.skip("SDPA with THD layout requires SM80 or higher")
+    if torch.cuda.get_device_capability()[0] < 9:
+        pytest.skip("SDPA with THD layout requires SM90 or higher")
 
     print("\n" + "=" * 80)
     print("Test: SDPA with THD layout (basic)")
