@@ -29,8 +29,8 @@
 #include <cudnn_frontend.h>
 
 TEST_CASE("WoQ MoeGroupedMatmul", "[MoeGroupedMatmul][graph]") {
-#if (CUDNN_VERSION < 91900)
-    SKIP("MoE is not supported in cudnn versions prior to 9.19.0");
+#if (CUDNN_VERSION < 91800)
+    SKIP("MoE is not supported in cudnn versions prior to 9.18.0");
 #endif
 
     if (is_arch_supported_by_cudnn() == false) {

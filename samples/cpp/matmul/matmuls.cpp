@@ -615,8 +615,8 @@ TEST_CASE("Matmul with restricted shared memory", "[matmul][graph]") {
 }
 
 TEST_CASE("Matmul dynamic shape overrides", "[matmul][graph][dynamic_shape]") {
-#if (CUDNN_VERSION < 91900)
-    SKIP("Dynamic shape with overrides is not supported in cudnn versions prior to 9.19.0");
+#if (CUDNN_VERSION < 91800)
+    SKIP("Dynamic shape with overrides is not supported in cudnn versions prior to 9.18.0");
 #endif
 
     namespace fe = cudnn_frontend;
@@ -665,6 +665,7 @@ TEST_CASE("Matmul dynamic shape overrides", "[matmul][graph][dynamic_shape]") {
     C->set_uid(C_UID).set_output(true).set_data_type(fe::DataType_t::BFLOAT16);
 
     // For dynamic shape, recommend to query fallback plan to get a general good performance
+    // Heuristics Mode A is recommended if the dynamic problem shapes are similar in size
     REQUIRE(graph->build(handle, {fe::HeurMode_t::FALLBACK}).is_good());
 
     // run graph with dynamic shapes
