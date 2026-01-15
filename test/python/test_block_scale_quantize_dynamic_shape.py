@@ -43,8 +43,8 @@ class TestBlockScaleQuantizeMatmulDynamicShape:
     """
 
     @pytest.mark.skipif(
-        cudnn.backend_version() < 91900,
-        reason="block_scale_quantize requires cuDNN >= 9.19.0",
+        cudnn.backend_version() < 91800,
+        reason="block_scale_quantize requires cuDNN >= 9.18.0",
     )
     @pytest.mark.skipif(
         get_cc() < 100,
