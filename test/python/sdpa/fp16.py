@@ -533,11 +533,15 @@ def exec_sdpa(cfg, request, cudnn_handle):
             # zero out padded region of the output for comparison
             for i, (m, n) in enumerate(zip(seq_len_q_ref, seq_len_kv_ref)):
                 dQ_ref[i, :, m:, :] = 0
-                dQ_gpu[i, :, m:, :] = 0
                 dK_ref[i, :, n:, :] = 0
-                dK_gpu[i, :, n:, :] = 0
                 dV_ref[i, :, n:, :] = 0
-                dV_gpu[i, :, n:, :] = 0
+            
+            if cfg.is_ragged:
+                # zero out padded region as kernel wont do it
+                for i, (m, n) in enumerate(zip(seq_len_q_ref, seq_len_kv_ref)):
+                    dQ_gpu[i, :, m:, :] = 0
+                    dK_gpu[i, :, n:, :] = 0
+                    dV_gpu[i, :, n:, :] = 0
 
         torch.cuda.synchronize()
 
