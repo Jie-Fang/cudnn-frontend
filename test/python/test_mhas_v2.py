@@ -27,6 +27,7 @@ from sdpa.random_config import (
 from sdpa.fp16 import exec_sdpa
 from sdpa.fp8 import exec_sdpa_fp8
 from sdpa.blocked import fetch_blocked_tests, show_blocked_tests
+from sdpa.helpers import compute_total_elems
 
 # fmt: off
 
@@ -70,10 +71,10 @@ class SDPATestConfig:
             # print(f"head_group       = {self.cfg.head_group}")
             # print(f"layout           = {self.in_layout}->{self.out_layout}")
             print(f"basic_dims       = [b={self.cfg.batches}, h_q={self.cfg.h_q}, h_k={self.cfg.h_k}, h_v={self.cfg.h_v}, d_qk={self.cfg.d_qk}, d_v={self.cfg.d_v}, s_q={self.cfg.s_q}, s_kv={self.cfg.s_kv}]")
-            print(f"shape_q(b,h,s,d) = {self.cfg.shape_q}, strides={self.cfg.stride_q}, elems={self.cfg.elems_q}")
-            print(f"shape_k(b,h,s,d) = {self.cfg.shape_k}, strides={self.cfg.stride_k}, elems={self.cfg.elems_k}")
-            print(f"shape_v(b,h,s,d) = {self.cfg.shape_v}, strides={self.cfg.stride_v}, elems={self.cfg.elems_v}")
-            print(f"shape_o(b,h,s,d) = {self.cfg.shape_o}, strides={self.cfg.stride_o}, elems={self.cfg.elems_o}")
+            print(f"shape_q(b,h,s,d) = {self.cfg.shape_q}, strides={self.cfg.stride_q}, elems={compute_total_elems(self.cfg.shape_q, self.cfg.stride_q)}")
+            print(f"shape_k(b,h,s,d) = {self.cfg.shape_k}, strides={self.cfg.stride_k}, elems={compute_total_elems(self.cfg.shape_k, self.cfg.stride_k)}")
+            print(f"shape_v(b,h,s,d) = {self.cfg.shape_v}, strides={self.cfg.stride_v}, elems={compute_total_elems(self.cfg.shape_v, self.cfg.stride_v)}")
+            print(f"shape_o(b,h,s,d) = {self.cfg.shape_o}, strides={self.cfg.stride_o}, elems={compute_total_elems(self.cfg.shape_o, self.cfg.stride_o)}")
             
             print(f"is_infer         = {self.cfg.is_infer}")
             print(f"is_padding       = {self.cfg.is_padding} ({'ragged' if self.cfg.is_ragged else 'no ragged'})")
@@ -104,6 +105,10 @@ class SDPATestConfig:
                 # Convert torch dtype to string
                 if cfg_dict.get('data_type') is not None:
                     cfg_dict['data_type'] = str(cfg_dict['data_type'])
+                # Remove derived fields that can be recomputed from basic dims
+                # Shapes are derived from: batches, h_q/h_k/h_v, s_q/s_kv, d_qk/d_v
+                for key in ['shape_q', 'shape_k', 'shape_v', 'shape_o']:
+                    cfg_dict.pop(key, None)
                 print(f"repro_cmd        = pytest -vv -s -rA {request.module.__file__}::test_repro --repro \"{repr(cfg_dict)}\"")
         elif request.config.option.dryrun == 2:
             print(f"\npytest -vv -s -rA {request.module.__file__}::{request.node.name} --geom_seed {self.geom_seed} --data_seed {self.data_seed}")
@@ -788,6 +793,9 @@ def test_repro(env_info, request, cudnn_handle):
             repro_dict['data_type'] = torch.float32
 
     cfg.cfg = ExecConfig(**repro_dict)
+    # Fill in derived fields (shapes, strides, elems) from basic dims
+    # If strides are not provided, default BHSD strides are computed automatically
+    cfg.cfg.fill_derived_fields()
     print(f"cfg.cfg: {cfg.cfg}")
 
     cfg.showConfig((1,1), request, False)

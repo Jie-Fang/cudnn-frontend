@@ -21,6 +21,11 @@ def get_fp8_scale_factor(amax: float, dtype: torch.dtype, fudge_factor: float = 
 def get_fp8_descale_factor(amax: float, dtype: torch.dtype, fudge_factor: float = 0.25, epsilon = 0.0625):
     return 1.0 / get_fp8_scale_factor(amax, dtype, fudge_factor, epsilon)
 
+def compute_total_elems(shape, strides):
+    """Compute total element count (max offset + 1) from shape and strides."""
+    return sum((s - 1) * st for s, st in zip(shape, strides)) + 1
+
+
 def convert_to_cudnn_type(torch_type):
     if torch_type == torch.float16:
         return cudnn.data_type.HALF
@@ -40,20 +45,23 @@ def convert_to_cudnn_type(torch_type):
         assert False, "unsupported tensor data type"
 
 def alloc_tensor(shape, data_type, *, elems=None, strides=None, rng=None, mean=0.0, std=1.0, margins=512):
-    if elems is None and strides is None:
+    if strides is None:
+        # Compute default contiguous strides
         if hasattr(shape, '__iter__'):
             strides = []
             prod = 1
             for dim in reversed(shape):
                 strides.insert(0, prod)
                 prod *= int(dim)
-            elems = prod
+            if elems is None:
+                elems = prod
         else:
-            elems = int(shape)
+            if elems is None:
+                elems = int(shape)
             strides = (1,)
             shape = (shape,)
-    else:
-        assert elems is not None and strides is not None, "wrong input"
+    elif elems is None:
+        elems = compute_total_elems(shape, strides)
 
     assert margins >= 0 and type(margins) == int, "wrong input"
 

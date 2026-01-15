@@ -14,13 +14,13 @@ def generate_test_seeds(*, num_tests, rng_seed):
 
 
 def get_strides_from_indices(shape, indices=[0, 1, 2, 3], gaps=[0, 0, 0, 0], rng_geom=None):
+    """Compute strides for a given dimension order and optional gaps."""
     assert len(shape) == len(gaps) == 4 and sorted(indices) == [0, 1, 2, 3] and indices[3] == 3, "wrong input"
     strides = [0, 0, 0, 1]  # d should always have stride 1
     curr_stride = 1
 
     for i in range(3, 0, -1):
         j = indices[i]
-
         curr_stride = (shape[j] + gaps[j]) * curr_stride
         j = indices[i - 1]
         strides[j] = curr_stride
@@ -29,14 +29,24 @@ def get_strides_from_indices(shape, indices=[0, 1, 2, 3], gaps=[0, 0, 0, 0], rng
         if rng_geom is not None and shape[j] == 1:
             strides[j] = max(strides[j], rng_geom.choice([0, 3331333, 99990001]))
 
-    total_size = shape[j] * curr_stride
-    return tuple(strides), tuple(gaps), total_size
+    return tuple(strides)
 
 
 def get_strides_from_layout(shape, layout, gaps=[0, 0, 0, 0], rng_geom=None):
+    """Compute strides for a given layout string (e.g. 'bshd', 'bhsd')."""
     assert "".join(sorted(layout)) == "bdhs", f"wrong layout '{layout}'"
     indices = ["bhsd".index(ch) for ch in layout]
     return get_strides_from_indices(shape, indices, gaps, rng_geom)
+
+
+def compute_default_BHSD_strides(shape):
+    """Compute default BHSD strides (rightmost dim is innermost with stride=1, no gaps)."""
+    if shape is None:
+        return None
+    strides = [1] * len(shape)
+    for i in range(len(shape) - 2, -1, -1):
+        strides[i] = strides[i + 1] * shape[i + 1]
+    return tuple(strides)
 
 
 @dataclass
@@ -74,19 +84,15 @@ class ExecConfig:
 
     shape_q: tuple[int, int, int, int] = None
     stride_q: tuple[int, int, int, int] = None
-    elems_q: int = None
 
     shape_k: tuple[int, int, int, int] = None
     stride_k: tuple[int, int, int, int] = None
-    elems_k: int = None
 
     shape_v: tuple[int, int, int, int] = None
     stride_v: tuple[int, int, int, int] = None
-    elems_v: int = None
 
     shape_o: tuple[int, int, int, int] = None
     stride_o: tuple[int, int, int, int] = None
-    elems_o: int = None
 
     seq_len_q: list[int] = field(default_factory=list)
     seq_len_kv: list[int] = field(default_factory=list)
@@ -94,6 +100,32 @@ class ExecConfig:
     dropout_prob: float = 0.0
 
     implementation: cudnn.attention_implementation = cudnn.attention_implementation.AUTO
+
+    def fill_derived_fields(self):
+        """
+        Fill in derived fields (shapes, strides) from basic dims.
+        - Shapes are computed from basic dims (batches, h_q/k/v, s_q/kv, d_qk/v)
+        - Strides default to BHSD layout if not provided
+        """
+        # Compute shapes from basic dims if not provided
+        if self.shape_q is None and all(x is not None for x in [self.batches, self.h_q, self.s_q, self.d_qk]):
+            self.shape_q = (self.batches, self.h_q, self.s_q, self.d_qk)
+        if self.shape_k is None and all(x is not None for x in [self.batches, self.h_k, self.s_kv, self.d_qk]):
+            self.shape_k = (self.batches, self.h_k, self.s_kv, self.d_qk)
+        if self.shape_v is None and all(x is not None for x in [self.batches, self.h_v, self.s_kv, self.d_v]):
+            self.shape_v = (self.batches, self.h_v, self.s_kv, self.d_v)
+        if self.shape_o is None and all(x is not None for x in [self.batches, self.h_q, self.s_q, self.d_v]):
+            self.shape_o = (self.batches, self.h_q, self.s_q, self.d_v)
+
+        # Compute default BHSD strides if not provided
+        if self.stride_q is None and self.shape_q is not None:
+            self.stride_q = compute_default_BHSD_strides(self.shape_q)
+        if self.stride_k is None and self.shape_k is not None:
+            self.stride_k = compute_default_BHSD_strides(self.shape_k)
+        if self.stride_v is None and self.shape_v is not None:
+            self.stride_v = compute_default_BHSD_strides(self.shape_v)
+        if self.stride_o is None and self.shape_o is not None:
+            self.stride_o = compute_default_BHSD_strides(self.shape_o)
 
 
 class RandomizationContext:
@@ -165,8 +197,8 @@ class RandomizationContext:
         randoms_.shape_o = (randoms_.batches, randoms_.h_q, randoms_.s_q, randoms_.d_v)
 
         if randoms_.is_ragged:  # Ideally Q ragged and O ragged
-            randoms_.stride_q, _, randoms_.elems_q = get_strides_from_layout(randoms_.shape_q, "bshd")
-            randoms_.stride_o, _, randoms_.elems_o = get_strides_from_layout(randoms_.shape_o, "bshd")
+            randoms_.stride_q = get_strides_from_layout(randoms_.shape_q, "bshd")
+            randoms_.stride_o = get_strides_from_layout(randoms_.shape_o, "bshd")
 
         else:
             indices = [0, 1, 2]
@@ -181,8 +213,8 @@ class RandomizationContext:
                 gaps_q.append(elem_align * rng.randint(0, 2))
                 gaps_o.append(elem_align * rng.randint(0, 2))
 
-            (randoms_.stride_q, randoms_.gaps_q, randoms_.elems_q) = get_strides_from_indices(randoms_.shape_q, indices, gaps_q, rng)
-            (randoms_.stride_o, randoms_.gaps_o, randoms_.elems_o) = get_strides_from_indices(randoms_.shape_o, indices, gaps_o, rng)
+            randoms_.stride_q = get_strides_from_indices(randoms_.shape_q, indices, gaps_q, rng)
+            randoms_.stride_o = get_strides_from_indices(randoms_.shape_o, indices, gaps_o, rng)
 
         # Decide K, V
         randoms_.shape_k = (
@@ -194,8 +226,8 @@ class RandomizationContext:
         randoms_.shape_v = (randoms_.batches, randoms_.h_v, randoms_.s_kv, randoms_.d_v)
 
         if randoms_.is_ragged:  # Ideally K ragged and V ragged
-            randoms_.stride_k, _, randoms_.elems_k = get_strides_from_layout(randoms_.shape_k, "bshd")
-            randoms_.stride_v, _, randoms_.elems_v = get_strides_from_layout(randoms_.shape_v, "bshd")
+            randoms_.stride_k = get_strides_from_layout(randoms_.shape_k, "bshd")
+            randoms_.stride_v = get_strides_from_layout(randoms_.shape_v, "bshd")
 
         else:
             indices = [0, 1, 2]
@@ -210,8 +242,8 @@ class RandomizationContext:
                 gaps_k.append(elem_align * rng.randint(0, 2))
                 gaps_v.append(elem_align * rng.randint(0, 2))
 
-            (randoms_.stride_k, randoms_.gaps_k, randoms_.elems_k) = get_strides_from_indices(randoms_.shape_k, indices, gaps_k, rng)
-            (randoms_.stride_v, randoms_.gaps_v, randoms_.elems_v) = get_strides_from_indices(randoms_.shape_v, indices, gaps_v, rng)
+            randoms_.stride_k = get_strides_from_indices(randoms_.shape_k, indices, gaps_k, rng)
+            randoms_.stride_v = get_strides_from_indices(randoms_.shape_v, indices, gaps_v, rng)
 
         return randoms_
 

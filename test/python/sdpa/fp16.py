@@ -71,9 +71,9 @@ def exec_sdpa(cfg, request, cudnn_handle):
 
     rng_data_gen = torch.Generator(device="cuda").manual_seed(cfg.rng_data_seed)
 
-    (q_gpu, _, _) = alloc_tensor(cfg.shape_q, cfg.data_type, elems=cfg.elems_q, strides=cfg.stride_q, rng=rng_data_gen, mean=-0.5, std=1.0)
-    (k_gpu, _, _) = alloc_tensor(cfg.shape_k, cfg.data_type, elems=cfg.elems_k, strides=cfg.stride_k, rng=rng_data_gen, mean=-0.5, std=1.0)
-    (v_gpu, _, _) = alloc_tensor(cfg.shape_v, cfg.data_type, elems=cfg.elems_v, strides=cfg.stride_v, rng=rng_data_gen, mean=-0.5, std=1.0)
+    (q_gpu, _, _) = alloc_tensor(cfg.shape_q, cfg.data_type, strides=cfg.stride_q, rng=rng_data_gen, mean=-0.5, std=1.0)
+    (k_gpu, _, _) = alloc_tensor(cfg.shape_k, cfg.data_type, strides=cfg.stride_k, rng=rng_data_gen, mean=-0.5, std=1.0)
+    (v_gpu, _, _) = alloc_tensor(cfg.shape_v, cfg.data_type, strides=cfg.stride_v, rng=rng_data_gen, mean=-0.5, std=1.0)
     (bias_gpu, _, _) = (alloc_tensor((1, cfg.h_q, cfg.s_q, cfg.s_kv), cfg.data_type, rng=rng_data_gen, mean=0.0, std=1.0) if cfg.is_bias else (None, None, None))
 
     TILE_M = 128
@@ -81,11 +81,11 @@ def exec_sdpa(cfg, request, cudnn_handle):
     block_mask_gpu = torch.randint(0, 256, (cfg.batches, cfg.h_q, (cfg.s_q + TILE_M - 1) // TILE_M, ((cfg.s_kv + TILE_N - 1) // TILE_N + 7) // 8), dtype=torch.uint8, device="cuda")
 
     if not cfg.is_infer:
-        (dQ_gpu, dQ_sep, dQ_raw) = alloc_tensor(cfg.shape_q, cfg.data_type, elems=cfg.elems_q, strides=cfg.stride_q)
-        (dK_gpu, dK_sep, dK_raw) = alloc_tensor(cfg.shape_k, cfg.data_type, elems=cfg.elems_k, strides=cfg.stride_k)
-        (dV_gpu, dV_sep, dV_raw) = alloc_tensor(cfg.shape_v, cfg.data_type, elems=cfg.elems_v, strides=cfg.stride_v)
+        (dQ_gpu, dQ_sep, dQ_raw) = alloc_tensor(cfg.shape_q, cfg.data_type, strides=cfg.stride_q)
+        (dK_gpu, dK_sep, dK_raw) = alloc_tensor(cfg.shape_k, cfg.data_type, strides=cfg.stride_k)
+        (dV_gpu, dV_sep, dV_raw) = alloc_tensor(cfg.shape_v, cfg.data_type, strides=cfg.stride_v)
         (dBias_gpu, dBias_sep, dBias_raw) = (alloc_tensor((1, cfg.h_q, cfg.s_q, cfg.s_kv), cfg.data_type) if cfg.is_bias else (None, None, None))
-        (dO_gpu, dO_sep, dO_raw) = alloc_tensor(cfg.shape_o, cfg.data_type, elems=cfg.elems_o, strides=cfg.stride_o, rng=rng_data_gen, mean=0.0, std=0.1)
+        (dO_gpu, dO_sep, dO_raw) = alloc_tensor(cfg.shape_o, cfg.data_type, strides=cfg.stride_o, rng=rng_data_gen, mean=0.0, std=0.1)
 
     # Sequence lengths for gpu, must be a four dimensional tensor.
     seq_len_q_gpu = seq_len_kv_gpu = None
@@ -114,7 +114,7 @@ def exec_sdpa(cfg, request, cudnn_handle):
         v_ragged_offset_gpu = (prefix_sum(seq_len_kv_gpu) * cfg.h_v * cfg.d_v).to(torch.int64)
         o_ragged_offset_gpu = (prefix_sum(seq_len_q_gpu) * cfg.h_q * cfg.d_v).to(torch.int64)
 
-    (o_gpu, o_sep, o_raw) = alloc_tensor(cfg.shape_o, cfg.data_type, elems=cfg.elems_o, strides=cfg.stride_o)
+    (o_gpu, o_sep, o_raw) = alloc_tensor(cfg.shape_o, cfg.data_type, strides=cfg.stride_o)
     (stats_gpu, stats_sep, stats_raw) = (alloc_tensor((cfg.batches, cfg.h_q, cfg.s_q, 1), torch.float32) if not cfg.is_infer else (None, None, None))
 
     container_k_gpu  = None
