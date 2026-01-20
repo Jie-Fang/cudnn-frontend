@@ -21,7 +21,7 @@ def exec_sdpa(cfg, request, cudnn_handle):
     # Do not run any test when --dryrun option is provided.
 
     if request.config.option.dryrun:
-        pytest.skip("dry run mode")
+        pytest.skip("dryrun")
 
     # ============================
     # Basic parameter check.

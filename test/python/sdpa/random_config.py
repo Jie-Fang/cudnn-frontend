@@ -51,8 +51,17 @@ def compute_default_BHSD_strides(shape):
 
 @dataclass
 class ExecConfig:
+    # Registry for enum-like fields: field_name -> module/class to getattr from
+    _ENUM_FIELDS = {
+        'data_type': torch,
+        'output_type': torch,
+        'diag_align': cudnn.diagonal_alignment,
+        'implementation': cudnn.attention_implementation,
+    }
+
     data_type: torch.dtype = None
     output_type: torch.dtype = None
+    rng_geom_seed: int = None
     rng_data_seed: int = None
 
     is_alibi: bool = None
@@ -127,6 +136,54 @@ class ExecConfig:
         if self.stride_o is None and self.shape_o is not None:
             self.stride_o = compute_default_BHSD_strides(self.shape_o)
 
+    def serialize(self) -> dict:
+        """Convert config to a serializable dict for repro commands."""
+        cfg_dict = asdict(self)
+        for field, enum_cls in self._ENUM_FIELDS.items():
+            if cfg_dict.get(field) is not None:
+                val = cfg_dict[field]
+                if hasattr(val, 'name'):
+                    module_prefix = enum_cls.__module__.split('.')[0]
+                    cfg_dict[field] = f"{module_prefix}.{enum_cls.__name__}.{val.name}"
+                else:
+                    cfg_dict[field] = str(val)
+        return cfg_dict
+
+    @classmethod
+    def deserialize(cls, d: dict) -> "ExecConfig":
+        """Create ExecConfig from a serialized dict."""
+        for field, enum_cls in cls._ENUM_FIELDS.items():
+            if d.get(field) is not None:
+                name = d[field].split('.')[-1]
+                assert hasattr(enum_cls, name), f"Invalid {field}: {name}"
+                d[field] = getattr(enum_cls, name)
+        cfg = cls(**d)
+        cfg.fill_derived_fields()
+        return cfg
+
+    def to_repro_cmd(self, test_file: str) -> str:
+        """Generate a readable multi-line repro command with aligned backslashes."""
+        cfg_dict = self.serialize()
+        indent = " " * 4
+        # Build lines without trailing backslash first
+        lines = [
+            "pytest -vv -s -rA --no-header --tb=short",
+            f"{indent}{test_file}::test_repro",
+            f"{indent}--repro \"",
+            f"{indent}{indent}" + "{",
+        ]
+        items = list(cfg_dict.items())
+        for i, (k, v) in enumerate(items):
+            comma = "," if i < len(items) - 1 else ""
+            lines.append(f"{indent}{indent}{indent}'{k}': {repr(v)}{comma}")
+        lines.append(f"{indent}{indent}" + "}")
+        lines.append(f'{indent}"')
+        # Find max length and align backslashes (except last line)
+        max_len = max(len(line) for line in lines[:-1])
+        aligned = [f"{line:<{max_len}} \\" for line in lines[:-1]]
+        aligned.append(lines[-1])
+        return "\n".join(aligned)
+
 
 class RandomizationContext:
     def __init__(self, **kwargs):
@@ -138,12 +195,13 @@ class RandomizationContext:
     def __exit__(self, exc_type, exc_value, traceback):
         pass
 
-    def __call__(self, rng, rng_data_seed):
+    def __call__(self, rng, rng_data_seed, rng_geom_seed=None):
 
         randoms_ = ExecConfig()
 
         randoms = {}
 
+        randoms_.rng_geom_seed = rng_geom_seed
         randoms_.rng_data_seed = rng_data_seed
 
         randoms["rng_data_seed"] = rng_data_seed

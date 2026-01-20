@@ -26,7 +26,9 @@ def cudnn_handle():
 # =================== PyTest Hooks =====================
 def pytest_load_initial_conftests(args, early_config, parser):
     if not any(arg.startswith("--tb=") for arg in args):
-        args.append("--tb=short")
+        args.insert(0, "--tb=short")
+    if "--no-header" not in args:
+        args.insert(0, "--no-header")
 
 
 def pytest_configure(config):

@@ -10,7 +10,6 @@ import random
 import torch
 import sys
 from datetime import datetime
-from dataclasses import asdict
 
 from sdpa.random_config import (
     ExecConfig,
@@ -26,8 +25,8 @@ from sdpa.random_config import (
 )
 from sdpa.fp16 import exec_sdpa
 from sdpa.fp8 import exec_sdpa_fp8
-from sdpa.blocked import fetch_blocked_tests, show_blocked_tests
-from sdpa.helpers import compute_total_elems
+from sdpa.blocked import fetch_blocked_tests
+from sdpa.helpers import print_section_begin, print_section_end
 
 # fmt: off
 
@@ -56,120 +55,16 @@ class SDPATestConfig:
         self.cfg = ExecConfig()
 
 
-    def showConfig(self, test_no, request, reg_run=True):
-        if request.config.option.dryrun == 0 or request.config.option.dryrun == 1:
-            if request.config.option.dryrun == 0:
-                print("\n" + "=" * 90)
-            else:
-                print("\n" + "=" * 40 + "Dry-RUN" + "=" * 40)
-            print(f"#### Test #{test_no[0]} of {test_no[1]} at", datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "\n")
-            print(f"test_name        = {request.node.name}")
-            # print(f"geom_seed        = {self.geom_seed}")
-            # print(f"data_seed        = {self.data_seed}")
-            print(f"platform_info    = {self.gpu_arch} ({self.gpu_info}), cudnn_ver={self.cudnn_ver}")
-            print(f"rng_data_seed    = {self.cfg.rng_data_seed}")
-            # print(f"head_group       = {self.cfg.head_group}")
-            # print(f"layout           = {self.in_layout}->{self.out_layout}")
-            print(f"basic_dims       = [b={self.cfg.batches}, h_q={self.cfg.h_q}, h_k={self.cfg.h_k}, h_v={self.cfg.h_v}, d_qk={self.cfg.d_qk}, d_v={self.cfg.d_v}, s_q={self.cfg.s_q}, s_kv={self.cfg.s_kv}]")
-            print(f"shape_q(b,h,s,d) = {self.cfg.shape_q}, strides={self.cfg.stride_q}, elems={compute_total_elems(self.cfg.shape_q, self.cfg.stride_q)}")
-            print(f"shape_k(b,h,s,d) = {self.cfg.shape_k}, strides={self.cfg.stride_k}, elems={compute_total_elems(self.cfg.shape_k, self.cfg.stride_k)}")
-            print(f"shape_v(b,h,s,d) = {self.cfg.shape_v}, strides={self.cfg.stride_v}, elems={compute_total_elems(self.cfg.shape_v, self.cfg.stride_v)}")
-            print(f"shape_o(b,h,s,d) = {self.cfg.shape_o}, strides={self.cfg.stride_o}, elems={compute_total_elems(self.cfg.shape_o, self.cfg.stride_o)}")
-            
-            print(f"is_infer         = {self.cfg.is_infer}")
-            print(f"is_padding       = {self.cfg.is_padding} ({'ragged' if self.cfg.is_ragged else 'no ragged'})")
-            print(f"is_alibi         = {self.cfg.is_alibi}")
-            print(f"is_paged         = {self.cfg.is_paged} (block_size={self.cfg.block_size})")
-            print(f"is_bias          = {self.cfg.is_bias}")
-            print(f"is_block_mask    = {self.cfg.is_block_mask}")
-            print(f"is_dropout       = {self.cfg.is_dropout}")
-            if self.cfg.is_infer == False:
-                print(f"is_determin      = {self.cfg.is_determin}")
-            print(f"diag_align       = {self.cfg.diag_align}")
-            print(f"left_bound       = {self.cfg.left_bound}", '(NO BOUND)' if self.cfg.left_bound is None else '')
-            print(f"right_bound      = {self.cfg.right_bound}", '(NO BOUND)' if self.cfg.right_bound is None else '')
-            # print(f"seq_len_q        = {self.seq_len_q}")
-            # print(f"seq_len_kv       = {self.seq_len_kv}")
-            print(f"data_type        = {self.cfg.data_type}")
-            if self.cfg.output_type and self.cfg.output_type != self.cfg.data_type:
-                print(f"output_type      = {self.cfg.output_type}")
-            print(f"implementation   = {self.cfg.implementation.name}")
-            if reg_run:
-                # Convert enums to integers and handle torch dtypes for proper serialization
-                cfg_dict = asdict(self.cfg)
-                # Convert enum values to integers
-                if cfg_dict.get('diag_align') is not None:
-                    cfg_dict['diag_align'] = cfg_dict['diag_align'].value
-                if cfg_dict.get('implementation') is not None:
-                    cfg_dict['implementation'] = cfg_dict['implementation'].name
-                # Convert torch dtype to string
-                if cfg_dict.get('data_type') is not None:
-                    cfg_dict['data_type'] = str(cfg_dict['data_type'])
-                # Remove derived fields that can be recomputed from basic dims
-                # Shapes are derived from: batches, h_q/h_k/h_v, s_q/s_kv, d_qk/d_v
-                for key in ['shape_q', 'shape_k', 'shape_v', 'shape_o']:
-                    cfg_dict.pop(key, None)
-                print(f"repro_cmd        = pytest -vv -s -rA {request.module.__file__}::test_repro --repro \"{repr(cfg_dict)}\"")
-        elif request.config.option.dryrun == 2:
-            print(f"\npytest -vv -s -rA {request.module.__file__}::{request.node.name} --geom_seed {self.geom_seed} --data_seed {self.data_seed}")
-        elif request.config.option.dryrun == 3:
-            print(f"repro_cmd        = pytest -vv -s -rA {request.module.__file__}::{request.node.name} --geom_seed {self.geom_seed} --data_seed {self.data_seed}")
-
-        else:
-            assert False, "wrong --dryrun command line option"
-
-        # Make sure to flush everything out.
-        print(" ", flush=True)
-
-
-    def avoid_invalid_configs(self, avoid_invalid_configs):
-        if avoid_invalid_configs == avoid_invalid_configs.ALWAYS:
-            # LIMIT: always is_determin=True in inference.
-            if self.is_infer:
-                self.is_determin = True
-
-            # LIMIT: Paged attention only in inference.
-            if not self.is_infer:
-                self.is_paged = False
-
-            # LIMIT: Paged caches can only be used in combination with padding mask (variable sequence length).
-            if self.is_paged and not self.is_padding:
-                self.is_paged = False
-
-            # LIMIT: Paged caches cannot be used with ragged offsets (packed variable sequence lengths).
-            if self.is_paged and self.is_ragged:
-                self.is_paged = False
-        
-            # LIMIT: left and right bounds are only supported with is_dropout=False, is_bias=False.
-            if self.left_bound is not None and self.right_bound is not None:
-                self.is_dropout = False
-                self.is_bias = False
-
-            # LIMIT: when alibi mask is used, diagonal_band_right_bound needs to be exactly 0.
-            if self.is_alibi and self.right_bound != 0:
-                self.is_alibi = False
-
-            # LIMIT: bottom right causal mask is only supported with is_bias=False, is_alibi=False, is_dropout=False.
-            if self.diag_align == self.diag_align.BOTTOM_RIGHT and (self.left_bound is not None or self.right_bound is not None):
-                self.is_bias    = False
-                self.is_alibi   = False
-                self.is_dropout = False
-
-            # LIMIT: Left or right bounds are only supported with is_dropout=False, is_bias=False.
-            if self.left_bound is not None or self.right_bound is not None:
-                self.is_dropout = False
-                self.is_bias    = False
-
-            # LIMIT: Left bound (a.k.a sliding window) does not support s_q > s_kv
-            if self.left_bound is not None and self.s_q.val > self.s_kv.val:
-                self.left_bound = None
-
-            # LIMIT: Bottom right causal mask does not support s_q > s_kv. 
-            if self.s_q.val > self.s_kv.val and self.diag_align == self.diag_align.BOTTOM_RIGHT and self.right_bound is not None:
-                self.right_bound = None
-            
-            if not self.is_infer:
-                self.is_block_mask = False
+    def showConfig(self, test_no, request):
+        is_dryrun = request.config.option.dryrun
+        print()
+        print_section_begin("DRY-RUN" if is_dryrun else "")
+        print(f"#### Test #{test_no[0]} of {test_no[1]} at", datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "\n")
+        print(f"test_name        = {request.node.name}")
+        print(f"platform_info    = {self.gpu_arch} ({self.gpu_info}), cudnn_ver={self.cudnn_ver}")
+        print()
+        print(self.cfg.to_repro_cmd(request.module.__file__))
+        print(flush=True)
 
 
 @pytest.fixture(scope="package")
@@ -186,7 +81,6 @@ def env_info(request):
     cudnn_ver    = str(torch.backends.cudnn.version())
 
     blocked_tests = fetch_blocked_tests(gpu_arch, cudnn_ver)
-    show_blocked_tests(blocked_tests, gpu_arch, cudnn_ver)
 
     return {"gpu_arch": gpu_arch, "gpu_info": gpu_info, "cudnn_ver": cudnn_ver, "blocked_tests": blocked_tests}
 
@@ -205,8 +99,6 @@ def test_sdpa_random_fwd_L0(env_info, test_no, request, cudnn_handle):
 
     test = SDPATestConfig(**env_info, implementation=cudnn.attention_implementation.AUTO)
 
-    print(f"test: {test} hash {abs(hash(test_no))}")
-
     geom_seed = abs(hash(test_no))
     data_seed = test_no[2]
 
@@ -224,9 +116,9 @@ def test_sdpa_random_fwd_L0(env_info, test_no, request, cudnn_handle):
         is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 0, "padded" : 1, "full" : 1}),
         stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "disabled" : 1}),
     ) as randomization_ctx:
-        test.cfg = randomization_ctx(rng, data_seed)
+        test.cfg = randomization_ctx(rng, data_seed, geom_seed)
 
-    test.showConfig(test_no, request, reg_run=True)
+    test.showConfig(test_no, request)
 
     exec_sdpa(test.cfg, request, cudnn_handle)
 
@@ -236,8 +128,6 @@ def test_sdpa_random_fwd_L0(env_info, test_no, request, cudnn_handle):
 def test_sdpa_random_fwd_unified_L0(env_info, test_no, request, cudnn_handle):
 
     test = SDPATestConfig(**env_info, implementation=cudnn.attention_implementation.AUTO)
-
-    print(f"test: {test} hash {abs(hash(test_no))}")
 
     geom_seed = abs(hash(test_no))
     data_seed = test_no[2]
@@ -256,10 +146,10 @@ def test_sdpa_random_fwd_unified_L0(env_info, test_no, request, cudnn_handle):
         is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 0, "padded" : 1, "full" : 1}),
         stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "disabled" : 1}),
     ) as randomization_ctx:
-        test.cfg = randomization_ctx(rng, data_seed)
+        test.cfg = randomization_ctx(rng, data_seed, geom_seed)
     test.cfg.implementation = getattr(cudnn.attention_implementation, request.config.getoption("--implementation") or "", cudnn.attention_implementation.UNIFIED)
 
-    test.showConfig(test_no, request, reg_run=True)
+    test.showConfig(test_no, request)
 
     exec_sdpa(test.cfg, request, cudnn_handle)
 
@@ -273,8 +163,6 @@ def test_sdpa_random_fwd_unified_L0(env_info, test_no, request, cudnn_handle):
 def test_sdpa_random_bwd_L0(env_info, test_no, request, cudnn_handle):
 
     test = SDPATestConfig(**env_info, implementation=cudnn.attention_implementation.AUTO)
-
-    print(f"test: {test} hash {abs(hash(test_no))}")
 
     geom_seed = abs(hash(test_no))
     data_seed = test_no[2]
@@ -294,10 +182,10 @@ def test_sdpa_random_bwd_L0(env_info, test_no, request, cudnn_handle):
         stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "disabled" : 1}),
         is_deterministic=RandomChoice({True : 3, False : 1}),
     ) as randomization_ctx:
-        test.cfg = randomization_ctx(rng, data_seed)
+        test.cfg = randomization_ctx(rng, data_seed, geom_seed)
 
     test.cfg.is_infer = False
-    test.showConfig(test_no, request, reg_run=True)
+    test.showConfig(test_no, request)
 
     exec_sdpa(test.cfg, request, cudnn_handle)
 
@@ -312,8 +200,6 @@ def test_sdpa_random_sq1_L0(env_info, test_no, request, cudnn_handle):
 
     test = SDPATestConfig(**env_info, implementation=cudnn.attention_implementation.AUTO)
 
-    print(f"test: {test} hash {abs(hash(test_no))}")
-
     geom_seed = abs(hash(test_no))
     data_seed = test_no[2]
 
@@ -331,9 +217,9 @@ def test_sdpa_random_sq1_L0(env_info, test_no, request, cudnn_handle):
         is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 0, "padded" : 0, "full" : 1}),
         stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "disabled" : 1}),
     ) as randomization_ctx:
-        test.cfg = randomization_ctx(rng, data_seed)
+        test.cfg = randomization_ctx(rng, data_seed, geom_seed)
 
-    test.showConfig(test_no, request, reg_run=True)
+    test.showConfig(test_no, request)
 
     exec_sdpa(test.cfg, request, cudnn_handle)
 
@@ -343,8 +229,6 @@ def test_sdpa_random_sq1_L0(env_info, test_no, request, cudnn_handle):
 def test_sdpa_random_sq1_unified_L0(env_info, test_no, request, cudnn_handle):
 
     test = SDPATestConfig(**env_info, implementation=cudnn.attention_implementation.AUTO)
-
-    print(f"test: {test} hash {abs(hash(test_no))}")
 
     geom_seed = abs(hash(test_no))
     data_seed = test_no[2]
@@ -363,10 +247,10 @@ def test_sdpa_random_sq1_unified_L0(env_info, test_no, request, cudnn_handle):
         is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 0, "padded" : 0, "full" : 1}),
         stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "disabled" : 1}),
     ) as randomization_ctx:
-        test.cfg = randomization_ctx(rng, data_seed)
+        test.cfg = randomization_ctx(rng, data_seed, geom_seed)
     test.cfg.implementation = getattr(cudnn.attention_implementation, request.config.getoption("--implementation") or "", cudnn.attention_implementation.UNIFIED)
 
-    test.showConfig(test_no, request, reg_run=True)
+    test.showConfig(test_no, request)
 
     exec_sdpa(test.cfg, request, cudnn_handle)
 
@@ -381,8 +265,6 @@ def test_sdpa_random_lean_attn_L0(env_info, test_no, request, cudnn_handle):
 
     test = SDPATestConfig(**env_info, implementation=cudnn.attention_implementation.AUTO)
 
-    print(f"test: {test} hash {abs(hash(test_no))}")
-
     geom_seed = abs(hash(test_no))
     data_seed = test_no[2]
 
@@ -400,9 +282,9 @@ def test_sdpa_random_lean_attn_L0(env_info, test_no, request, cudnn_handle):
         is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 0, "padded" : 1, "full" : 1}),
         stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "disabled" : 1}),
     ) as randomization_ctx:
-        test.cfg = randomization_ctx(rng, data_seed)
+        test.cfg = randomization_ctx(rng, data_seed, geom_seed)
 
-    test.showConfig(test_no, request, reg_run=True)
+    test.showConfig(test_no, request)
 
     exec_sdpa(test.cfg, request, cudnn_handle)
 
@@ -412,8 +294,6 @@ def test_sdpa_random_lean_attn_L0(env_info, test_no, request, cudnn_handle):
 def test_sdpa_random_lean_attn_unified_L0(env_info, test_no, request, cudnn_handle):
 
     test = SDPATestConfig(**env_info, implementation=cudnn.attention_implementation.AUTO)
-
-    print(f"test: {test} hash {abs(hash(test_no))}")
 
     geom_seed = abs(hash(test_no))
     data_seed = test_no[2]
@@ -432,10 +312,10 @@ def test_sdpa_random_lean_attn_unified_L0(env_info, test_no, request, cudnn_hand
         is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 0, "padded" : 1, "full" : 1}),
         stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "disabled" : 1}),
     ) as randomization_ctx:
-        test.cfg = randomization_ctx(rng, data_seed)
+        test.cfg = randomization_ctx(rng, data_seed, geom_seed)
     test.cfg.implementation = getattr(cudnn.attention_implementation, request.config.getoption("--implementation") or "", cudnn.attention_implementation.UNIFIED)
 
-    test.showConfig(test_no, request, reg_run=True)
+    test.showConfig(test_no, request)
 
     exec_sdpa(test.cfg, request, cudnn_handle)
 
@@ -448,8 +328,6 @@ def test_sdpa_random_lean_attn_unified_L0(env_info, test_no, request, cudnn_hand
 def test_sdpa_random_fwd_ragged_L0(env_info, test_no, request, cudnn_handle):
 
     test = SDPATestConfig(**env_info, implementation=cudnn.attention_implementation.AUTO)
-
-    print(f"test: {test} hash {abs(hash(test_no))}")
 
     geom_seed = abs(hash(test_no))
     data_seed = test_no[2]
@@ -468,9 +346,9 @@ def test_sdpa_random_fwd_ragged_L0(env_info, test_no, request, cudnn_handle):
         is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 1, "padded" : 0, "full" : 0}),
         stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "disabled" : 1}),
     ) as randomization_ctx:
-        test.cfg = randomization_ctx(rng, data_seed)
+        test.cfg = randomization_ctx(rng, data_seed, geom_seed)
 
-    test.showConfig(test_no, request, reg_run=True)
+    test.showConfig(test_no, request)
 
     exec_sdpa(test.cfg, request, cudnn_handle)
 
@@ -480,8 +358,6 @@ def test_sdpa_random_fwd_ragged_L0(env_info, test_no, request, cudnn_handle):
 def test_sdpa_random_fwd_ragged_unified_L0(env_info, test_no, request, cudnn_handle):
 
     test = SDPATestConfig(**env_info, implementation=cudnn.attention_implementation.AUTO)
-
-    print(f"test: {test} hash {abs(hash(test_no))}")
 
     geom_seed = abs(hash(test_no))
     data_seed = test_no[2]
@@ -500,10 +376,10 @@ def test_sdpa_random_fwd_ragged_unified_L0(env_info, test_no, request, cudnn_han
         is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 1, "padded" : 0, "full" : 0}),
         stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "disabled" : 1}),
     ) as randomization_ctx:
-        test.cfg = randomization_ctx(rng, data_seed)
+        test.cfg = randomization_ctx(rng, data_seed, geom_seed)
     test.cfg.implementation = getattr(cudnn.attention_implementation, request.config.getoption("--implementation") or "", cudnn.attention_implementation.UNIFIED)
 
-    test.showConfig(test_no, request, reg_run=True)
+    test.showConfig(test_no, request)
 
     exec_sdpa(test.cfg, request, cudnn_handle)
 
@@ -513,8 +389,6 @@ def test_sdpa_random_fwd_ragged_unified_L0(env_info, test_no, request, cudnn_han
 def test_sdpa_random_bwd_ragged_L0(env_info, test_no, request, cudnn_handle):
 
     test = SDPATestConfig(**env_info, implementation=cudnn.attention_implementation.AUTO)
-
-    print(f"test: {test} hash {abs(hash(test_no))}")
 
     geom_seed = abs(hash(test_no))
     data_seed = test_no[2]
@@ -534,10 +408,10 @@ def test_sdpa_random_bwd_ragged_L0(env_info, test_no, request, cudnn_handle):
         stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "disabled" : 1}),
         is_deterministic=RandomChoice({True : 3, False : 1}),
     ) as randomization_ctx:
-        test.cfg = randomization_ctx(rng, data_seed)
+        test.cfg = randomization_ctx(rng, data_seed, geom_seed)
 
     test.cfg.is_infer = False
-    test.showConfig(test_no, request, reg_run=True)
+    test.showConfig(test_no, request)
 
     exec_sdpa(test.cfg, request, cudnn_handle)
 
@@ -551,8 +425,6 @@ def test_sdpa_random_bwd_ragged_L0(env_info, test_no, request, cudnn_handle):
 def test_sdpa_fwd_paged_L0(env_info, test_no, request, cudnn_handle):
 
     test = SDPATestConfig(**env_info, implementation=cudnn.attention_implementation.AUTO)
-
-    print(f"test: {test} hash {abs(hash(test_no))}")
 
     geom_seed = abs(hash(test_no))
     data_seed = test_no[2]
@@ -572,11 +444,11 @@ def test_sdpa_fwd_paged_L0(env_info, test_no, request, cudnn_handle):
         stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "disabled" : 1}),
         block_size=RandomBlockSize(min=1, max=1024, with_high_probability=[1,32,128]),
     ) as randomization_ctx:
-        test.cfg = randomization_ctx(rng, data_seed)
+        test.cfg = randomization_ctx(rng, data_seed, geom_seed)
         test.cfg.is_paged = True
         test.cfg.implementation=cudnn.attention_implementation.COMPOSITE  # FIXNOW
 
-    test.showConfig(test_no, request, reg_run=True)
+    test.showConfig(test_no, request)
 
     exec_sdpa(test.cfg, request, cudnn_handle)
 
@@ -586,8 +458,6 @@ def test_sdpa_fwd_paged_L0(env_info, test_no, request, cudnn_handle):
 def test_sdpa_fwd_paged_unified_L0(env_info, test_no, request, cudnn_handle):
 
     test = SDPATestConfig(**env_info, implementation=cudnn.attention_implementation.AUTO)
-
-    print(f"test: {test} hash {abs(hash(test_no))}")
 
     geom_seed = abs(hash(test_no))
     data_seed = test_no[2]
@@ -607,11 +477,11 @@ def test_sdpa_fwd_paged_unified_L0(env_info, test_no, request, cudnn_handle):
         stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "disabled" : 1}),
         block_size=RandomBlockSize(min=1, max=1024, with_high_probability=[1,32,128]),
     ) as randomization_ctx:
-        test.cfg = randomization_ctx(rng, data_seed)
+        test.cfg = randomization_ctx(rng, data_seed, geom_seed)
         test.cfg.is_paged = True
     test.cfg.implementation = getattr(cudnn.attention_implementation, request.config.getoption("--implementation") or "", cudnn.attention_implementation.UNIFIED)
 
-    test.showConfig(test_no, request, reg_run=True)
+    test.showConfig(test_no, request)
 
     exec_sdpa(test.cfg, request, cudnn_handle)
 
@@ -620,8 +490,6 @@ def test_sdpa_fwd_paged_unified_L0(env_info, test_no, request, cudnn_handle):
 def test_sdpa_random_fwd_unified_block_mask_L0(env_info, test_no, request, cudnn_handle):
 
     test = SDPATestConfig(**env_info, implementation=cudnn.attention_implementation.AUTO)
-
-    print(f"test: {test} hash {abs(hash(test_no))}")
 
     geom_seed = abs(hash(test_no))
     data_seed = test_no[2]
@@ -640,11 +508,11 @@ def test_sdpa_random_fwd_unified_block_mask_L0(env_info, test_no, request, cudnn
         is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 0, "padded" : 0, "full" : 1}),
         stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "disabled" : 1}),
     ) as randomization_ctx:
-        test.cfg = randomization_ctx(rng, data_seed)
+        test.cfg = randomization_ctx(rng, data_seed, geom_seed)
         test.cfg.is_block_mask = True
     test.cfg.implementation = cudnn.attention_implementation.UNIFIED
 
-    test.showConfig(test_no, request, reg_run=True)
+    test.showConfig(test_no, request)
 
     exec_sdpa(test.cfg, request, cudnn_handle)
 
@@ -676,8 +544,8 @@ def test_sdpa_fp8_fwd_L0(env_info, test_no, request, cudnn_handle):
         is_q_ragged_or_padded_or_full=RandomChoice({"ragged": 0, "padded": 0, "full": 1}),
         stats_layout=RandomChoice({"disabled": 1}),
     ) as randomization_ctx:
-        test.cfg = randomization_ctx(rng, data_seed)
-    test.showConfig(test_no, request, reg_run=True)
+        test.cfg = randomization_ctx(rng, data_seed, geom_seed)
+    test.showConfig(test_no, request)
 
     if request.node.name in test.blocked_tests:
         pytest.skip(f"blocked test: {request.node.name}")
@@ -712,10 +580,10 @@ def test_sdpa_fp8_bwd_L0(env_info, test_no, request, cudnn_handle):
         stats_layout=RandomChoice({"disabled": 1}),
         is_deterministic=RandomChoice({True: 1, False: 1}),
     ) as randomization_ctx:
-        test.cfg = randomization_ctx(rng, data_seed)
+        test.cfg = randomization_ctx(rng, data_seed, geom_seed)
 
     test.cfg.is_infer = False
-    test.showConfig(test_no, request, reg_run=True)
+    test.showConfig(test_no, request)
 
     if request.node.name in test.blocked_tests:
         pytest.skip(f"blocked test: {request.node.name}")
@@ -750,9 +618,9 @@ def test_sdpa_fp8_fwd_paged_L0(env_info, test_no, request, cudnn_handle):
         stats_layout=RandomChoice({"disabled": 1}),
         block_size=RandomBlockSize(min=16, max=128, with_high_probability=[16, 32, 64]),
     ) as randomization_ctx:
-        test.cfg = randomization_ctx(rng, data_seed)
+        test.cfg = randomization_ctx(rng, data_seed, geom_seed)
         test.cfg.is_paged = True
-    test.showConfig(test_no, request, reg_run=True)
+    test.showConfig(test_no, request)
 
     if request.node.name in test.blocked_tests:
         pytest.skip(f"blocked test: {request.node.name}")
@@ -770,33 +638,9 @@ def test_sdpa_fp8_fwd_paged_L0(env_info, test_no, request, cudnn_handle):
 @pytest.mark.L3
 @pytest.mark.L4
 def test_repro(env_info, request, cudnn_handle):
+    import ast
     repro_str = request.config.getoption("--repro")
     cfg = SDPATestConfig(**env_info, implementation=cudnn.attention_implementation.AUTO)
-    print(f"repro_str: {repro_str}")
-
-    # Parse the dictionary string and reconstruct the ExecConfig object
-    import ast
-    repro_dict = ast.literal_eval(repro_str)
-
-    # Convert integer enum values back to enum objects
-    if 'diag_align' in repro_dict and repro_dict['diag_align'] is not None:
-        repro_dict['diag_align'] = cudnn.diagonal_alignment(repro_dict['diag_align'])
-    if 'implementation' in repro_dict and repro_dict['implementation'] is not None:
-        repro_dict['implementation'] = getattr(cudnn.attention_implementation, repro_dict['implementation'])
-    # Convert string dtype back to torch dtype
-    if 'data_type' in repro_dict and repro_dict['data_type'] is not None:
-        if 'torch.float16' in repro_dict['data_type']:
-            repro_dict['data_type'] = torch.float16
-        elif 'torch.bfloat16' in repro_dict['data_type']:
-            repro_dict['data_type'] = torch.bfloat16
-        elif 'torch.float32' in repro_dict['data_type']:
-            repro_dict['data_type'] = torch.float32
-
-    cfg.cfg = ExecConfig(**repro_dict)
-    # Fill in derived fields (shapes, strides, elems) from basic dims
-    # If strides are not provided, default BHSD strides are computed automatically
-    cfg.cfg.fill_derived_fields()
-    print(f"cfg.cfg: {cfg.cfg}")
-
-    cfg.showConfig((1,1), request, False)
+    cfg.cfg = ExecConfig.deserialize(ast.literal_eval(repro_str))
+    cfg.showConfig((1,1), request)
     exec_sdpa(cfg.cfg, request, cudnn_handle)

@@ -174,7 +174,7 @@ def create_paged_container_and_block_table(tensor, block_size):
 
 def exec_sdpa_fp8(cfg, request, cudnn_handle):
     if request.config.option.dryrun:
-        pytest.skip("dry run mode")
+        pytest.skip("dryrun")
 
     cudnn_version = LooseVersion(cudnn.backend_version_string())
     if cudnn_version < "9.14.0":

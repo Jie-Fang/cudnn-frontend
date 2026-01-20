@@ -234,3 +234,9 @@ def profile_execution(fn, *args, trace_dir=None):
         print("Sorted by CPU time:")
         print(prof.key_averages().table(sort_by="self_cpu_time_total", row_limit=10))
         print()
+
+def print_section_begin(msg, width=80):
+    print(f" {msg} ".center(width, "="))
+
+def print_section_end(width=80):
+    print("=" * width)
