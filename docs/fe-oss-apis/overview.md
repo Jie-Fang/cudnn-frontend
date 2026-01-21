@@ -5,6 +5,7 @@
 This folder documents the Python FE APIs implemented under `python/cudnn`. For details on currently implemented operations, see:
 - [GEMM + Amax](gemm_fusions/gemm_amax.md)
 - [GEMM + SwiGLU](gemm_fusions/gemm_swiglu.md)
+- [Grouped GEMM + SwiGLU](gemm_fusions/grouped_gemm_swiglu.md)
 - [Native Sparse Attention (NSA)](nsa.md)
 
 ## Installation and setup

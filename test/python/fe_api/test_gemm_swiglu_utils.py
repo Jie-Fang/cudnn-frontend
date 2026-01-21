@@ -7,6 +7,7 @@ import torch
 import pytest
 from typing import Optional, Tuple
 from test_fe_api_utils import (
+    compute_reference_amax,
     create_and_permute_tensor,
     create_scale_factor_tensor,
     create_sf_layout_tensor,
@@ -265,14 +266,6 @@ def run_gemm_swiglu_quant_ref(
         c_ref = c_ref.to(c_dtype).to(torch.float32)
 
     return ab12_ref_ret, c_ref, sfc_ref, amax_ref
-
-
-def compute_reference_amax(output_tensor: torch.Tensor) -> float:
-    if output_tensor.dtype != torch.float32:
-        output_fp32 = output_tensor.float()
-    else:
-        output_fp32 = output_tensor
-    return torch.amax(torch.abs(output_fp32)).item()
 
 
 def run_gemm_swiglu_ref(a_ref, b_ref, alpha):

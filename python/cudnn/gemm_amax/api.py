@@ -13,7 +13,7 @@ import cutlass.cute as cute
 from cutlass.cute.runtime import from_dlpack, make_ptr
 
 from cudnn.datatypes import _convert_to_cutlass_data_type
-from cudnn.api_base import APIBase
+from cudnn.api_base import APIBase, is_power_of_2
 
 
 class GemmAmaxSm100(APIBase):
@@ -214,9 +214,6 @@ class GemmAmaxSm100(APIBase):
 
         # Special cluster shape check for scale factor multicasts.
         # Due to limited size of scale factors, we can't multicast among more than 4 CTAs.
-        def is_power_of_2(x):
-            return x > 0 and (x & (x - 1)) == 0
-
         if not (
             self.cluster_shape_mn[0] <= 4
             and self.cluster_shape_mn[1] <= 4

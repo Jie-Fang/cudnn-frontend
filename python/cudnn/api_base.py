@@ -24,6 +24,11 @@ def ceil_div(a: int, b: int) -> int:
     return (a + b - 1) // b
 
 
+def is_power_of_2(n: int) -> bool:
+    """Check if n is a power of 2."""
+    return n > 0 and (n & (n - 1)) == 0
+
+
 class APIBase(ABC):
     """Abstract base class for cuDNN API wrappers.
 
@@ -425,6 +430,7 @@ class APIBase(ABC):
         stride: Optional[Tuple[int, ...] | List[Tuple[int, ...]]] = None,
         stride_order: Optional[Tuple[int, ...] | List[Tuple[int, ...]]] = None,
         name: str = "",
+        extra_error_msg: str = "",
     ) -> Optional[Tuple[Tuple[int, ...], Tuple[int, ...]]]:
         """Check if the stride of a tensor matches the expected stride(s) or stride order(s).
 
@@ -436,33 +442,53 @@ class APIBase(ABC):
         :type stride_order: Tuple[int, ...] | List[Tuple[int, ...]]
         :param name: Logical tensor name for logging
         :type name: str
+        :param extra_error_msg: Extra error message to add to the error
+        :type extra_error_msg: str
         :raises ValueError: If the stride of the tensor does not match the expected stride order
         :return: The stride and stride order of the tensor
         :rtype: Optional[Tuple[Tuple[int, ...], Tuple[int, ...]]]
         """
         if tensor_or_stride is None:
-            return None
+            return None, None
         tensor_stride = self._tensor_stride(tensor_or_stride, name=name) if isinstance(tensor_or_stride, torch.Tensor) else tensor_or_stride
         tensor_stride_order = tuple(i for i, s in sorted(enumerate(tensor_stride), key=lambda x: x[1]))
 
         if stride is not None:
             if isinstance(stride, tuple):
                 if tensor_stride != stride:
-                    raise ValueError(f"{name} tensor stride mismatch: expected {stride}, got {tensor_stride}")
+                    error_msg = f"{name} tensor stride mismatch: expected {stride}, got {tensor_stride}"
+                    if extra_error_msg:
+                        error_msg += f": {extra_error_msg}"
+                    raise ValueError(error_msg)
             elif isinstance(stride, list):
                 if tensor_stride not in stride:
-                    raise ValueError(f"{name} tensor stride mismatch: expected one of {stride}, got {tensor_stride}")
+                    error_msg = f"{name} tensor stride mismatch: expected one of {stride}, got {tensor_stride}"
+                    if extra_error_msg:
+                        error_msg += f": {extra_error_msg}"
+                    raise ValueError(error_msg)
             else:
-                raise ValueError(f"Expected stride to be a tuple or list, got {type(stride)}")
+                error_msg = f"Expected stride to be a tuple or list, got {type(stride)}"
+                if extra_error_msg:
+                    error_msg += f": {extra_error_msg}"
+                raise ValueError(error_msg)
         if stride_order is not None:
             if isinstance(stride_order, tuple):
                 if tensor_stride_order != stride_order:
-                    raise ValueError(f"{name} tensor stride order mismatch: expected {stride_order}, got {tensor_stride_order}")
+                    error_msg = f"{name} tensor stride order mismatch: expected {stride_order}, got {tensor_stride_order}"
+                    if extra_error_msg:
+                        error_msg += f": {extra_error_msg}"
+                    raise ValueError(error_msg)
             elif isinstance(stride_order, list):
                 if tensor_stride_order not in stride_order:
-                    raise ValueError(f"{name} tensor stride order mismatch: expected one of {stride_order}, got {tensor_stride_order}")
+                    error_msg = f"{name} tensor stride order mismatch: expected one of {stride_order}, got {tensor_stride_order}"
+                    if extra_error_msg:
+                        error_msg += f": {extra_error_msg}"
+                    raise ValueError(error_msg)
             else:
-                raise ValueError(f"Expected stride order to be a tuple or list, got {type(stride_order)}")
+                error_msg = f"Expected stride order to be a tuple or list, got {type(stride_order)}"
+                if extra_error_msg:
+                    error_msg += f": {extra_error_msg}"
+                raise ValueError(error_msg)
         return tensor_stride, tensor_stride_order
 
     def _check_dtype(
@@ -579,3 +605,35 @@ class APIBase(ABC):
         tensor_stride = self._tensor_stride(tensor, name=name)
         tensor_stride_order = tuple(i for i, s in sorted(enumerate(tensor_stride), key=lambda x: x[1]))
         return tensor_ptr, tensor_shape, tensor_stride_order
+
+
+class TupleDict(dict):
+    """A dictionary that supports tuple unpacking.
+
+    This class extends dict to allow unpacking like a tuple while still
+    providing dictionary-style key access. The unpacking order is determined
+    by the _keys attribute which preserves insertion order.
+
+    Example:
+        >>> result = TupleDict(a=1, b=2, c=3)
+        >>> x, y, z = result  # Unpacks as (1, 2, 3)
+        >>> result['a']  # Returns 1
+        >>> result[0]  # Returns 1 (integer indexing)
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Store keys in order for tuple unpacking
+        self._keys = list(self.keys())
+
+    def __iter__(self):
+        """Iterate over values in insertion order for tuple unpacking."""
+        return (self[k] for k in self._keys)
+
+    def __getitem__(self, key):
+        """Support both string keys and integer indices."""
+        if isinstance(key, int):
+            if key < 0 or key >= len(self._keys):
+                raise IndexError(f"index {key} out of range for TupleDict with {len(self._keys)} items")
+            return super().__getitem__(self._keys[key])
+        return super().__getitem__(key)

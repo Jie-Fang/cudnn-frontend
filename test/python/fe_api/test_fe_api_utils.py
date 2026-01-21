@@ -29,6 +29,11 @@ except Exception:
     cvt_sf_MKL_to_M32x4xrm_K4xrk_L = None
 
 
+def ceil_div(a: int, b: int) -> int:
+    """Compute ceiling division of a by b."""
+    return (a + b - 1) // b
+
+
 def create_and_permute_tensor(l, mode0, mode1, is_mode0_major, dtype):
     # is_mode0_major: (l, mode1, mode0) -> (mode0, mode1, l)
     # else: (l, mode0, mode1) -> (mode0, mode1, l)
@@ -62,10 +67,29 @@ def create_and_permute_tensor(l, mode0, mode1, is_mode0_major, dtype):
     return ref_tensor, dtype_tensor
 
 
-def create_sf_layout_tensor(l, mn, nk, sf_vec_size):
-    def ceil_div(a, b):
-        return (a + b - 1) // b
+def compute_reference_amax(output_tensor: torch.Tensor) -> float:
+    """
+    Compute reference amax value on CPU.
 
+    Args:
+        output_tensor: torch.Tensor, GEMM output result (CPU tensor)
+
+    Returns:
+        float: reference amax value
+    """
+    # Ensure FP32 for computation
+    if output_tensor.dtype != torch.float32:
+        output_fp32 = output_tensor.float()
+    else:
+        output_fp32 = output_tensor
+
+    # Compute absolute maximum value
+    reference_amax = torch.amax(torch.abs(output_fp32))
+
+    return reference_amax.item()
+
+
+def create_sf_layout_tensor(l, mn, nk, sf_vec_size):
     sf_k = ceil_div(nk, sf_vec_size)
 
     atom_m = (32, 4)

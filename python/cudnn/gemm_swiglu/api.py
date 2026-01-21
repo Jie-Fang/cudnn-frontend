@@ -46,7 +46,7 @@ from packaging import version
 import cutlass.cute.math as math
 
 from cudnn.datatypes import _convert_to_cutlass_data_type
-from cudnn.api_base import APIBase, ceil_div
+from cudnn.api_base import APIBase, ceil_div, is_power_of_2
 
 
 class GemmSwigluSm100(APIBase):
@@ -308,9 +308,6 @@ class GemmSwigluSm100(APIBase):
         )
 
         self._logger.debug("Checking MMA tile shape and cluster shape")
-
-        def is_power_of_2(x):
-            return x > 0 and (x & (x - 1)) == 0
 
         self._value_error_if(
             self.mma_tiler_mn[0] not in [128, 256],

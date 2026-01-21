@@ -276,5 +276,35 @@ def __getattr__(name: str) -> Any:
             return _gemm_amax_wrapper_sm100
         except Exception as e:
             raise ImportError(f"gemm_amax_wrapper_sm100 requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]': {e}") from e
+
+    # Grouped GEMM module
+    elif name == "grouped_gemm":
+        try:
+            from . import grouped_gemm as _grouped_gemm
+
+            return _grouped_gemm
+        except Exception as e:
+            raise ImportError(f"grouped_gemm requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]': {e}") from e
+
+    elif name == "GroupedGemmSwigluSm100":
+        try:
+            from .grouped_gemm import GroupedGemmSwigluSm100 as _GroupedGemmSwigluSm100
+
+            return _GroupedGemmSwigluSm100
+        except Exception as e:
+            raise ImportError(f"GroupedGemmSwigluSm100 requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]': {e}") from e
+
+    elif name == "grouped_gemm_swiglu_wrapper_sm100":
+        try:
+            from .grouped_gemm import (
+                grouped_gemm_swiglu_wrapper_sm100 as _grouped_gemm_swiglu_wrapper_sm100,
+            )
+
+            return _grouped_gemm_swiglu_wrapper_sm100
+        except Exception as e:
+            raise ImportError(
+                f"grouped_gemm_swiglu_wrapper_sm100 requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]': {e}"
+            ) from e
+
     else:
         raise AttributeError(name)

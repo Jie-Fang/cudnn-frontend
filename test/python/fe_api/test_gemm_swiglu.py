@@ -38,7 +38,6 @@ def test_gemm_swiglu_compile_execute(
         from cudnn import GemmSwigluSm100
         from cuda.bindings import driver as cuda
     except ImportError as e:
-        # raise e
         pytest.skip("Environment not supported: cudnn optional dependencies not installed")
     cfg = gemm_swiglu_init(
         request,
@@ -78,7 +77,6 @@ def test_gemm_swiglu_compile_execute(
     try:
         assert gemm_swiglu.check_support(), "Unsupported testcase"
     except (ValueError, NotImplementedError) as e:
-        # raise e
         pytest.skip(f"Unsupported testcase: {e}")
     gemm_swiglu.compile(current_stream=stream)
     gemm_swiglu.execute(

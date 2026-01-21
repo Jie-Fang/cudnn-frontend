@@ -97,4 +97,10 @@ def pytest_addoption(parser):
     parser.addoption("--gemm-amax-mma-tiler", action="store", default=None, type=str, help="[test_gemm_amax.py] MMA tiler (M,N) dimensions as comma-separated values (e.g., '128,128')")
     parser.addoption("--gemm-amax-cluster-shape", action="store", default=None, type=str, help="[test_gemm_amax.py] Cluster shape (M,N) dimensions as comma-separated values (e.g., '1,1')")
     parser.addoption("--gemm-amax-skip-ref", action="store_true", help="[test_gemm_amax.py] Skip reference computation for performance testing")
+
+    # Grouped GEMM SwiGLU command line options for test_grouped_gemm_swiglu.py
+    parser.addoption("--grouped-gemm-nkl", action="store", default=None, type=str, help="[test_grouped_gemm_swiglu.py] N,K,L dimensions as comma-separated values (e.g., '512,512,4')")
+    parser.addoption("--grouped-gemm-group-m", action="store", default=None, type=str, help="[test_grouped_gemm_swiglu.py] M values per group as comma-separated values (e.g., '256,512,256,256')")
+    parser.addoption("--grouped-gemm-m-aligned", action="store", default=None, type=int, help="[test_grouped_gemm_swiglu.py] M alignment (e.g., 256)")
+    parser.addoption("--grouped-gemm-skip-ref", action="store_true", help="[test_grouped_gemm_swiglu.py] Skip reference computation for performance testing")
 # fmt: on
