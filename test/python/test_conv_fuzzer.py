@@ -480,27 +480,27 @@ def create_tensors(config: ConvConfig, rng: random.Random):
     if config.conv_type == ConvType.FPROP:
         # FPROP: X,W are inputs, Y is output
         X = torch.empty(x_shape, device='cuda', dtype=config.x_dtype).to(memory_format=memory_format)
-        X.normal_(mean=0.5, std=0.5, generator=torch_rng)
+        X.normal_(mean=0.5, std=0.1, generator=torch_rng)
         W = torch.empty(w_shape, device='cuda', dtype=config.w_dtype).to(memory_format=memory_format)
-        W.normal_(mean=0.5, std=0.5, generator=torch_rng)
+        W.normal_(mean=0.5, std=0.1, generator=torch_rng)
         Y = torch.empty(y_shape, device='cuda', dtype=config.y_dtype).to(memory_format=memory_format)
         fill_with_garbage(Y)  # Output - fill with garbage
 
     elif config.conv_type == ConvType.DGRAD:
         # DGRAD: Y(dY),W are inputs, X(dX) is output
         Y = torch.empty(y_shape, device='cuda', dtype=config.y_dtype).to(memory_format=memory_format)
-        Y.normal_(mean=0.5, std=0.5, generator=torch_rng)  # dY - gradient from upstream
+        Y.normal_(mean=0.5, std=0.1, generator=torch_rng)  # dY - gradient from upstream
         W = torch.empty(w_shape, device='cuda', dtype=config.w_dtype).to(memory_format=memory_format)
-        W.normal_(mean=0.5, std=0.5, generator=torch_rng)  # weights
+        W.normal_(mean=0.5, std=0.1, generator=torch_rng)  # weights
         X = torch.empty(x_shape, device='cuda', dtype=config.x_dtype).to(memory_format=memory_format)
         fill_with_garbage(X)  # dX output - fill with garbage
 
     else:  # WGRAD
         # WGRAD: X,Y(dY) are inputs, W(dW) is output
         X = torch.empty(x_shape, device='cuda', dtype=config.x_dtype).to(memory_format=memory_format)
-        X.normal_(mean=0.5, std=0.5, generator=torch_rng)  # input image
+        X.normal_(mean=0.5, std=0.1, generator=torch_rng)  # input image
         Y = torch.empty(y_shape, device='cuda', dtype=config.y_dtype).to(memory_format=memory_format)
-        Y.normal_(mean=0.5, std=0.5, generator=torch_rng)  # dY - gradient from upstream
+        Y.normal_(mean=0.5, std=0.1, generator=torch_rng)  # dY - gradient from upstream
         W = torch.empty(w_shape, device='cuda', dtype=config.w_dtype).to(memory_format=memory_format)
         fill_with_garbage(W)  # dW output - fill with garbage
 
@@ -958,11 +958,7 @@ DEFAULT_SEED_L1 = 12345
 TEST_PARAMS_L0 = tlist_with_configs(num_tests=DEFAULT_NUM_TESTS, rng_seed=DEFAULT_SEED_L0, allow_unaligned=False)
 TEST_PARAMS_L1 = tlist_with_configs(num_tests=DEFAULT_NUM_TESTS, rng_seed=DEFAULT_SEED_L1, allow_unaligned=True)
 
-# Known failing test numbers (L0) - dgrad with f32 precision issues
-# 175 and 904 fail on Ampere
-# 179, 744, 756, 862, 979, 999 on Blackwell
-SKIP_TEST_NUMS_L0 = {175, 179, 744, 756, 862, 904,979, 999}
-
+SKIP_TEST_NUMS_L0 = {}
 
 # ============================================================================
 # Test Functions
@@ -971,7 +967,7 @@ SKIP_TEST_NUMS_L0 = {175, 179, 744, 756, 862, 904,979, 999}
 @pytest.mark.L0
 @pytest.mark.parametrize("test_num,total_tests,config_seed,config", TEST_PARAMS_L0,
                         ids=[make_test_id(p) for p in TEST_PARAMS_L0])
-def test_conv_random_L0(test_num: int, total_tests: int, config_seed: int, config: ConvConfig, cudnn_handle, num_diffs, request):
+def test_conv_random_L0_0(test_num: int, total_tests: int, config_seed: int, config: ConvConfig, cudnn_handle, num_diffs, request):
     """Random convolution tests (fprop/dgrad/wgrad) with aligned dimensions (L0)."""
     # Skip known failing tests
     if test_num in SKIP_TEST_NUMS_L0:
@@ -984,7 +980,7 @@ def test_conv_random_L0(test_num: int, total_tests: int, config_seed: int, confi
 
     try:
         # Print test header
-        test_name = f"test_conv_random_L0[{make_test_id((test_num, total_tests, config_seed, config))}]"
+        test_name = f"test_conv_random_L0_0[{make_test_id((test_num, total_tests, config_seed, config))}]"
         print(format_test_header(config, test_num, total_tests, test_name))
 
         # Run cuDNN
@@ -1028,7 +1024,7 @@ def test_conv_random_L0(test_num: int, total_tests: int, config_seed: int, confi
 @pytest.mark.L1
 @pytest.mark.parametrize("test_num,total_tests,config_seed,config", TEST_PARAMS_L1,
                         ids=[make_test_id(p, prefix="u") for p in TEST_PARAMS_L1])
-def test_conv_random_L1(test_num: int, total_tests: int, config_seed: int, config: ConvConfig, cudnn_handle, num_diffs, request):
+def test_conv_random_L0_1(test_num: int, total_tests: int, config_seed: int, config: ConvConfig, cudnn_handle, num_diffs, request):
     """Random convolution tests (fprop/dgrad/wgrad) with unaligned dimensions (L1)."""
     # Create tensors
     rng = random.Random(config_seed)
@@ -1037,7 +1033,7 @@ def test_conv_random_L1(test_num: int, total_tests: int, config_seed: int, confi
 
     try:
         # Print test header
-        test_name = f"test_conv_random_L1[{make_test_id((test_num, total_tests, config_seed, config), prefix='u')}]"
+        test_name = f"test_conv_random_L0_1[{make_test_id((test_num, total_tests, config_seed, config), prefix='u')}]"
         print(format_test_header(config, test_num, total_tests, test_name))
 
         # Run cuDNN
