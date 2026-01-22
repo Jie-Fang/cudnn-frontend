@@ -227,7 +227,7 @@ class RandomizationContext:
             # ~10% chance of 0-length sequence for each batch (independent of seq_len_q)
             randoms_.seq_len_kv = [
                 # 0 if rng.random() < 0.1 else rng.randint(randoms_.seq_len_q[i], randoms_.s_kv) for i in range(randoms_.batches)
-                rng.randint(randoms_.seq_len_q[i], randoms_.s_kv)
+                rng.randint(1, randoms_.s_kv)
                 for i in range(randoms_.batches)
             ]
 
@@ -462,6 +462,7 @@ class RandomSequenceLength:
             s_q = s_kv
         else:
             s_q = self.s_q_gen(rng)
+
             # Always s_q <=s_kv
             if s_q > s_kv:
                 s_q = s_kv
