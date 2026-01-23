@@ -158,15 +158,18 @@ SDPA_attributes::validate_sdpa_support_surface(const detail::Context& context,
             "consider using a newer architecture.");
 
         // validate basic dimension requirements
+        // d_qk=192 with d_v=128 is only supported starting from cuDNN 9.19
+        bool const d192_v128_supported = (detail::get_backend_version() >= 91900);
         if (prop.major >= 10) {
-            RETURN_CUDNN_FRONTEND_ERROR_IF(((d_qk > 128) || (d_qk % 16 != 0)) && !(d_qk == 192 && d_v == 128),
-                                           error_code_t::GRAPH_NOT_SUPPORTED,
-                                           "hidden_dim d_qk shoud be less than or equal to 128 and hidden_dim d_qk "
-                                           "should be multiple of 16 unless d_qk == 192 and d_v == 128");
+            RETURN_CUDNN_FRONTEND_ERROR_IF(
+                ((d_qk > 128) || (d_qk % 16 != 0)) && !(d192_v128_supported && d_qk == 192 && d_v == 128),
+                error_code_t::GRAPH_NOT_SUPPORTED,
+                "hidden_dim d_qk should be less than or equal to 128 and hidden_dim d_qk "
+                "should be multiple of 16 unless d_qk == 192 and d_v == 128 (requires cuDNN 9.19+)");
             RETURN_CUDNN_FRONTEND_ERROR_IF(
                 ((d_v > 128) || (d_v % 16 != 0)),
                 error_code_t::GRAPH_NOT_SUPPORTED,
-                "hidden_dim d_v shoud be less than or equal to 128 and hidden_dim d_v should be multiple of 16");
+                "hidden_dim d_v should be less than or equal to 128 and hidden_dim d_v should be multiple of 16");
         } else {
             RETURN_CUDNN_FRONTEND_ERROR_IF(
                 (d_qk > 256) || (d_qk % 16 != 0) || (d_v > 256) || (d_v % 16 != 0),
