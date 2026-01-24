@@ -239,9 +239,7 @@ gemm.execute(
   - Kernel tile size `(TILE_M, TILE_N)`. Default: `(128, 128)`
   - `TILE_M ∈ {128, 256}`
   - Standard mode: `TILE_N ∈ {32, 64, ..., 224, 256}`
-  - Quantized mode:
-    - FP4: `TILE_N ∈ {64, 128, 192, 256}`
-    - FP8: `TILE_N = 256` only
+  - Quantized mode: `TILE_N ∈ {64, 128, 192, 256}`
 - `cluster_shape_mn: Tuple[int, int] | None`
   - Thread Block cluster shape `(CLUSTER_M, CLUSTER_N)`
   - Constraints: positive powers of 2, `CLUSTER_M*CLUSTER_N ≤ 16`.
@@ -307,7 +305,7 @@ gemm.execute(
 - `A`/`B` must have the same dtype.
 - `ab12_dtype ∈ {float8_e4m3fn, float8_e5m2}` is currently disabled
 - `acc_dtype == float16` is only supported with `ab_dtype ∈ {float16, float8_e4m3fn, float8_e5m2}`
-- `ab12_dtype ∈ {float32}` requires `acc_dtype == float32` and `mma_tiler_mn[0] == 256`
+- `ab12_dtype ∈ {float32}` requires `acc_dtype == float32`
 
 #### Quantized mode
 
@@ -321,7 +319,8 @@ The quantized kernel supports the following configurations:
 
 Additional constraints:
 - `acc_dtype` must be `float32`
-- FP4 `ab_dtype` is not compatible with FP8 `c_dtype`. BF16 `c_dtype` is expected.
+- Not compatible with FP8 c_dtype. BF16 `c_dtype` is expected.
+- For MXFP8 inputs, ab12_dtype` should be float16 or bfloat16.
 - When `c_dtype ∈ {float8_e4m3fn, float8_e5m2}`: `sfc_tensor` and `norm_const_tensor` are required
 - When `ab_dtype` is FP4 and `c_dtype == bfloat16`: `amax_tensor` is required
 - `c_dtype` and `ab12_dtype` cannot both be `float32`
@@ -329,13 +328,9 @@ Additional constraints:
 ### Tiling and cluster
 
 - Using `TILE_M == 256` requires `mma_tiler_mn[0] == 256` (enables 2-CTA instructions).
-- If `mma_tiler_mn == (128, 128)` and `cluster_shape_mn == (1, 1)`, `c_major` must be `"m"`.
-- If `mma_tiler_mn != (128, 128)`, `c_major` must be `"m"`.
 - If `TILE_M == 128` and `cluster_shape_mn != (1, 1)`, `mma_tiler_mn` must be exactly `(128, 128)`.
-- `TILE_M == 256` and `ab12_dtype ∈ {float32}` is currently disabled.
 - If `mma_tiler_mn[0] == 256`, `CLUSTER_M` must be divisible by 2
 - Standard mode: If `mma_tiler_mn[0] != 256`, `cluster_shape_mn` must be `(1, 1)`.
-- Quantized mode: If `mma_tiler_mn == (256, 256)` with `cluster_shape_mn != (1, 1)`, `sf_vec_size == 32`, and `sf_dtype == float8_e8m0fnu`: both `ab12_dtype` and `c_dtype` must be `bfloat16`.
 
 ### Environment
 

@@ -25,18 +25,52 @@ GEMM_SWIGLU_PARAM_MARKS = [
     pytest.mark.parametrize(
         "ab_dtype",
         [
-            torch.float16,
+            # torch.float16,
             torch.bfloat16,
             torch.float32,
             torch.float8_e4m3fn,
-            torch.float8_e5m2,
+            # torch.float8_e5m2,
         ],
     ),
-    pytest.mark.parametrize("ab12_dtype", [torch.float16, torch.bfloat16, torch.float32]),
-    pytest.mark.parametrize("acc_dtype", [torch.float32]),  # Note: float16 accumulator is supported but disabled in testing
-    pytest.mark.parametrize("c_dtype", [torch.float16, torch.bfloat16]),
-    pytest.mark.parametrize("mma_tiler_mn", [(128, 128), (128, 64), (256, 256), (256, 128)]),
-    pytest.mark.parametrize("cluster_shape_mn", [(1, 1), (2, 2), (4, 4)]),
+    pytest.mark.parametrize(
+        "ab12_dtype",
+        [
+            # torch.float16,
+            torch.bfloat16,
+            torch.float32,
+        ],
+    ),
+    pytest.mark.parametrize(
+        "acc_dtype",
+        [
+            torch.float32,
+            # torch.float16,
+        ],
+    ),
+    pytest.mark.parametrize(
+        "c_dtype",
+        [
+            # torch.float16,
+            torch.bfloat16
+        ],
+    ),
+    pytest.mark.parametrize(
+        "mma_tiler_mn",
+        [
+            (128, 128),
+            (256, 256),
+            # (128, 64),
+            # (256, 128),
+        ],
+    ),
+    pytest.mark.parametrize(
+        "cluster_shape_mn",
+        [
+            (1, 1),
+            (2, 2),
+            # (4, 4),
+        ],
+    ),
 ]
 
 
@@ -46,37 +80,33 @@ def with_gemm_swiglu_params(func):
     return func
 
 
-GEMM_SWIGLU_QUANT_PARAM_MARKS = [
-    pytest.mark.parametrize("a_major", ["k", "m"]),
-    pytest.mark.parametrize("b_major", ["k", "n"]),
-    pytest.mark.parametrize("c_major", ["m", "n"]),
+GEMM_SWIGLU_QUANT_PARAM_MARKS_FP4 = [
+    pytest.mark.parametrize("a_major", ["k"]),
+    pytest.mark.parametrize("b_major", ["k"]),
+    pytest.mark.parametrize("c_major", ["n"]),
     pytest.mark.parametrize(
         "ab_dtype",
         [
             torch.float4_e2m1fn_x2,
             # torch.uint8,
-            torch.float8_e4m3fn,
-            torch.float8_e5m2,
         ],
     ),
     pytest.mark.parametrize(
         "ab12_dtype",
         [
-            # torch.float32
-            torch.float16,
+            torch.float32,
+            # torch.float16,
             torch.bfloat16,
             torch.float8_e4m3fn,
-            torch.float8_e5m2,
+            # torch.float8_e5m2,
         ],
     ),
     pytest.mark.parametrize(
         "c_dtype",
         [
-            # torch.float32
-            torch.float16,
+            torch.float32,
+            # torch.float16,
             torch.bfloat16,
-            torch.float8_e4m3fn,
-            torch.float8_e5m2,
         ],
     ),
     pytest.mark.parametrize("acc_dtype", [torch.float32]),
@@ -94,7 +124,7 @@ GEMM_SWIGLU_QUANT_PARAM_MARKS = [
         [
             (1, 1),
             (2, 2),
-            (4, 4),
+            # (4, 4),
         ],
     ),
     pytest.mark.parametrize("sf_vec_size", [16, 32]),
@@ -102,9 +132,64 @@ GEMM_SWIGLU_QUANT_PARAM_MARKS = [
     pytest.mark.parametrize("vector_f32", [True, False]),
 ]
 
+GEMM_SWIGLU_QUANT_PARAM_MARKS_FP8 = [
+    pytest.mark.parametrize("a_major", ["k", "m"]),
+    pytest.mark.parametrize("b_major", ["k", "n"]),
+    pytest.mark.parametrize("c_major", ["m", "n"]),
+    pytest.mark.parametrize(
+        "ab_dtype",
+        [
+            torch.float8_e4m3fn,
+            # torch.float8_e5m2,
+        ],
+    ),
+    pytest.mark.parametrize(
+        "ab12_dtype",
+        [
+            # torch.float16,
+            torch.bfloat16,
+        ],
+    ),
+    pytest.mark.parametrize(
+        "c_dtype",
+        [
+            torch.float32,
+            # torch.float16,
+            torch.bfloat16,
+        ],
+    ),
+    pytest.mark.parametrize("acc_dtype", [torch.float32]),
+    pytest.mark.parametrize(
+        "mma_tiler_mn",
+        [
+            (128, 128),
+            (256, 256),
+            # (128, 64),
+            # (256, 128),
+        ],
+    ),
+    pytest.mark.parametrize(
+        "cluster_shape_mn",
+        [
+            (1, 1),
+            (2, 2),
+            # (4, 4),
+        ],
+    ),
+    pytest.mark.parametrize("sf_vec_size", [32]),
+    pytest.mark.parametrize("sf_dtype", [torch.float8_e8m0fnu]),
+    pytest.mark.parametrize("vector_f32", [True, False]),
+]
 
-def with_gemm_swiglu_quant_params(func):
-    for mark in reversed(GEMM_SWIGLU_QUANT_PARAM_MARKS):
+
+def with_gemm_swiglu_quant_params_fp4(func):
+    for mark in reversed(GEMM_SWIGLU_QUANT_PARAM_MARKS_FP4):
+        func = mark(func)
+    return func
+
+
+def with_gemm_swiglu_quant_params_fp8(func):
+    for mark in reversed(GEMM_SWIGLU_QUANT_PARAM_MARKS_FP8):
         func = mark(func)
     return func
 

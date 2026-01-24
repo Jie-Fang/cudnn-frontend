@@ -8,7 +8,8 @@ from fe_api.test_gemm_swiglu_utils import (
     check_ref_gemm_swiglu,
     with_gemm_swiglu_params,
     gemm_swiglu_init,
-    with_gemm_swiglu_quant_params,
+    with_gemm_swiglu_quant_params_fp4,
+    with_gemm_swiglu_quant_params_fp8,
     check_ref_gemm_swiglu_quant,
 )
 
@@ -178,8 +179,145 @@ def test_gemm_swiglu_wrapper(
 
 @pytest.mark.L0
 @torch_fork_set_rng(seed=0)
-@with_gemm_swiglu_quant_params
-def test_gemm_swiglu_compile_execute_quantize(
+@with_gemm_swiglu_quant_params_fp4
+def test_gemm_swiglu_compile_execute_quant_fp4(
+    a_major,
+    b_major,
+    c_major,
+    ab_dtype,
+    ab12_dtype,
+    c_dtype,
+    acc_dtype,
+    mma_tiler_mn,
+    cluster_shape_mn,
+    sf_vec_size,
+    sf_dtype,
+    vector_f32,
+    request,
+):
+    _test_gemm_swiglu_compile_execute_quant(
+        a_major=a_major,
+        b_major=b_major,
+        c_major=c_major,
+        ab_dtype=ab_dtype,
+        ab12_dtype=ab12_dtype,
+        c_dtype=c_dtype,
+        acc_dtype=acc_dtype,
+        mma_tiler_mn=mma_tiler_mn,
+        cluster_shape_mn=cluster_shape_mn,
+        sf_vec_size=sf_vec_size,
+        sf_dtype=sf_dtype,
+        vector_f32=vector_f32,
+        request=request,
+    )
+
+
+@pytest.mark.L0
+@torch_fork_set_rng(seed=0)
+@with_gemm_swiglu_quant_params_fp8
+def test_gemm_swiglu_compile_execute_quant_fp8(
+    a_major,
+    b_major,
+    c_major,
+    ab_dtype,
+    ab12_dtype,
+    c_dtype,
+    acc_dtype,
+    mma_tiler_mn,
+    cluster_shape_mn,
+    sf_vec_size,
+    sf_dtype,
+    vector_f32,
+    request,
+):
+    _test_gemm_swiglu_compile_execute_quant(
+        a_major=a_major,
+        b_major=b_major,
+        c_major=c_major,
+        ab_dtype=ab_dtype,
+        ab12_dtype=ab12_dtype,
+        c_dtype=c_dtype,
+        acc_dtype=acc_dtype,
+        mma_tiler_mn=mma_tiler_mn,
+        cluster_shape_mn=cluster_shape_mn,
+        sf_vec_size=sf_vec_size,
+        sf_dtype=sf_dtype,
+        vector_f32=vector_f32,
+        request=request,
+    )
+
+
+@pytest.mark.L0
+@torch_fork_set_rng(seed=0)
+@with_gemm_swiglu_quant_params_fp4
+def test_gemm_swiglu_wrapper_quant_fp4(
+    a_major,
+    b_major,
+    c_major,
+    ab_dtype,
+    ab12_dtype,
+    c_dtype,
+    acc_dtype,
+    mma_tiler_mn,
+    cluster_shape_mn,
+    sf_vec_size,
+    sf_dtype,
+    vector_f32,
+    request,
+):
+    _test_gemm_swiglu_wrapper_quant(
+        a_major=a_major,
+        b_major=b_major,
+        c_major=c_major,
+        ab_dtype=ab_dtype,
+        ab12_dtype=ab12_dtype,
+        c_dtype=c_dtype,
+        acc_dtype=acc_dtype,
+        mma_tiler_mn=mma_tiler_mn,
+        cluster_shape_mn=cluster_shape_mn,
+        sf_vec_size=sf_vec_size,
+        sf_dtype=sf_dtype,
+        vector_f32=vector_f32,
+        request=request,
+    )
+
+
+@pytest.mark.L0
+@torch_fork_set_rng(seed=0)
+@with_gemm_swiglu_quant_params_fp8
+def test_gemm_swiglu_wrapper_quant_fp8(
+    a_major,
+    b_major,
+    c_major,
+    ab_dtype,
+    ab12_dtype,
+    c_dtype,
+    acc_dtype,
+    mma_tiler_mn,
+    cluster_shape_mn,
+    sf_vec_size,
+    sf_dtype,
+    vector_f32,
+    request,
+):
+    _test_gemm_swiglu_wrapper_quant(
+        a_major=a_major,
+        b_major=b_major,
+        c_major=c_major,
+        ab_dtype=ab_dtype,
+        ab12_dtype=ab12_dtype,
+        c_dtype=c_dtype,
+        acc_dtype=acc_dtype,
+        mma_tiler_mn=mma_tiler_mn,
+        cluster_shape_mn=cluster_shape_mn,
+        sf_vec_size=sf_vec_size,
+        sf_dtype=sf_dtype,
+        vector_f32=vector_f32,
+        request=request,
+    )
+
+
+def _test_gemm_swiglu_compile_execute_quant(
     a_major,
     b_major,
     c_major,
@@ -308,10 +446,7 @@ def test_gemm_swiglu_compile_execute_quantize(
     )
 
 
-@pytest.mark.L0
-@torch_fork_set_rng(seed=0)
-@with_gemm_swiglu_quant_params
-def test_gemm_swiglu_wrapper_quantize(
+def _test_gemm_swiglu_wrapper_quant(
     a_major,
     b_major,
     c_major,

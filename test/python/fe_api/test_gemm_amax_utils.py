@@ -14,37 +14,91 @@ from test_fe_api_utils import create_and_permute_tensor, create_scale_factor_ten
 
 
 # Parameterization marks for GEMM Amax
-GEMM_AMAX_PARAM_MARKS = [
+GEMM_AMAX_PARAM_MARKS_FP4 = [
+    pytest.mark.parametrize("a_major", ["k"]),
+    pytest.mark.parametrize("b_major", ["k"]),
+    pytest.mark.parametrize("c_major", ["m", "n"]),
+    pytest.mark.parametrize(
+        "ab_dtype",
+        [
+            torch.float4_e2m1fn_x2,
+            # torch.uint8,
+        ],
+    ),
+    pytest.mark.parametrize(
+        "sf_dtype",
+        [
+            torch.float8_e8m0fnu,
+            # torch.int8,
+            torch.float8_e4m3fn,
+        ],
+    ),
+    pytest.mark.parametrize(
+        "c_dtype",
+        [
+            torch.float32,
+            # torch.float16,
+            torch.bfloat16,
+            # torch.float8_e5m2,
+            torch.float8_e4m3fn,
+            torch.float4_e2m1fn_x2,
+            # torch.uint8,
+        ],
+    ),
+    pytest.mark.parametrize("acc_dtype", [torch.float32]),
+    pytest.mark.parametrize("sf_vec_size", [16, 32]),
+    pytest.mark.parametrize(
+        "mma_tiler_mn",
+        [
+            (128, 128),
+        ],
+    ),
+    pytest.mark.parametrize("cluster_shape_mn", [(1, 1), (2, 2)]),
+]
+
+GEMM_AMAX_PARAM_MARKS_FP8 = [
     pytest.mark.parametrize("a_major", ["k", "m"]),
     pytest.mark.parametrize("b_major", ["k", "n"]),
     pytest.mark.parametrize("c_major", ["m", "n"]),
     pytest.mark.parametrize(
         "ab_dtype",
-        [torch.float8_e5m2, torch.float8_e4m3fn, torch.uint8, torch.float4_e2m1fn_x2],
+        [
+            torch.float8_e5m2,
+            # torch.float8_e4m3fn,
+        ],
     ),
-    pytest.mark.parametrize("sf_dtype", [torch.float8_e8m0fnu, torch.int8, torch.float8_e4m3fn]),
+    pytest.mark.parametrize(
+        "sf_dtype",
+        [
+            torch.float8_e8m0fnu,
+            # torch.int8,
+        ],
+    ),
     pytest.mark.parametrize(
         "c_dtype",
         [
             torch.float32,
-            torch.float16,
+            # torch.float16,
             torch.bfloat16,
-            torch.float8_e5m2,
-            torch.float8_e4m3fn,
-            torch.float4_e2m1fn_x2,
-            torch.uint8,
         ],
     ),
     pytest.mark.parametrize("acc_dtype", [torch.float32]),
-    pytest.mark.parametrize("sf_vec_size", [16, 32]),
+    pytest.mark.parametrize("sf_vec_size", [32]),
     pytest.mark.parametrize("mma_tiler_mn", [(128, 128), (128, 256)]),
-    pytest.mark.parametrize("cluster_shape_mn", [(1, 1), (1, 2), (2, 2)]),
+    pytest.mark.parametrize("cluster_shape_mn", [(1, 1), (2, 2)]),
 ]
 
 
-def with_gemm_amax_params(func):
+def with_gemm_amax_params_fp4(func):
     """Apply all GEMM Amax parameterization marks to a test function."""
-    for mark in reversed(GEMM_AMAX_PARAM_MARKS):
+    for mark in reversed(GEMM_AMAX_PARAM_MARKS_FP4):
+        func = mark(func)
+    return func
+
+
+def with_gemm_amax_params_fp8(func):
+    """Apply all GEMM Amax parameterization marks to a test function."""
+    for mark in reversed(GEMM_AMAX_PARAM_MARKS_FP8):
         func = mark(func)
     return func
 

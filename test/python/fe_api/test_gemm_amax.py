@@ -4,8 +4,134 @@ import pytest
 
 from test_utils import torch_fork_set_rng
 from fe_api.test_gemm_amax_utils import (
-    with_gemm_amax_params,
+    with_gemm_amax_params_fp4,
+    with_gemm_amax_params_fp8,
 )
+
+
+@pytest.mark.L0
+@torch_fork_set_rng(seed=0)
+@with_gemm_amax_params_fp4
+def test_gemm_amax_compile_execute_fp4(
+    a_major,
+    b_major,
+    c_major,
+    ab_dtype,
+    sf_dtype,
+    c_dtype,
+    acc_dtype,
+    sf_vec_size,
+    mma_tiler_mn,
+    cluster_shape_mn,
+    request,
+):
+    _test_gemm_amax_compile_execute(
+        a_major=a_major,
+        b_major=b_major,
+        c_major=c_major,
+        ab_dtype=ab_dtype,
+        sf_dtype=sf_dtype,
+        c_dtype=c_dtype,
+        acc_dtype=acc_dtype,
+        sf_vec_size=sf_vec_size,
+        mma_tiler_mn=mma_tiler_mn,
+        cluster_shape_mn=cluster_shape_mn,
+        request=request,
+    )
+
+
+@pytest.mark.L0
+@torch_fork_set_rng(seed=0)
+@with_gemm_amax_params_fp8
+def test_gemm_amax_compile_execute_fp8(
+    a_major,
+    b_major,
+    c_major,
+    ab_dtype,
+    sf_dtype,
+    c_dtype,
+    acc_dtype,
+    sf_vec_size,
+    mma_tiler_mn,
+    cluster_shape_mn,
+    request,
+):
+    _test_gemm_amax_compile_execute(
+        a_major=a_major,
+        b_major=b_major,
+        c_major=c_major,
+        ab_dtype=ab_dtype,
+        sf_dtype=sf_dtype,
+        c_dtype=c_dtype,
+        acc_dtype=acc_dtype,
+        sf_vec_size=sf_vec_size,
+        mma_tiler_mn=mma_tiler_mn,
+        cluster_shape_mn=cluster_shape_mn,
+        request=request,
+    )
+
+
+@pytest.mark.L0
+@torch_fork_set_rng(seed=0)
+@with_gemm_amax_params_fp4
+def test_gemm_amax_wrapper_fp4(
+    a_major,
+    b_major,
+    c_major,
+    ab_dtype,
+    sf_dtype,
+    c_dtype,
+    acc_dtype,
+    sf_vec_size,
+    mma_tiler_mn,
+    cluster_shape_mn,
+    request,
+):
+    _test_gemm_amax_wrapper(
+        a_major=a_major,
+        b_major=b_major,
+        c_major=c_major,
+        ab_dtype=ab_dtype,
+        sf_dtype=sf_dtype,
+        c_dtype=c_dtype,
+        acc_dtype=acc_dtype,
+        sf_vec_size=sf_vec_size,
+        mma_tiler_mn=mma_tiler_mn,
+        cluster_shape_mn=cluster_shape_mn,
+        request=request,
+    )
+
+
+@pytest.mark.L0
+@torch_fork_set_rng(seed=0)
+@with_gemm_amax_params_fp8
+def test_gemm_amax_wrapper_fp8(
+    a_major,
+    b_major,
+    c_major,
+    ab_dtype,
+    sf_dtype,
+    c_dtype,
+    acc_dtype,
+    sf_vec_size,
+    mma_tiler_mn,
+    cluster_shape_mn,
+    request,
+):
+    _test_gemm_amax_wrapper(
+        a_major=a_major,
+        b_major=b_major,
+        c_major=c_major,
+        ab_dtype=ab_dtype,
+        sf_dtype=sf_dtype,
+        c_dtype=c_dtype,
+        acc_dtype=acc_dtype,
+        sf_vec_size=sf_vec_size,
+        mma_tiler_mn=mma_tiler_mn,
+        cluster_shape_mn=cluster_shape_mn,
+        request=request,
+    )
+
 
 """
 GemmAmax API with explicit set_params, compile, and execute paths. 
@@ -13,10 +139,7 @@ Use this method when running one static configuration for each GemmAmax object.
 """
 
 
-@pytest.mark.L0
-@torch_fork_set_rng(seed=0)
-@with_gemm_amax_params
-def test_gemm_amax_compile_execute(
+def _test_gemm_amax_compile_execute(
     a_major,
     b_major,
     c_major,
@@ -103,10 +226,7 @@ Use the wrapper to directly call GemmAmax without explicit setup and compilation
 """
 
 
-@pytest.mark.L0
-@torch_fork_set_rng(seed=0)
-@with_gemm_amax_params
-def test_gemm_amax_wrapper(
+def _test_gemm_amax_wrapper(
     a_major,
     b_major,
     c_major,

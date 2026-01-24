@@ -332,16 +332,11 @@ class GemmSwigluSm100(APIBase):
                     f"Invalid MMA tile shape: expected mma_tiler_mn[1] in {{64, 128, 192, 256}}, got {self.mma_tiler_mn[1]}",
                 )
             else:
-                self._value_error_if(
-                    self.mma_tiler_mn[1] not in [256],
-                    f"Invalid MMA tile shape: MXFP8 Quantized kernel only supports tile_n=256, got {self.mma_tiler_mn[1]}",
-                )
-
-            if self.mma_tiler_mn == (256, 256) and self.cluster_shape_mn != (1, 1) and self.sf_vec_size == 32 and self.sf_dtype == torch.float8_e8m0fnu:
-                self._value_error_if(
-                    not (self.ab12_dtype == torch.bfloat16 and self.c_dtype == torch.bfloat16),
-                    "Invalid MMA tile shape/cluster shape/dtype combination: for 256x256mma tile shape, non-1x1 cluster shape, 32 sf_vec_size, float8_e8m0fnu sf_dtype: ab12_dtype must be bfloat16 and c_dtype must be bfloat16",
-                )
+                if self._is_fp8(self.ab_dtype):
+                    self._value_error_if(
+                        self._is_fp8(self.c_dtype) or self._is_fp8(self.ab12_dtype) or self.ab12_dtype == torch.float32,
+                        "For MXFP8 inputs for blockscaled quantized GEMM swiglu kernel, ab12_dtype and c_dtype cannot be FP8. ab12_dtype also cannot be float32",
+                    )
 
         self._value_error_if(
             self.cluster_shape_mn[0] % (2 if self.mma_tiler_mn[0] == 256 else 1) != 0,
@@ -367,28 +362,11 @@ class GemmSwigluSm100(APIBase):
                 not use_2cta_instrs and self.cluster_shape_mn != (1, 1),
                 "Invalid cluster shape: cluster_shape must be (1, 1) when use_2cta_instrs=False",
             )
-            self._value_error_if(
-                not use_2cta_instrs and self.ab12_dtype == torch.float32,
-                "Invalid ab12_dtype: use_2cta_instrs=False is incompatbile with float32 accumulator",
-            )
-
-            self._value_error_if(
-                self.mma_tiler_mn == (128, 128) and self.cluster_shape_mn == (1, 1) and self.ab12_stride_order != (0, 1, 2),
-                "Invalid MMA tile shape and AB12 stride order combination: (128, 128) mma tile shape with 1x1 cluster shape is only supported with ab12 stride_order (0, 1, 2)",
-            )
-            self._value_error_if(
-                self.mma_tiler_mn != (128, 128) and self.ab12_stride_order != (0, 1, 2),
-                f"Invalid AB12 tensor stride order: for non-128x128mma tile shape, ab12 stride_order must be (0, 1, 2), got {self.ab12_stride_order}",
-            )
             if self.cluster_shape_mn != (1, 1) and self.mma_tiler_mn[0] == 128:
                 self._value_error_if(
                     self.mma_tiler_mn != (128, 128),
                     "Invalid MMA tile shape: for non-1x1 cluster shape and 128xmma tile shape, mma_tiler_mn must be (128, 128)",
                 )
-            self._not_implemented_error_if(
-                self.mma_tiler_mn[0] == 256 and self.ab12_dtype == torch.float32,
-                "mma_tiler_mn[0] == 256 and ab12_dtype == torch.float32 currently disabled",
-            )
 
         self._logger.debug("Checking tensor alignment")
 
