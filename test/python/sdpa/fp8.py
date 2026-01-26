@@ -6,7 +6,7 @@ from enum import IntEnum
 from looseversion import LooseVersion
 
 from .fp8_ref import compute_amax, compute_backward_amax, compute_ref, compute_ref_backward
-from .helpers import get_fp8_scale_factor, get_fp8_descale_factor, convert_to_cudnn_type, create_sparse_int_tensor, print_tensor_stats
+from .helpers import get_fp8_scale_factor, get_fp8_descale_factor, convert_to_cudnn_type, create_sparse_int_tensor, print_tensor_stats, exact_equal
 
 # fmt: off
 
@@ -179,8 +179,8 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
     cudnn_version = LooseVersion(cudnn.backend_version_string())
     if cudnn_version < "9.14.0":
         pytest.skip("SDPA FP8 requires cuDNN 9.14.0 or higher")
-    if torch.cuda.get_device_capability()[0] < 10:
-        pytest.skip("SDPA FP8 requires Blackwell or higher")
+    if torch.cuda.get_device_capability()[0] < 9:
+        pytest.skip("SDPA FP8 requires Hopper or higher")
 
     torch_itype = cfg.data_type
     torch_otype = cfg.output_type if hasattr(cfg, 'output_type') and cfg.output_type else cfg.data_type
@@ -301,9 +301,17 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
         v_gpu = v_gen.to(torch_itype)
 
         graph_fwd = generate_graph_fwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, 0)
-        graph_fwd.validate(); graph_fwd.build_operation_graph()
-        graph_fwd.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
-        graph_fwd.check_support(); graph_fwd.build_plans()
+        try:
+            graph_fwd.validate()
+        except cudnn.cudnnGraphNotSupportedError as e:
+            pytest.skip(f"unsupported forward graph for backward: {e}")
+        try:
+            graph_fwd.build_operation_graph()
+            graph_fwd.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
+            graph_fwd.check_support()
+            graph_fwd.build_plans()
+        except cudnn.cudnnGraphNotSupportedError as e:
+            pytest.skip(f"unsupported forward graph for backward after validate: {e}")
 
         o_gpu = torch.full((b, s_qo, h_q, d_vo), float('nan'), dtype=torch_otype, device="cuda")
         stats_gpu = torch.full((b, h_q, s_qo, 1), float('nan'), dtype=torch.float, device="cuda")
@@ -366,6 +374,27 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
         workspace_bwd = torch.empty(graph.get_workspace_size(), dtype=torch.uint8, device="cuda")
         graph.execute(variant_pack_bwd, workspace_bwd, handle=cudnn_handle)
         torch.cuda.synchronize()
+
+        if deterministic:
+            dQ_gpu_rerun = dQ_gpu.clone().detach()
+            dK_gpu_rerun = dK_gpu.clone().detach()
+            dV_gpu_rerun = dV_gpu.clone().detach()
+
+            dQ_gpu = torch.fill_(dQ_gpu, float("nan"))
+            dK_gpu = torch.fill_(dK_gpu, float("nan"))
+            dV_gpu = torch.fill_(dV_gpu, float("nan"))
+            graph.execute(variant_pack_bwd, workspace_bwd, handle=cudnn_handle)
+            torch.cuda.synchronize()
+
+            determin_err_count = 0
+            determin_err_count += exact_equal(dQ_gpu, dQ_gpu_rerun, tag="dQ_determin", disp_elems=10)
+            determin_err_count += exact_equal(dK_gpu, dK_gpu_rerun, tag="dK_determin", disp_elems=10)
+            determin_err_count += exact_equal(dV_gpu, dV_gpu_rerun, tag="dV_determin", disp_elems=10)
+
+            if determin_err_count != 0:
+                print("@@@@ Overall result: FAILED, determinism check failed - outputs differ between runs.")
+                pytest.fail("determinism check failed", pytrace=False)
+            print("@@@@ Determinism check: PASSED, dQ, dK, dV bitwise match between runs.")
 
         dQ_ref, dK_ref, dV_ref = compute_ref_backward(
             q_gpu, k_gpu, v_gpu, o_gpu, dO_gpu, attn_scale=attn_scale,

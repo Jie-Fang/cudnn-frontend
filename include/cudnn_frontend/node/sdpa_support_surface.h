@@ -187,8 +187,8 @@ SDPA_attributes::validate_sdpa_support_surface(const detail::Context& context,
             (output_data_type == DataType_t::HALF || output_data_type == DataType_t::BFLOAT16) &&
                 (detail::get_backend_version() < 91300 || prop_major < 10),
             error_code_t::GRAPH_NOT_SUPPORTED,
-            "sdpa fp8 forward operation is only supported on cuDNN version 9.13.0 and newer. Please "
-            "consider upgrading your current version.");
+            "sdpa fp8 forward with HALF/BFLOAT16 output is only supported on Blackwell architecture "
+            "with cuDNN version 9.13.0 and newer.");
     } else if (mma_core_mode == DataType_t::HALF) {
         // FP16 specific validation
 

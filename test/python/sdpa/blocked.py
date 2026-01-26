@@ -86,6 +86,21 @@ BLOCKED_TESTS = {
     "test_sdpa_random_bwd_ragged_L0[test243]": {"sms": ["SM_80", "SM_120"]},
     "test_sdpa_random_bwd_ragged_L0[test247]": {"sms": ["SM_80", "SM_120"]},
     "test_sdpa_random_bwd_ragged_L0[test256]": {"sms": ["SM_80", "SM_120"]},
+
+    # FP8 backward GQA numerical accuracy issues on Hopper - passes on Blackwell
+    "test_sdpa_fp8_bwd_L0[test1]": {"sms": ["SM_90"]},
+    "test_sdpa_fp8_bwd_L0[test17]": {"sms": ["SM_90"]},
+    "test_sdpa_fp8_bwd_L0[test20]": {"sms": ["SM_90"]},
+    "test_sdpa_fp8_bwd_L0[test24]": {"sms": ["SM_90"]},
+    "test_sdpa_fp8_bwd_L0[test28]": {"sms": ["SM_90"]},
+    "test_sdpa_fp8_bwd_L0[test33]": {"sms": ["SM_90"]},
+    "test_sdpa_fp8_bwd_L0[test37]": {"sms": ["SM_90"]},
+    "test_sdpa_fp8_bwd_L0[test41]": {"sms": ["SM_90"]},
+    "test_sdpa_fp8_bwd_L0[test43]": {"sms": ["SM_90"]},
+    "test_sdpa_fp8_bwd_L0[test47]": {"sms": ["SM_90"]},
+    "test_sdpa_fp8_bwd_L0[test51]": {"sms": ["SM_90"]},
+    "test_sdpa_fp8_bwd_L0[test56]": {"sms": ["SM_90"]},
+    "test_sdpa_fp8_bwd_L0[test57]": {"sms": ["SM_90"]},
 }
 
 
