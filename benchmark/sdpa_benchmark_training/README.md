@@ -21,10 +21,7 @@ This directory contains benchmarking tools for Scaled Dot Product Attention (SDP
 ### 1. Build Docker Container
 
 ```bash
-docker build \
-    --build-arg GITLAB_ACCESS_TOKEN=<your_token> \
-    --build-arg BRANCH=develop \
-    -t cudnn_attention_benchmark .
+docker build -t cudnn_attention_benchmark .
 
 docker run -it --gpus all --rm cudnn_attention_benchmark
 ```
@@ -196,4 +193,42 @@ runner.save_csv(results, config)
 | `pyt_flash_attention` | PyTorch FlashAttention |
 | `pyt_cudnn` | PyTorch cuDNN backend |
 | `pyt_efficient_attention` | PyTorch xFormers |
+
+## Benchmark Results
+
+### GB200 - Llama 3.1 Causal (top_left)
+![Llama 3.1 Causal on GB200](results/gb200_918_only_cudnn/llama3.1_top_left_causal.png)
+- SDPA parameters: `batch=1; num_q_heads=64; num_kv_heads=8; head_dim=128; is_causal=True`
+- Sequence lengths shown on x-axis
+- Results obtained on NVIDIA GB200 GPU
+
+### GB200 - Llama 3.1 Non-Causal (no_mask)
+![Llama 3.1 Non-Causal on GB200](results/gb200_918_only_cudnn/llama3.1_no_mask.png)
+- SDPA parameters: `batch=1; num_q_heads=64; num_kv_heads=8; head_dim=128; is_causal=False`
+- Sequence lengths shown on x-axis
+- Results obtained on NVIDIA GB200 GPU
+
+### GB200 - DeepSeek V3 Causal (top_left)
+![DeepSeek V3 Causal on GB200](results/gb200_918_only_cudnn/dsv3_top_left_causal.png)
+- SDPA parameters: `batch=1; num_q_heads=128; num_kv_heads=128; head_dim_qk=192; head_dim_vo=128; is_causal=True`
+- Sequence lengths shown on x-axis
+- Results obtained on NVIDIA GB200 GPU
+
+### GB300 - Llama 3.1 Causal (top_left)
+![Llama 3.1 Causal on GB300](results/gb300_918_only_cudnn/llama3.1_top_left_causal.png)
+- SDPA parameters: `batch=1; num_q_heads=64; num_kv_heads=8; head_dim=128; is_causal=True`
+- Sequence lengths shown on x-axis
+- Results obtained on NVIDIA GB300 GPU
+
+### GB300 - Llama 3.1 Non-Causal (no_mask)
+![Llama 3.1 Non-Causal on GB300](results/gb300_918_only_cudnn/llama3.1_no_mask.png)
+- SDPA parameters: `batch=1; num_q_heads=64; num_kv_heads=8; head_dim=128; is_causal=False`
+- Sequence lengths shown on x-axis
+- Results obtained on NVIDIA GB300 GPU
+
+### GB300 - DeepSeek V3 Causal (top_left)
+![DeepSeek V3 Causal on GB300](results/gb300_918_only_cudnn/dsv3_top_left_causal.png)
+- SDPA parameters: `batch=1; num_q_heads=128; num_kv_heads=128; head_dim_qk=192; head_dim_vo=128; is_causal=True`
+- Sequence lengths shown on x-axis
+- Results obtained on NVIDIA GB300 GPU
 

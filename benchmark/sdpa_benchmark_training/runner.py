@@ -32,6 +32,38 @@ from .config_types import BenchmarkConfig, BenchmarkResult, ModelPreset
 logger = logging.getLogger(__name__)
 
 
+def log_environment_info():
+    """Log environment information (torch, CUDA, cuDNN, flash_attn versions)."""
+    try:
+        import torch
+
+        logger.info(f"torch.__version__ = '{torch.__version__}'")
+        logger.info(f"torch.version.cuda = '{torch.version.cuda}'")
+        logger.info(f"torch.cuda.is_available() = {torch.cuda.is_available()}")
+        if torch.cuda.is_available():
+            logger.info(f"torch.cuda.device_count() = {torch.cuda.device_count()}")
+            logger.info(f"torch.cuda.current_device() = {torch.cuda.current_device()}")
+            logger.info(f"torch.cuda.get_device_name(torch.cuda.current_device()) = '{torch.cuda.get_device_name(torch.cuda.current_device())}'")
+        logger.info(f"torch.backends.cudnn.enabled = {torch.backends.cudnn.enabled}")
+    except ImportError:
+        logger.warning("torch not available")
+
+    try:
+        import cudnn
+
+        logger.info(f"cuDNN Backend Version: cudnn.backend_version() = {cudnn.backend_version()}")
+        logger.info(f"cuDNN Frontend Version: cudnn.__version__ = '{cudnn.__version__}'")
+    except ImportError:
+        logger.warning("cudnn not available")
+
+    try:
+        import flash_attn
+
+        logger.info(f"flash_attn.__version__ = '{flash_attn.__version__}'")
+    except ImportError:
+        pass  # flash_attn is optional
+
+
 class BenchmarkRunner:
     """
     Runs benchmarks from configurations with cartesian product expansion.
@@ -178,6 +210,7 @@ class BenchmarkRunner:
                 success=True,
                 gpu_name=result.get("gpu_name"),
                 cudnn_version=result.get("cudnn_version"),
+                cudnn_backend_version=result.get("cudnn_backend_version"),
             )
 
         except Exception as e:
@@ -226,6 +259,10 @@ class BenchmarkRunner:
         Returns:
             List of BenchmarkResult for all executed cases
         """
+        # Log environment info at the start
+        log_environment_info()
+        logger.info("")  # Blank line for readability
+
         results = []
         cases = list(self.expand_config(config))
 

@@ -266,10 +266,12 @@ def run_benchmark(
 
     # Try to get cudnn version
     cudnn_version = None
+    cudnn_backend_version = None
     try:
         import cudnn
 
         cudnn_version = cudnn.__version__
+        cudnn_backend_version = cudnn.backend_version()
     except ImportError:
         pass
 
@@ -281,6 +283,7 @@ def run_benchmark(
         "max_diff": float(parts[12]) if len(parts) > 12 else 0.0,
         "gpu_name": gpu_name,
         "cudnn_version": cudnn_version,
+        "cudnn_backend_version": cudnn_backend_version,
     }
 
 

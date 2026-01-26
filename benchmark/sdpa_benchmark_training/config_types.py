@@ -180,3 +180,4 @@ class BenchmarkResult:
     # Metadata
     gpu_name: Optional[str] = None
     cudnn_version: Optional[str] = None
+    cudnn_backend_version: Optional[int] = None

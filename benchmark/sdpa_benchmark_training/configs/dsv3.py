@@ -37,5 +37,5 @@ CONFIG = BenchmarkConfig(
     deterministic_bwd=[True],
     batch_size=1,
     num_iterations=10,
-    output_dir="../results",
+    output_dir="results",
 )
