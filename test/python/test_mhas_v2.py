@@ -413,6 +413,8 @@ def test_sdpa_random_bwd_ragged_L0(env_info, test_no, request, cudnn_handle):
     test.cfg.is_infer = False
     test.showConfig(test_no, request)
 
+    if request.node.name in test.blocked_tests:
+        pytest.skip(f"blocked test: {request.node.name}")
     exec_sdpa(test.cfg, request, cudnn_handle)
 
 

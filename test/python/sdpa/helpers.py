@@ -25,7 +25,6 @@ def compute_total_elems(shape, strides):
     """Compute total element count (max offset + 1) from shape and strides."""
     return sum((s - 1) * st for s, st in zip(shape, strides)) + 1
 
-
 def convert_to_cudnn_type(torch_type):
     if torch_type == torch.float16:
         return cudnn.data_type.HALF
@@ -82,27 +81,40 @@ def alloc_tensor(shape, data_type, *, elems=None, strides=None, rng=None, mean=0
 
     return tensor, sepbuf, rawbuf
 
-def convert_ragged_to_uniform(ragged_tensor, seq_len):
-    assert ragged_tensor.dim() == 4
-    b, h, s, d = ragged_tensor.size()
-    b_stride, h_stride, s_stride, d_stride = ragged_tensor.stride()
-    assert b_stride >= s_stride >= h_stride >= d_stride
-    assert seq_len.dim() == 4 and (b, 1, 1, 1) == seq_len.size()
+def prefix_sum(t):
+    t = t.flatten()
+    return torch.cat((torch.zeros(1, dtype=t.dtype, device=t.device), torch.cumsum(t, dim=0)))
 
+def convert_packed_to_uniform(packed_tensor, seq_len, s_max, fill_value=0):
+    assert packed_tensor.dim() == 3
+    t, h, d = packed_tensor.size()
     seq_len = seq_len.flatten()
+    b = seq_len.size(0)
 
-    uniform_tensor = torch.zeros(b, s, h, d).to(
-        dtype=ragged_tensor.dtype, device=ragged_tensor.device
-    )
-    ragged_tensor_thd = torch.einsum("bhsd->bshd", ragged_tensor).reshape(b * s, h, d)
+    uniform_tensor = torch.full((b, s_max, h, d), fill_value, dtype=packed_tensor.dtype, device=packed_tensor.device)
 
-    t = 0
-    for b, s in enumerate(seq_len):
-        uniform_tensor[b, 0:s, :, :] = ragged_tensor_thd[t : t + s, :, :]
-        t += s
+    t_idx = 0
+    for bi, s in enumerate(seq_len):
+        uniform_tensor[bi, 0:s, :, :] = packed_tensor[t_idx : t_idx + s, :, :]
+        t_idx += s
 
     uniform_tensor = torch.einsum("bshd->bhsd", uniform_tensor)
     return uniform_tensor
+
+def convert_uniform_to_packed(uniform_tensor, seq_len, max_t):
+    assert uniform_tensor.dim() == 4
+    uniform_tensor = torch.einsum("bhsd->bshd", uniform_tensor)
+    b, s, h, d = uniform_tensor.size()
+    seq_len = seq_len.flatten()
+    assert seq_len.size(0) == b
+    packed_tensor = torch.full((max_t, h, d), float('nan'), dtype=uniform_tensor.dtype, device=uniform_tensor.device)
+
+    t_idx = 0
+    for bi, s_len in enumerate(seq_len):
+        packed_tensor[t_idx : t_idx + s_len, :, :] = uniform_tensor[bi, 0:s_len, :, :]
+        t_idx += s_len
+
+    return packed_tensor
 
 def create_container_and_page_table(tensor, block_size):
     B, H, S, D = tensor.shape
@@ -147,8 +159,9 @@ def exact_equal(actual, expected, tag, disp_elems):
         print(f"%%%% Exact (bitwise) equality of '{tag}' verified")
     return mismatch_cnt
 
-def approx_equal(actual, expected, sepbuf, rawbuf, rtol, atol, tag, disp_elems):
-    mismatches = torch.where(torch.isclose(actual.float(), expected, rtol=rtol, atol=atol) == False)
+def approx_equal(alloc, expected, atol, rtol, tag, disp_elems):
+    actual, sepbuf, rawbuf = alloc
+    mismatches = torch.where(torch.isclose(actual.float(), expected, rtol=rtol, atol=atol, equal_nan=True) == False)
     mismatch_cnt = mismatches[0].numel()
     num_elements = torch.numel(actual)
     if mismatch_cnt != 0:

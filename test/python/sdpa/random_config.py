@@ -49,6 +49,14 @@ def compute_default_BHSD_strides(shape):
     return tuple(strides)
 
 
+def compute_packed_strides(shape):
+    """Compute packed (ragged) BSHD strides for BHSD shape: (s*h*d, d, h*d, 1)."""
+    if shape is None:
+        return None
+    b, h, s, d = shape
+    return (s * h * d, d, h * d, 1)
+
+
 @dataclass
 class ExecConfig:
     # Registry for enum-like fields: field_name -> module/class to getattr from
@@ -110,6 +118,10 @@ class ExecConfig:
 
     implementation: cudnn.attention_implementation = cudnn.attention_implementation.AUTO
 
+    @property
+    def is_train(self):
+        return not self.is_infer
+
     def fill_derived_fields(self):
         """
         Fill in derived fields (shapes, strides) from basic dims.
@@ -126,15 +138,16 @@ class ExecConfig:
         if self.shape_o is None and all(x is not None for x in [self.batches, self.h_q, self.s_q, self.d_v]):
             self.shape_o = (self.batches, self.h_q, self.s_q, self.d_v)
 
-        # Compute default BHSD strides if not provided
+        # Compute strides if not provided (packed for ragged, default BHSD otherwise)
+        stride_fn = compute_packed_strides if self.is_ragged else compute_default_BHSD_strides
         if self.stride_q is None and self.shape_q is not None:
-            self.stride_q = compute_default_BHSD_strides(self.shape_q)
+            self.stride_q = stride_fn(self.shape_q)
         if self.stride_k is None and self.shape_k is not None:
-            self.stride_k = compute_default_BHSD_strides(self.shape_k)
+            self.stride_k = stride_fn(self.shape_k)
         if self.stride_v is None and self.shape_v is not None:
-            self.stride_v = compute_default_BHSD_strides(self.shape_v)
+            self.stride_v = stride_fn(self.shape_v)
         if self.stride_o is None and self.shape_o is not None:
-            self.stride_o = compute_default_BHSD_strides(self.shape_o)
+            self.stride_o = stride_fn(self.shape_o)
 
     def serialize(self) -> dict:
         """Convert config to a serializable dict for repro commands."""
