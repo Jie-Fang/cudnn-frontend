@@ -280,8 +280,7 @@ class Graph : public ICudnn, public INode {
             sdpa_outputs.Amax_S = attributes.outputs[SDPA_attributes::output_names::Amax_S] =
                 output_tensor(attributes.name + "::Amax_S");
         }
-        if (attributes.inputs.find(SDPA_attributes::input_names::Scale_O) != attributes.inputs.end() &&
-            attributes.inputs.at(SDPA_attributes::input_names::Scale_O) != nullptr) {
+        if (attributes.mma_core_mode == DataType_t::FP8_E4M3 || attributes.mma_core_mode == DataType_t::FP8_E5M2) {
             sdpa_outputs.Amax_O = attributes.outputs[SDPA_attributes::output_names::Amax_O] =
                 output_tensor(attributes.name + "::Amax_O");
         }
@@ -1311,10 +1310,20 @@ class Graph : public ICudnn, public INode {
                                                            std::shared_ptr<Tensor_attributes>,
                                                            SDPA_attributes);
 
+    // FP8 version
     std::array<std::shared_ptr<Tensor_attributes>, 4> sdpa_fp8(std::shared_ptr<Tensor_attributes>,
                                                                std::shared_ptr<Tensor_attributes>,
                                                                std::shared_ptr<Tensor_attributes>,
                                                                std::shared_ptr<Tensor_attributes>,
+                                                               std::shared_ptr<Tensor_attributes>,
+                                                               std::shared_ptr<Tensor_attributes>,
+                                                               std::shared_ptr<Tensor_attributes>,
+                                                               std::shared_ptr<Tensor_attributes>,
+                                                               std::shared_ptr<Tensor_attributes>,
+                                                               SDPA_fp8_attributes);
+
+    // MXFP8 version
+    std::array<std::shared_ptr<Tensor_attributes>, 3> sdpa_fp8(std::shared_ptr<Tensor_attributes>,
                                                                std::shared_ptr<Tensor_attributes>,
                                                                std::shared_ptr<Tensor_attributes>,
                                                                std::shared_ptr<Tensor_attributes>,
@@ -2520,6 +2529,28 @@ Graph::sdpa_fp8(std::shared_ptr<Tensor_attributes> q,
     // Call internal implementation and return {Output, Stats, Amax_S, Amax_O} as array for backward compatibility
     auto internal_result = sdpa_internal(q, k, v, std::move(attributes));
     return {internal_result.O, internal_result.Stats, internal_result.Amax_S, internal_result.Amax_O};
+}
+
+inline std::array<std::shared_ptr<Tensor_attributes>, 3>
+Graph::sdpa_fp8(std::shared_ptr<Tensor_attributes> q,
+                std::shared_ptr<Tensor_attributes> k,
+                std::shared_ptr<Tensor_attributes> v,
+                std::shared_ptr<Tensor_attributes> descale_q,
+                std::shared_ptr<Tensor_attributes> descale_k,
+                std::shared_ptr<Tensor_attributes> descale_v,
+                SDPA_fp8_attributes attributes) {
+    if (attributes.mma_core_mode == DataType_t::NOT_SET) {
+        attributes._set_mma_core_mode(DataType_t::FP8_E4M3);
+    }
+
+    // Set FP8 scaling inputs
+    attributes.inputs[SDPA_fp8_attributes::input_names::Descale_Q] = descale_q;
+    attributes.inputs[SDPA_fp8_attributes::input_names::Descale_K] = descale_k;
+    attributes.inputs[SDPA_fp8_attributes::input_names::Descale_V] = descale_v;
+
+    // Call internal implementation and return {Output, Stats, Amax_O} as array for backward compatibility
+    auto internal_result = sdpa_internal(q, k, v, std::move(attributes));
+    return {internal_result.O, internal_result.Stats, internal_result.Amax_O};
 }
 
 inline std::array<std::shared_ptr<Tensor_attributes>, 7>

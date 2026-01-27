@@ -25,6 +25,7 @@ from sdpa.random_config import (
 )
 from sdpa.fp16 import exec_sdpa
 from sdpa.fp8 import exec_sdpa_fp8
+from sdpa.mxfp8 import exec_sdpa_mxfp8
 from sdpa.blocked import fetch_blocked_tests
 from sdpa.helpers import print_section_begin, print_section_end
 
@@ -719,3 +720,40 @@ def test_repro(env_info, request, cudnn_handle):
     cfg.cfg = ExecConfig.deserialize(ast.literal_eval(repro_str))
     cfg.showConfig((1,1), request)
     exec_sdpa(cfg.cfg, request, cudnn_handle)
+
+
+# # ==================================
+# # L0 MXFP8 fprop tests
+# # ==================================
+
+@pytest.mark.parametrize("test_no", generate_test_seeds(num_tests=128, rng_seed=1001), ids=lambda p: f"test{p[0]}")
+@pytest.mark.L0
+def test_sdpa_mxfp8_fwd_L0(env_info, test_no, request, cudnn_handle):
+
+    test = SDPATestConfig(**env_info, implementation=cudnn.attention_implementation.AUTO)
+
+    geom_seed = abs(hash(test_no))
+    data_seed = test_no[2]
+
+    rng = random.Random(geom_seed)
+
+    with RandomizationContext(
+        batches=RandomBatchSize(min=1, max=4, with_high_probability=[1, 2]),
+        s_q_s_kv=RandomSequenceLength(s_q_min=128, s_q_max=512, s_kv_min=128, s_kv_max=512, s_q_distribution={"s_q=1": 0, "s_q=s_kv": 1, "s_q=random": 0}),
+        d_qk_d_v=RandomHiddenDimSize(d_qk_min=128, d_qk_max=128, d_v_min=128, d_v_max=128, head_dim_distribution={"d_qk=d_v": 1, "d_qk=random": 0}, with_high_probability=[(128, 128)]),
+        head_count=RandomHeadGenerator(min=1, max=2, head_group_options=(1, 0, 0)),  # MHA only, small head count
+        data_type=RandomChoice({torch.float8_e4m3fn: 2, torch.float8_e5m2: 1}),
+        output_type=RandomChoice({torch.float16: 2, torch.bfloat16: 1}),  # FP16 more often for tighter tolerance testing
+        with_sliding_mask=SlidingWindowMaskGenerator(causal=0, no_mask=1),  # No-mask only for testing
+        diag_align=RandomChoice({cudnn.diagonal_alignment.TOP_LEFT: 1}),
+        is_q_ragged_or_padded_or_full=RandomChoice({"ragged": 0, "padded": 2, "full": 1}),
+        stats_layout=RandomChoice({"disabled": 1}),
+    ) as randomization_ctx:
+        test.cfg = randomization_ctx(rng, data_seed, geom_seed)
+        test.cfg.use_causal_mask = test.cfg.left_bound is None and test.cfg.right_bound == 0
+
+    test.showConfig(test_no, request)
+
+    if request.node.name in test.blocked_tests:
+        pytest.skip(f"blocked test: {request.node.name}")
+    exec_sdpa_mxfp8(test.cfg, request, cudnn_handle)
