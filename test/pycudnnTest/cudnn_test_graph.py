@@ -234,7 +234,7 @@ class cudnn_test_graph(test_graph):
         # TODO(@mbreughe:) Handle the case for -T1. Right now, -T1 and -T0 both run the graph only once, without timing
         if timingLoop > 1:
             # TODO(@mbreughe): Support cold caches by using multiple variant_packs
-            (min_rt, avg_rt, max_rt) = utils.measure_gpu_runtime(lambda: self.cudnn_graph.execute(variant_pack, workspace), timingLoop)
+            min_rt, avg_rt, max_rt = utils.measure_gpu_runtime(lambda: self.cudnn_graph.execute(variant_pack, workspace), timingLoop)
 
         utils.reportCurrentTime("graph.execute")
 

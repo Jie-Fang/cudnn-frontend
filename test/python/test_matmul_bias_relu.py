@@ -25,7 +25,7 @@ def convert_to_cudnn_type(torch_type):
 
 
 def get_cc():
-    (major, minor) = torch.cuda.get_device_capability()
+    major, minor = torch.cuda.get_device_capability()
     return major * 10 + minor
 
 

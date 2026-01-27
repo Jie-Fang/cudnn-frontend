@@ -12,7 +12,6 @@ from test_low_precision_matmul import (
 )
 from test_fe_api_utils import create_and_permute_tensor, create_scale_factor_tensor
 
-
 # Parameterization marks for GEMM Amax
 GEMM_AMAX_PARAM_MARKS_FP4 = [
     pytest.mark.parametrize("a_major", ["k"]),

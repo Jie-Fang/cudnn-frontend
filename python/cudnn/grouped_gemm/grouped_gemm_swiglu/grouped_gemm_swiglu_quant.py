@@ -63,7 +63,6 @@ from ..utils import (
     silu_f32,
 )
 
-
 """
 High-performance persistent blockscaled contiguous grouped dense GEMM (D = alpha * (SFA * A) * (SFB * B)) example for the NVIDIA Blackwell architecture
 using CUTE DSL.
@@ -2255,7 +2254,7 @@ class BlockScaledContiguousGroupedGemmKernel:
                     #
                     if cutlass.const_expr(self.vector_f32):
                         for i in cutlass.range_constexpr(0, cute.size(tTR_rAcc_up), 2):
-                            (tTR_rAcc_up[i], tTR_rAcc_up[i + 1]) = cute.arch.mul_packed_f32x2(
+                            tTR_rAcc_up[i], tTR_rAcc_up[i + 1] = cute.arch.mul_packed_f32x2(
                                 (tTR_rAcc_up[i], tTR_rAcc_up[i + 1]),
                                 (
                                     cutlass.Float32(alpha_val),
@@ -2264,7 +2263,7 @@ class BlockScaledContiguousGroupedGemmKernel:
                                 rnd=FPRoundingMode.RN,
                                 ftz=False,
                             )
-                            (tTR_rAcc_gate[i], tTR_rAcc_gate[i + 1]) = cute.arch.mul_packed_f32x2(
+                            tTR_rAcc_gate[i], tTR_rAcc_gate[i + 1] = cute.arch.mul_packed_f32x2(
                                 (tTR_rAcc_gate[i], tTR_rAcc_gate[i + 1]),
                                 (
                                     cutlass.Float32(alpha_val),
@@ -2987,21 +2986,29 @@ class BlockScaledContiguousGroupedGemmKernelNoDlpack:
         sfa_cute = cute.make_tensor(sfa_ptr, layout=cute.make_ordered_layout(sfa_shape, order=sfa_order))
         sfb_cute = cute.make_tensor(sfb_ptr, layout=cute.make_ordered_layout(sfb_shape, order=sfb_order))
         tile_idx_cute = cute.make_tensor(
-            tile_idx_to_expert_idx_ptr, layout=cute.make_ordered_layout(tile_idx_to_expert_idx_shape, order=tile_idx_to_expert_idx_order)
+            tile_idx_to_expert_idx_ptr,
+            layout=cute.make_ordered_layout(tile_idx_to_expert_idx_shape, order=tile_idx_to_expert_idx_order),
         )
         num_tiles_cute = cute.make_tensor(
-            num_non_exiting_tiles_ptr, layout=cute.make_ordered_layout(num_non_exiting_tiles_shape, order=num_non_exiting_tiles_order)
+            num_non_exiting_tiles_ptr,
+            layout=cute.make_ordered_layout(num_non_exiting_tiles_shape, order=num_non_exiting_tiles_order),
         )
         alpha_cute = cute.make_tensor(alpha_ptr, layout=cute.make_ordered_layout(alpha_shape, order=alpha_order))
 
         # Optional tensors
         sfd_row_cute = None
         if cutlass.const_expr(sfd_row_ptr is not None):
-            sfd_row_cute = cute.make_tensor(sfd_row_ptr, layout=cute.make_ordered_layout(sfd_row_shape, order=sfd_row_order))
+            sfd_row_cute = cute.make_tensor(
+                sfd_row_ptr,
+                layout=cute.make_ordered_layout(sfd_row_shape, order=sfd_row_order),
+            )
 
         sfd_col_cute = None
         if cutlass.const_expr(sfd_col_ptr is not None):
-            sfd_col_cute = cute.make_tensor(sfd_col_ptr, layout=cute.make_ordered_layout(sfd_col_shape, order=sfd_col_order))
+            sfd_col_cute = cute.make_tensor(
+                sfd_col_ptr,
+                layout=cute.make_ordered_layout(sfd_col_shape, order=sfd_col_order),
+            )
 
         amax_cute = None
         if cutlass.const_expr(amax_ptr is not None):
@@ -3009,11 +3016,17 @@ class BlockScaledContiguousGroupedGemmKernelNoDlpack:
 
         norm_const_cute = None
         if cutlass.const_expr(norm_const_ptr is not None):
-            norm_const_cute = cute.make_tensor(norm_const_ptr, layout=cute.make_ordered_layout(norm_const_shape, order=norm_const_order))
+            norm_const_cute = cute.make_tensor(
+                norm_const_ptr,
+                layout=cute.make_ordered_layout(norm_const_shape, order=norm_const_order),
+            )
 
         m_split_cumsum_cute = None
         if cutlass.const_expr(m_split_cumsum_ptr is not None):
-            m_split_cumsum_cute = cute.make_tensor(m_split_cumsum_ptr, layout=cute.make_ordered_layout(m_split_cumsum_shape, order=m_split_cumsum_order))
+            m_split_cumsum_cute = cute.make_tensor(
+                m_split_cumsum_ptr,
+                layout=cute.make_ordered_layout(m_split_cumsum_shape, order=m_split_cumsum_order),
+            )
 
         prob_cute = None
         if cutlass.const_expr(prob_ptr is not None):

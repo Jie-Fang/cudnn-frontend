@@ -7,13 +7,13 @@ from test_utils import torch_fork_set_rng
 
 
 def is_ampere_arch():
-    (major, minor) = torch.cuda.get_device_capability()
+    major, minor = torch.cuda.get_device_capability()
     cc = major * 10 + minor
     return 80 <= cc and cc < 89
 
 
 def is_hopper_arch():
-    (major, minor) = torch.cuda.get_device_capability()
+    major, minor = torch.cuda.get_device_capability()
     cc = major * 10 + minor
     return 90 <= cc
 

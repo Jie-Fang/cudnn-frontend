@@ -21,7 +21,6 @@ from test_low_precision_matmul import (
     float4_e2m1fn_x2_to_float32,
 )
 
-
 # =============================================================================
 # Parameterization Marks
 # =============================================================================
@@ -307,7 +306,13 @@ def create_mask(
     num_non_exiting_tiles_tensor = torch.tensor([num_non_exiting_tiles], device="cuda", dtype=torch.int32)
     num_m_split_cumsum_tensor = torch.tensor(m_split_cumsum, device="cuda", dtype=torch.int32)
 
-    return valid_m, aligned_group_m_list, tile_idx_to_expert_idx_tensor, num_non_exiting_tiles_tensor, num_m_split_cumsum_tensor
+    return (
+        valid_m,
+        aligned_group_m_list,
+        tile_idx_to_expert_idx_tensor,
+        num_non_exiting_tiles_tensor,
+        num_m_split_cumsum_tensor,
+    )
 
 
 # =============================================================================
@@ -336,9 +341,13 @@ def allocate_grouped_gemm_input_tensors(
     :return: Dictionary containing all input tensors and metadata
     """
 
-    valid_m, aligned_group_m_list, tile_idx_to_expert_idx, num_non_exiting_tiles, num_m_split_cumsum = create_mask(
-        group_m_list, cta_tile_m, m_aligned, permuted_m
-    )
+    (
+        valid_m,
+        aligned_group_m_list,
+        tile_idx_to_expert_idx,
+        num_non_exiting_tiles,
+        num_m_split_cumsum,
+    ) = create_mask(group_m_list, cta_tile_m, m_aligned, permuted_m)
 
     tensor_m = permuted_m if permuted_m is not None else valid_m
 
@@ -374,7 +383,10 @@ def allocate_grouped_gemm_input_tensors(
     }
 
     # Norm constant tensor
-    if ab_dtype in [torch.float8_e4m3fn, torch.float8_e5m2] and sf_dtype in [torch.float8_e8m0fnu, torch.float8_e4m3fn]:
+    if ab_dtype in [torch.float8_e4m3fn, torch.float8_e5m2] and sf_dtype in [
+        torch.float8_e8m0fnu,
+        torch.float8_e4m3fn,
+    ]:
         result["norm_const_tensor"] = torch.tensor([norm_const], dtype=torch.float32, device=device)
 
     return result
@@ -417,7 +429,10 @@ def allocate_grouped_gemm_output_tensors(
     if d_dtype in [torch.bfloat16, torch.float16]:
         result["amax_tensor"] = torch.full((l, 1), float("-inf"), dtype=torch.float32, device=device)
 
-    if ab_dtype in [torch.float8_e4m3fn, torch.float8_e5m2] and sf_dtype in [torch.float8_e8m0fnu, torch.float8_e4m3fn]:  # generate_sfd
+    if ab_dtype in [torch.float8_e4m3fn, torch.float8_e5m2] and sf_dtype in [
+        torch.float8_e8m0fnu,
+        torch.float8_e4m3fn,
+    ]:  # generate_sfd
         sfd_row_ref, sfd_row_tensor = create_scale_factor_tensor(1, tensor_m, n_out, sf_vec_size, sf_dtype)
         result["sfd_row_tensor"] = sfd_row_tensor
         result["sfd_row_ref"] = sfd_row_ref

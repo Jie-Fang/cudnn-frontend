@@ -116,7 +116,7 @@ def test_batchnorm(jparams, testgraph):
     epsilon = testgraph.tensor_cpu_constant(1e-03, dim=[1, 1, 1, 1], data_type=cudnn.data_type.FLOAT)
     momentum = testgraph.tensor_cpu_constant(0.1, dim=[1, 1, 1, 1], data_type=cudnn.data_type.FLOAT)
 
-    (Y, saved_mean, saved_inv_var, out_running_mean, out_running_var) = testgraph.batchnorm(
+    Y, saved_mean, saved_inv_var, out_running_mean, out_running_var = testgraph.batchnorm(
         name="BN",
         input=X,
         scale=scale,
@@ -160,7 +160,7 @@ def test_conv_batchnorm(jparams, testgraph):
     epsilon = testgraph.tensor_cpu_constant(1e-03, dim=[1, 1, 1, 1], data_type=cudnn.data_type.FLOAT)
     momentum = testgraph.tensor_cpu_constant(0.1, dim=[1, 1, 1, 1], data_type=cudnn.data_type.FLOAT)
 
-    (Y, saved_mean, saved_inv_var, out_running_mean, out_running_var) = testgraph.batchnorm(
+    Y, saved_mean, saved_inv_var, out_running_mean, out_running_var = testgraph.batchnorm(
         name="BN",
         input=conv_out,
         scale=scale,

@@ -753,12 +753,12 @@ class FineGrainedReductionQK:
                                 tTR_rS[i + 1] = cute.math.exp2(tTR_rS[i + 1], fastmath=True)
 
                                 if h_r_idx == 0:
-                                    (tTR_rS_compute[i], tTR_rS_compute[i + 1]) = cute.arch.add_packed_f32x2(
+                                    tTR_rS_compute[i], tTR_rS_compute[i + 1] = cute.arch.add_packed_f32x2(
                                         (0.0, 0.0),
                                         (tTR_rS[i], tTR_rS[i + 1]),
                                     )
                                 else:
-                                    (tTR_rS_compute[i], tTR_rS_compute[i + 1]) = cute.arch.add_packed_f32x2(
+                                    tTR_rS_compute[i], tTR_rS_compute[i + 1] = cute.arch.add_packed_f32x2(
                                         (tTR_rS_compute[i], tTR_rS_compute[i + 1]),
                                         (tTR_rS[i], tTR_rS[i + 1]),
                                     )

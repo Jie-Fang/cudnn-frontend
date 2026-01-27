@@ -12,7 +12,7 @@ from test_utils import torch_fork_set_rng
 
 def get_cc():
     """Get CUDA compute capability."""
-    (major, minor) = torch.cuda.get_device_capability()
+    major, minor = torch.cuda.get_device_capability()
     return major * 10 + minor
 
 

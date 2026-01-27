@@ -260,7 +260,7 @@ def _floatx_unpacked_to_f32(x: torch.Tensor, ebits: int, mbits: int) -> torch.Te
 
 
 def get_cc():
-    (major, minor) = torch.cuda.get_device_capability()
+    major, minor = torch.cuda.get_device_capability()
     return major * 10 + minor
 
 

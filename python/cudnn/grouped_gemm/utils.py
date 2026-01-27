@@ -52,7 +52,6 @@ from cutlass.cute.typing import Float32, Int32 as CuteInt32
 import cutlass.cute as cute
 import cutlass
 
-
 ##############################################################################
 # Helper functions
 ##############################################################################

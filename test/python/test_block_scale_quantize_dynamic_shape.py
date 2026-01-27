@@ -12,7 +12,7 @@ from test_utils import torch_fork_set_rng
 
 def get_cc():
     """Get CUDA compute capability."""
-    (major, minor) = torch.cuda.get_device_capability()
+    major, minor = torch.cuda.get_device_capability()
     return major * 10 + minor
 
 
@@ -100,7 +100,13 @@ class TestBlockScaleQuantizeMatmulDynamicShape:
 
         block_scale_dim_m, block_scale_dim_n, block_scale_dim_k = calculate_block_scale_dims(m, n, k, block_size)
 
-        A = graph.tensor(name="A", uid=A_UID, dim=[b, m, k], stride=[m * k, k, 1], data_type=datatype_a)
+        A = graph.tensor(
+            name="A",
+            uid=A_UID,
+            dim=[b, m, k],
+            stride=[m * k, k, 1],
+            data_type=datatype_a,
+        )
 
         SF_A = graph.tensor(
             name="SF_A",
@@ -113,7 +119,13 @@ class TestBlockScaleQuantizeMatmulDynamicShape:
 
         dequan_tensor_a = graph.block_scale_dequantize(A, SF_A, block_size=[1, block_size], name="dequantize_a")
 
-        B = graph.tensor(name="B", uid=B_UID, dim=[b, k, n], stride=[n * k, 1, k], data_type=datatype_b)
+        B = graph.tensor(
+            name="B",
+            uid=B_UID,
+            dim=[b, k, n],
+            stride=[n * k, 1, k],
+            data_type=datatype_b,
+        )
 
         SF_B = graph.tensor(
             name="SF_B",
@@ -126,7 +138,12 @@ class TestBlockScaleQuantizeMatmulDynamicShape:
 
         dequan_tensor_b = graph.block_scale_dequantize(B, SF_B, block_size=[block_size, 1], name="dequantize_b")
 
-        C = graph.matmul(dequan_tensor_a, dequan_tensor_b, compute_data_type=cudnn.data_type.FLOAT, name="matmul")
+        C = graph.matmul(
+            dequan_tensor_a,
+            dequan_tensor_b,
+            compute_data_type=cudnn.data_type.FLOAT,
+            name="matmul",
+        )
         C.set_uid(C_UID).set_output(True).set_data_type(datatype_output)
 
         graph.validate()
@@ -137,7 +154,10 @@ class TestBlockScaleQuantizeMatmulDynamicShape:
 
         for dynamic_shape in matmul_dynamic_shapes:
             block_scale_dim_m, block_scale_dim_n, block_scale_dim_k = calculate_block_scale_dims(
-                dynamic_shape["m"], dynamic_shape["n"], dynamic_shape["k"], block_size
+                dynamic_shape["m"],
+                dynamic_shape["n"],
+                dynamic_shape["k"],
+                block_size,
             )
 
             override_uids = [A_UID, SF_A_UID, B_UID, SF_B_UID, C_UID]
@@ -158,19 +178,54 @@ class TestBlockScaleQuantizeMatmulDynamicShape:
                 [dynamic_shape["m"] * dynamic_shape["n"], dynamic_shape["n"], 1],
             ]
 
-            A_gpu = torch.randint(0, 256, (dynamic_shape["b"], dynamic_shape["m"], dynamic_shape["k"] // 2), dtype=torch.uint8, device="cuda")
-            SF_A_gpu = torch.ones((b, block_scale_dim_m, block_scale_dim_k), dtype=torch.float8_e4m3fn, device="cuda")
-            B_gpu = torch.randint(0, 256, (dynamic_shape["b"], dynamic_shape["k"] // 2, dynamic_shape["n"]), dtype=torch.uint8, device="cuda")
-            SF_B_gpu = torch.ones((b, block_scale_dim_k, block_scale_dim_n), dtype=torch.float8_e4m3fn, device="cuda")
-            C_gpu = torch.empty((dynamic_shape["b"], dynamic_shape["m"], dynamic_shape["n"]), dtype=torch.bfloat16, device="cuda")
+            A_gpu = torch.randint(
+                0,
+                256,
+                (dynamic_shape["b"], dynamic_shape["m"], dynamic_shape["k"] // 2),
+                dtype=torch.uint8,
+                device="cuda",
+            )
+            SF_A_gpu = torch.ones(
+                (b, block_scale_dim_m, block_scale_dim_k),
+                dtype=torch.float8_e4m3fn,
+                device="cuda",
+            )
+            B_gpu = torch.randint(
+                0,
+                256,
+                (dynamic_shape["b"], dynamic_shape["k"] // 2, dynamic_shape["n"]),
+                dtype=torch.uint8,
+                device="cuda",
+            )
+            SF_B_gpu = torch.ones(
+                (b, block_scale_dim_k, block_scale_dim_n),
+                dtype=torch.float8_e4m3fn,
+                device="cuda",
+            )
+            C_gpu = torch.empty(
+                (dynamic_shape["b"], dynamic_shape["m"], dynamic_shape["n"]),
+                dtype=torch.bfloat16,
+                device="cuda",
+            )
 
-            variant_pack = {A_UID: A_gpu, SF_A_UID: SF_A_gpu, B_UID: B_gpu, SF_B_UID: SF_B_gpu, C_UID: C_gpu}
+            variant_pack = {
+                A_UID: A_gpu,
+                SF_A_UID: SF_A_gpu,
+                B_UID: B_gpu,
+                SF_B_UID: SF_B_gpu,
+                C_UID: C_gpu,
+            }
 
             workspace_size = graph.get_workspace_size()
             workspace = torch.empty(workspace_size, dtype=torch.uint8, device="cuda")
 
             graph.execute(
-                variant_pack, workspace, handle=cudnn_handle, override_uids=override_uids, override_shapes=override_shapes, override_strides=override_strides
+                variant_pack,
+                workspace,
+                handle=cudnn_handle,
+                override_uids=override_uids,
+                override_shapes=override_shapes,
+                override_strides=override_strides,
             )
 
             torch.cuda.synchronize()

@@ -13,7 +13,6 @@ from fe_api.test_gemm_swiglu_utils import (
     check_ref_gemm_swiglu_quant,
 )
 
-
 """
 GemmSwiglu API with explicit set_params, compile, and execute paths. 
 Use this method when running one static configuration for each GemmSwiglu object.
