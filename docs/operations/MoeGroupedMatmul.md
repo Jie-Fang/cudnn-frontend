@@ -16,8 +16,6 @@ TokenKs has shape [1, S * topK, 1] and is used in the Scatter mode.
 
 TopK as an int32_t element needs to be explicitly provided in the Scatter mode.
 
-The operation also has broadcasting capabilities which are described in {ref}`cudnn backend's moe grouped matmul operation <CUDNN_BACKEND_OPERATION_MOE_GROUPED_MATMUL_DESCRIPTOR>`.
-
 ## C++ API
 
 ```
