@@ -1433,9 +1433,8 @@ class test_tensor_ir:
                     dump_ir_path = ""  # Set this to dump intermediate IR
                     load_ir_path = ""
                     enable_timing = False
-
                     compile_options = nv_tensor_ir.TensorIRCompilationOptions(
-                        10,  # Hardcoded for blackwell
+                        100, # Hardcoded for blackwell
                         nv_tensor_ir.CompilerBackend.Tile,
                         conversion_options,
                         nv_tensor_ir.DebugOptions(dump_ir_path, load_ir_path, enable_timing),
