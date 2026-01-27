@@ -47,7 +47,7 @@ Notes:
 
 ### Diagram
 
-```
+```text
  A (MxKxL)     B (NxKxL)
       |              |
       \__ GEMM (per L): AB12 = alpha * A @ B  ______________________

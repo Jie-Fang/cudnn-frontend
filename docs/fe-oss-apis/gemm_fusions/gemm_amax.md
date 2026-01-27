@@ -46,7 +46,7 @@ $$
 
 ### Diagram
 
-```
+```text
 A (MxKxL), SFA                   B (NxKxL), SFB
      |  dequantize(.; SFA)            |  dequantize(.; SFB)
      v                                v

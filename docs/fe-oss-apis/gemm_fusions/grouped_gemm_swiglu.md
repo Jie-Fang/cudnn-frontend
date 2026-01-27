@@ -62,7 +62,7 @@ $$
 
 ### Diagram
 
-```
+```text
  A (valid_m×K×1)    B (N×K×L)         tile_idx_to_expert_idx
  SFA                SFB                      |
    |                 |                       |
