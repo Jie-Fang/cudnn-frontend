@@ -21,7 +21,7 @@ before_script:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_13.1.0
 
 .cudnn_ga_image:template:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.17.1.4_13.1.0
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.18.1.3_13.1.0
 
 .device_matrix:template:
     parallel:
@@ -32,26 +32,26 @@ before_script:
 
 .fetch_cudnn_dev:template:
     cache:
-        - key: dev_cudnn_9_19_cuda_13_1
+        - key: dev_cudnn_9_21_cuda_13_2
           paths:
               - downloads
     before_script:
         - mkdir -p downloads
         - ls -1 downloads/
-        - python3 ci/fetch_cudnn.py https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.19 13.1
+        - python3 ci/fetch_cudnn.py https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.21 13.2
         - find /debug_cudnn
         - export CUDNN_PATH=/debug_cudnn # This is required for source building FE
         - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/debug_cudnn/lib64 # This is required for dlopening BE
 
 .fetch_cudnn_rel:template:
     cache:
-        - key: rel_cudnn_9_18_cuda_13_1
+        - key: rel_cudnn_9_19_cuda_13_1
           paths:
               - downloads
     before_script:
         - mkdir -p downloads
         - ls -1 downloads
-        - python3 ci/fetch_cudnn.py https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.18 13.1
+        - python3 ci/fetch_cudnn.py https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.19 13.1
         - find /debug_cudnn
         - export CUDNN_PATH=/debug_cudnn # This is required for source building FE
         - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/debug_cudnn/lib64 # This is required for dlopening BE
@@ -180,7 +180,7 @@ include:
   - local: ci/job-template.yml
     inputs:
         cuda_version: "13.1.0"
-        cudnn_version: "9.17.1.4"
+        cudnn_version: "9.18.1.3"
     rules:
         - if: $CI_PIPELINE_SOURCE == "schedule"
 
@@ -197,7 +197,6 @@ stages:
     - mha_v2_tests
     - pycudnnTest
     - L4_graph_runner
-    - thunder
     - deploy
     - notify
 
@@ -379,27 +378,7 @@ L4_graph_runner_large:cudnn_rel_latest:
     needs: ["build:cudnn_rel_latest"]
     only:
         - schedules
-
-thunder:pjnl_latest:
-    image: gitlab-master.nvidia.com:5005/dl/pytorch/update-scripts:pjnl-latest
-    stage: thunder
-    needs: []
-    parallel:
-        matrix:
-            - ARCH: ["Hopper", "Ampere"]
-    tags:
-        - ${ARCH}
-    script:
-        # Install cudnn_frontend
-        - cd /opt/cudnn/cudnn_frontend
-        - git checkout develop
-        - pip install -v .
-        # Run cudnnex tests in thunder
-        - cd /opt/pytorch/lightning-thunder
-        - pytest thunder/tests/test_cudnn_executor.py -v
-    only:
-        - schedules
-   
+  
 build:cudnn_GA_windows:
     tags:
         - Windows
@@ -410,7 +389,7 @@ build:cudnn_GA_windows:
         # Otherwise just use already downloaded cudnn_8.9.5.29
         # - wget https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v8.9_cuda_12.2/8.9.5.29/cudnn-windows-x86_64-8.9.5.29.zip -O cudnn.zip
         # - Expand-Archive .\cudnn.zip
-        - $Env:CUDNN_PATH = "C:\Users\Public\Downloads\cudnn-9.8.0.87"
+        - $Env:CUDNN_PATH = "C:\Users\Public\Downloads\cudnn-9.18.1.3"
         - mkdir build
         - cd build
         - cmake ../
