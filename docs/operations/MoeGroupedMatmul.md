@@ -1,4 +1,4 @@
-# Matmul
+# MoE Grouped Matmul
 
 The MoE Grouped Matmul operation computes a grouped matmul operation based on given first token offset, token index, and token ks in three modes (None, Gather, and Scatter):
 
