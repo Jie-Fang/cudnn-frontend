@@ -1,7 +1,6 @@
 # Attention
 
-(scaled-dot-product-attention-fp16bf16-forward)=
-## Scaled Dot Product Attention FP16/BF16 Forward
+## Scaled Dot Product Attention
 
 This operation computes the scaled dot product attention (SDPA), as
 
@@ -9,118 +8,173 @@ $\text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d}}\right)V$
 
 using the FlashAttention-2 algorithm as described in the paper [FlashAttention-2: Faster Attention with Better Parallelism and Work Partitioning](https://arxiv.org/abs/2307.08691). It is applicable for both training and inference phases, with an option to generate a stats tensor to be used for backwards training computation.
 
-- Python sample: [samples/python/50_sdpa_forward.ipynb](https://github.com/NVIDIA/cudnn-frontend/blob/main/samples/python/50_sdpa_forward.ipynb)
 
-- Python prefill sample with paged caches: [samples/python/52_sdpa_with_paged_caches.ipynb](https://github.com/NVIDIA/cudnn-frontend/blob/main/samples/python/52_sdpa_with_paged_caches.ipynb)
+## Support Matrix
 
-- Python decode sample with packed paged caches: [samples/python/53_sdpa_decode_with_paged_caches.ipynb](https://github.com/NVIDIA/cudnn-frontend/blob/main/samples/python/53_sdpa_decode_with_paged_caches.ipynb)
+cudnn SDPA operation requires SM80 (Ampere) or newer architectures and cuda toolkit 12.x or newer.
 
-- C++ sample: [samples/cpp/sdpa](https://github.com/NVIDIA/cudnn-frontend/tree/main/samples/cpp/sdpa)
+The support matrix is based on the latest cudnn backend version 9.18.1
 
-- Python tests: [test/python/test_mhas_v2.py](https://github.com/NVIDIA/cudnn-frontend/blob/main/test/python/test_mhas_v2.py)
 
-(configurable-options-fp16bf16-forward)=
-### Configurable Options
+| Arch <br> | Datatype  <br>  | Layout  <br>                      | Paged  <br>  Attn| Masking     | Deterministic | Head dim |  
+|-----------|-------------|-------------------------------|----------|-------------------------------------------| ------------- | ---- | 
+| Ampere/Ada <br> (Prefill) |  fp16, bf16 | BHSD, BSHD, Interleaved¹, <br> Padded², Ragged³ | Yes | Yes⁴ | Yes | d <= 256 | 
+| Ampere/Ada <br> (Decode)  |  fp16, bf16 | BHSD, BSHD, Interleaved, <br> Padded, Ragged | Yes | Yes | Yes | d <= 128  |
+| Ampere/Ada <br> (Bprop)   |  fp16, bf16 | BHSD, BSHD, Interleaved, <br> Padded, Ragged | NA | Yes | Yes | d <= 128 |
+||
+| Hopper <br> (Prefill)      |  fp8, fp16, bf16 | BHSD, BSHD, Interleaved, <br> Padded, Ragged | Yes | Yes | Yes | d <= 256⁵ <br> (d_qk = 192, d_vo = 128)|
+| Hopper <br> (Decode)       |  fp8, fp16, bf16 | BHSD, BSHD, Interleaved, <br> Padded, Ragged | Yes | Yes | Yes | d <= 256 <br> (d_qk = 192, d_vo = 128)|
+| Hopper <br> (Bprop)        |  fp8, fp16, bf16 | BHSD, BSHD, Interleaved, <br> Padded, Ragged | NA | Yes | Yes | d <= 256 <br> (d_qk = 192, d_vo = 128)|
+||
+| Blackwell (B200/B300) <br> (Prefill)     |  fp8, fp16, bf16 | BHSD, BSHD, Interleaved, <br> Padded, Ragged | Yes | Yes  | Yes | d <= 256 <br> (d_qk = 192, d_vo = 128) |
+| Blackwell (B200/B300) <br> (Decode)      |  fp8, fp16, bf16 | BHSD, BSHD, Interleaved, <br> Padded, Ragged | Yes | Yes | Yes | d <= 128 <br> (d_qk = 192, d_vo = 128) |
+| Blackwell (B200/B300) <br> (Bprop)       |  fp8, fp16, bf16 | BHSD, BSHD, Interleaved, <br> Padded, Ragged | NA | Yes | Yes  | d <= 128 <br> (d_qk = 192, d_vo = 128) |
+||
+| Blackwell (Consumer) <br> (Prefill) |  fp16, bf16 | BHSD, BSHD, Interleaved, <br> Padded, Ragged | Yes | Yes | Yes | d <= 256  |
+| Blackwell (Consumer) <br> (Decode)  |  fp16, bf16 | BHSD, BSHD, Interleaved, <br> Padded, Ragged | Yes | Yes | Yes | d <= 128 <br> (d_qk = 192, d_vo = 128)|
+| Blackwell (Consumer) <br> (Bprop)   |  fp16, bf16 | BHSD, BSHD, Interleaved, <br> Padded, Ragged | NA | Yes | Yes | d <= 128 |
 
-- Attention scale (`attn_scale`): Applies a scaling factor to attention scores before the softmax, such as $\frac{1}{\sqrt{\text{d}}}$. Set to 1.0 by default.
-- Bias mask: Applies an additive bias mask to attention scores. You must pass a bias tensor as specified in the tensors section below. The dimensions that are passed as 1 will apply a broadcasted mask over attention scores.
-- Block mask: Masks out tiles attention scores.
-- Alibi mask: Attention with Linear Biases (ALiBi) is an additive mask applied to the attention scores as described in the paper [Train Short, Test Long: Attention with Linear Biases Enables Input Length Extrapolation](https://arxiv.org/abs/2108.12409).
-- Padding mask: Also called variable sequence length, this option masks out padded time steps to ignore them in computation. You must pass a per-batch sequence length as specified in the tensors section below. In padded or ragged layout (discussed below) where the actual seqlen can be less than the max seqlens of a graph, certain batches can be skipped by setting the actual seqlen of the corresponding batch to 0
-- Causal mask: Fills the upper triangular matrix of attention scores with negative infinity. The diagonal of the matrix starts at the top left. As explained below, this can be set by calling `set_diagonal_band_right_bound(0)` and `set_diagonal_alignment(DiagonalAlignment_t::TOP_LEFT)`, or with the deprecated option `set_causal_mask`.
-- Bottom right causal mask: Similar as causal mask, but the diagonal starts from the bottom right. In addition, if variable sequence lengths are used, the diagonal is specified on a "per-batch" basis, depending on the sequence length of the given batch. This can be set by calling `set_diagonal_band_right_bound(0)` and `set_diagonal_alignment(DiagonalAlignment_t::BOTTOM_RIGHT)`, or with the deprecated option `set_causal_mask_bottom_right`.
-- Diagonal Band: Anything between the left and right bounds of the diagonal band will be attended to. By default the left and right bounds are considered infinite and everything is attended to.
- - Diagonal Band Left Bound (new)/Sliding window length (deprecated): Specifies that attention scores up to and including column `row_idx-left_bound` for row index `row_idx` don't get calculated and the associated entries in the score matrix are filled with negative infinity.
- - Diagonal Band Right Bound: Specifies that attention scores beyond column `row_idx+right_bound` for row index `row_idx` don't get calculated and the associated entries in the score matrix are filled with negative infinity.
- - Diagonal Alignment: Specifies that when using left and/or right bounds, the diagonal starts at the top left ("TOP_LEFT") or at the bottom right aligned with the actual sequence length ("BOTTOM_RIGHT").
-- Dropout: Randomly zeros some of the attention weights after the softmax as a form of regularization.
-  You can configure dropout in two ways:
-  - To use the more performant Philox RNG dropout implementation, you must provide:
-    - An RNG seed, passed as a cudnn tensor.
-    - An RNG offset, passed as a cudnn tensor.
-    - A float representing the dropout probability, which is the probability that any given weight is set to zero.
-    - (Debug only) Output RNG dump generated by the Philox RNG, passed as a cuDNN tensor.
-  - To use a user-provided dropout mask, you must provide:
-    - `dropout mask` that matches the attention weights' dimensions, indicating which weights to drop. The dimensions that are passed as 1 will apply a broadcasted dropout mask.
-    - `dropout scale` used to adjust the scale of the remaining weights accordingly, such as $1 / (1 - \text{dropout probability})$.
-- Packed layout: The query, key, value, and output tensor should be [ragged tensors](https://www.tensorflow.org/guide/ragged_tensor), which are tensors with nested variable length lists as inner dimensions. You must pass another tensor called ragged offset tensor using the `Tensor_attributes.set_ragged_offset()` method. the ragged offset tensor must be a tensor of size $(B + 1, 1, 1, 1)$ that contains the nested tensor's offset in terms of number of elements (not bytes). The last value of the offset tensor specifies the offset of the past-the-end element of the ragged tensor. Refer to [](supported-tensor-layouts) for more information on the supported layouts.
-- Paged attention: with paged K and/or V caches, the K/V blocks no longer need to be contiguous, allowing you to better utilize memory by avoiding fragmentation. 
-  - You must therefore:
-    - Pass a `page table k` tensor containing offsets to the container with K blocks. This is optional, and only needed if the K cache is paged.
-    - Pass a `page table v` tensor containing offsets to the container with V blocks. This is optional, and only needed if the V cache is paged.
-    - Pass anything required for `Padding mask` above (i.e., per-batch sequence lengths for both K and V caches). This is needed if at least one of the K/V caches are paged.
-    - Optionally, but recommended, pass the maximum sequence length for the K/V caches. When omitted, it will be (over)estimated, which could result in a corrupted graph in some corner cases.
-  - Offsets to the K/V containers will be calculcated as 
-    - $Kcache[b,h,s,d] = K[page\ table\ k[b,1,s / bs_k, 1],h,s\ mod\ bs_{k},d]$
-    - $Vcache[b,h,s,d] = V[page\ table\ v[b,1,s / bs_v, 1],h,s\ mod\ bs_{v},d]$
-  - See also the [PagedAttention paper](https://arxiv.org/abs/2309.06180).
-- Implementation: Which underlying SDPA implementation to use. Choices are:
-  - `AUTO`: The default, auto-selects one of the following implementations. Almost all users should use this default.
-  - `COMPOSITE`: The standard cuDNN graph representing SDPA as several distinct operations.
-  - `UNIFIED`: An experimental new SDPA forward operation (cuDNN backend 9.13+ only). For now, only supports a few features.
 
-(tensors-fp16bf16-forward)=
-### Tensors
+### Glossary
+¹ Interleaved q,k,v tensors. Generally they have layouts as BS3HD, B3SHD.
 
-#### Input Tensors
+² Padded, variable length sequences (requires padding mask). When sequences in a batch have different lengths, use `use_padding_mask=True` with sequence length tensors.
 
-| Tensor Name                                    | Device     | Data Type      | Dimensions                                                                                                     |
-|------------------------------------------------|------------|----------------|----------------------------------------------------------------------------------------------------------------|
-| Q                                              | GPU        | FP16 or BF16   | $(B, H_{q}, S_{q}, D_{qk})$                                                                                    |
-| K                                              | GPU        | FP16 or BF16   | $(B, H_{k}, S_{kv}, D_{qk})$, or $(num\_blocks_{k}, H_{k}, bs_{k}, D_{qk})$ in case of paged K cache           |
-| V                                              | GPU        | FP16 or BF16   | $(B, H_{v}, S_{kv}, D_{v})$, or $(num\_blocks_{v}, H_{v}, bs_{v}, D_{v})$  in case of paged V cache            |
-| (Bias mask) Bias Mask                          | GPU        | FP16 or BF16   | $(1, 1, S_{q}, S_{kv})$, $(1, H_{q}, S_{q}, S_{kv})$, $(B, 1, S_{q}, S_{kv})$, or $(B, H_{q}, S_{q}, S_{kv})$  |
-| (Padding mask/Paged Caches) Sequence Length Q  | GPU        | INT32          | $(B, 1, 1, 1)$                                                                                                 |
-| (Padding mask/Paged Caches) Sequence Length KV | GPU        | INT32          | $(B, 1, 1, 1)$                                                                                                 |
-| (Philox RNG Dropout) Seed                      | CPU or GPU | INT32 or INT64 | $(1, 1, 1, 1)$                                                                                                 |
-| (Philox RNG Dropout) Offset                    | CPU or GPU | INT32 or INT64 | $(1, 1, 1, 1)$                                                                                                 |
-| (Custom Dropout Mask) Mask                     | GPU        | FP16 or BF16   | $(1, 1, S_{q}, S_{kv})$, $(1, H_{q}, S_{q}, S_{kv})$, $(B, 1, S_{q}, S_{kv})$, or $(B, H_{q}, S_{q}, S_{kv})$  |
-| (Custom Dropout Mask) Scale                    | GPU        | FP32           | $(1, 1, 1, 1)$                                                                                                 |
-| (Packed Layout) Ragged Offset                  | GPU        | INT32          | $(B + 1, 1, 1, 1)$                                                                                             |
-| (Paged Attention) Page Table K                 | GPU        | INT32          | $(B, 1, ceil(S_{kv}/bs_{k}), 1)$                                                                               |
-| (Paged Attention) Page Table V                 | GPU        | INT32          | $(B, 1, ceil(S_{kv}/bs_{v}), 1)$                                                                               |
-| (Paged Attention) Max Sequence Length KV       | CPU        | INT32 or INT64 | $(1, 1, 1, 1)$                                                                                                 |
+&nbsp;&nbsp; *Setup:* <br>
+    &nbsp;&nbsp; - Set `use_padding_mask=True`  
+    &nbsp;&nbsp; -  Provide `seq_len_q` tensor of shape `(B, 1, 1, 1)` with actual query sequence lengths  
+    &nbsp;&nbsp; -  Provide `seq_len_kv` tensor of shape `(B, 1, 1, 1)` with actual key/value sequence lengths  
 
-#### Output Tensors
+&nbsp;&nbsp; *Example:*<br>
+&nbsp;&nbsp; Batch with sequences "aa" (length 2) and "bbb" (length 3), max length `S=8`:
+  - `seq_len_q = [2, 3]`
+  - `seq_len_kv = [2, 3]`
+    ```
+    Q[b=0] = aa000000  (6 padding tokens)
+    Q[b=1] = bbb00000  (5 padding tokens)
+    ```
+  - Dimensions: $[B=2, H=1, S=8, D=64]$
+  - Strides: $[512, 64, 64, 1]$ (standard BHSD)
 
-| Tensor Name                         | Device     | Data Type    | Dimensions                   |
-|-------------------------------------|------------|--------------|------------------------------|
-| O                                   | GPU        | FP16 or BF16 | $(B, H_{q}, S_{q}, D_{v})$   |
-| Stats (training only)               | GPU        | FP32         | $(B, H_{q}, S_{q}, 1)$       |
-| (Philox RNG Dropout) RNG Dump       | GPU        | FP32         | $(B, H_{q}, S_{q}, S_{kv})$  |
+&nbsp;&nbsp; cuDNN automatically masks out padding tokens during attention computation.
 
-Where:
+³ Ragged Layout.
 
-- $B$ is the batch size
-- $H_{q}$ is the number of query heads
-- $H_{k}$ is the number of key heads
-- $H_{v}$ is the number of value heads
-- $S_{q}$ is the sequence length of the query
-- $S_{kv}$ is the sequence length of the key and value
-- $D_{qk}$ is the embedding dimension per head of query and key
-- $D_{v}$ is the embedding dimension per head of value
-- $bs_{k}$ is the (power of 2) block size of the K container
-- $bs_{v}$ is the (power of 2) block size of the V container
-- $num\_blocks_{k}$ is the number of blocks in the K container
-- $num\_blocks_{v}$ is the number of blocks in the V container
+&nbsp;&nbsp; For memory efficiency, variable-length sequences can be **packed** together without padding. This is called THD layout where $T = \sum(\text{seq\_len})$ is the total number of valid tokens.
 
-(gqa-and-mqa-fp16bf16-forward)=
-### Group-Query Attention (GQA) and Multi-Query Attention (MQA)
+&nbsp;&nbsp; **Requirements:**
+- Must set ragged offset tensor via `tensor.set_ragged_offset(ragged_offset_tensor)`
 
-As described in the paper [GQA: Training Generalized Multi-Query Transformer Models from Multi-Head Checkpoints](https://arxiv.org/abs/2305.13245):
+&nbsp;&nbsp; **Ragged Offset Tensor:**
+- Shape: $(B + 1, 1, 1, 1)$
+- Contains cumulative token offsets in **elements** (not bytes)
+- Last element is the total number of tokens
 
-- When $H_{k}$ and $H_{v}$ is less than $H_{q}$ and factors of $H_{q}$, this operation will perform group-query attention (GQA) computation.
-- When $H_{k}$ and $H_{v}$ are both set to 1, this operation perform multi-query attention (MQA) computation.
+&nbsp;&nbsp; **Memory Layout visualization:**
 
-(limitations-fp16bf16-forward)=
-### Limitations
+  &nbsp;&nbsp;&nbsp;&nbsp; *Example:*
 
-- All input and output tensor datatypes must be float16 or bfloat16 datatype except the softmax stats output tensor, which must be float32.
-- The dimension of the embedding dimension per head $D_{qk}$ and $D_{v}$ must be a multiple of 8 with maximum value 128.
-- The stride of the embedding dimension per head $D_{qk}$ and $D_{v}$ for all the tensors above must be 1.
-- This operation is only supported on GPUs with NVIDIA Ampere architecture (SM80) or newer.
+  &nbsp;&nbsp;&nbsp;&nbsp; Same sequences "aa" and "bbb" packed together:<br>
+  - `seq_len_q = [2, 3]`<br>
+  - `seq_len_kv = [2, 3]`<br>
 
-### C++ API
+      ```
+      Q = aabbb  (no padding, T=5 total tokens)
+      ```
+
+  - Dimensions: $[B=2, H=1, S=8, D=64]$ (S is still max sequence length)
+  - Strides: $[512, 64, 64, 1]$ (strides unchanged, but ignored for ragged)
+  - **Ragged offset:** $[0, 2 \times H \times D, 5 \times H \times D] = [0, 128, 320]$
+
+  &nbsp;&nbsp;&nbsp;&nbsp; *Partially Packed Layout:*<br>
+  
+  &nbsp;&nbsp;&nbsp;&nbsp; Tokens within each batch can be contiguous without being globally packed.<br>
+
+  - Ragged offset: $[0, 4 \times H \times D, 7 \times H \times D] = [0, 256, 448]$
+      ```
+      Q = aa00bbb0  (batch 0 at offset 0, batch 1 at offset 4)
+      ```
+
+  &nbsp;&nbsp;&nbsp;&nbsp; *Not Supported:*<br>
+
+  &nbsp;&nbsp;&nbsp;&nbsp; Tokens that are not contiguous within a batch cannot be represented.
+
+  - `seq_len_q = [2, 3]`
+      ```
+      Q = a0abbb00bb000000  (tokens interleaved - NOT SUPPORTED)
+      ```
+&nbsp;&nbsp; **Note that Q,K,V and their gradients can be individually ragged or not.**<br> 
+
+&nbsp;&nbsp; **Backward Pass with THD:**
+
+&nbsp;&nbsp; When using THD layout with cudnn,  maximum total tokens are needed  for efficient workspace allocation. If not set, defaults to $B \times S$ which may overallocate memory.
+
+⁴ None, Causal, Sliding window, Additive Bias, Softcap, Arbitrary masking.
+
+⁵ d_qo should be equal to d_kv. (Except when d_qk == 192 and d_vo = 128, which is also supported.)
+
+### Important Notes on Support Surface
+1. All attention flavors MHA, MQA, GQA are supported.
+2. The head dim (d) should be a multiple of 8 for fp16/bf16 and multiple of 16 for fp8 data-types.
+3. The seqlens s_q, and s_kv can have arbitrary value.
+4. The layout of q,k,v,o and dq, dk, dv, do can be independent of each other.
+5. **Dropout**: Randomly zeros some of the attention weights after the softmax as a form of regularization.
+    You can configure dropout in two ways:
+    - **Philox RNG dropout** (more performant): Provide:
+      - An RNG seed tensor (INT32 or INT64)
+      - An RNG offset tensor (INT32 or INT64)
+      - A float representing the dropout probability (probability that any weight is set to zero)
+      - (Debug only) Output RNG dump tensor to capture the generated dropout mask
+    - **Custom dropout mask**: Provide:
+      - A `dropout mask` tensor matching the attention weights' dimensions. Dimensions set to 1 will broadcast.
+      - A `dropout scale` tensor to adjust remaining weights, typically $1 / (1 - \text{dropout probability})$.
+6. Stats from fprop is supported (Max, Sum). In addition QKClip required for KimiK2, Qwen are also supported optionally.
+
+## Benchmarks
+
+To run the sdpa benchmarks, refer to [benchmarks/sdpa](https://github.com/NVIDIA/cudnn-frontend/blob/main/benchmark/sdpa_benchmark_training/README.md) folder. Current results:
+
+### GB200 - Llama 3.1 Causal (top_left)
+![Llama 3.1 Causal on GB200](https://raw.githubusercontent.com/NVIDIA/cudnn-frontend/main/benchmark/sdpa_benchmark_training/results/gb200_918_only_cudnn/llama3.1_top_left_causal.png) 
+- SDPA parameters: `batch=1; num_q_heads=64; num_kv_heads=8; head_dim=128; is_causal=True`
+- Sequence lengths shown on x-axis
+- Results obtained on NVIDIA GB200 GPU
+
+### GB200 - Llama 3.1 Non-Causal (no_mask)
+![Llama 3.1 Non-Causal on GB200](https://raw.githubusercontent.com/NVIDIA/cudnn-frontend/main/benchmark/sdpa_benchmark_training/results/gb200_918_only_cudnn/llama3.1_no_mask.png)
+- SDPA parameters: `batch=1; num_q_heads=64; num_kv_heads=8; head_dim=128; is_causal=False`
+- Sequence lengths shown on x-axis
+- Results obtained on NVIDIA GB200 GPU
+
+### GB200 - DeepSeek V3 Causal (top_left)
+![DeepSeek V3 Causal on GB200](https://raw.githubusercontent.com/NVIDIA/cudnn-frontend/main/benchmark/sdpa_benchmark_training/results/gb200_918_only_cudnn/dsv3_top_left_causal.png)
+- SDPA parameters: `batch=1; num_q_heads=128; num_kv_heads=128; head_dim_qk=192; head_dim_vo=128; is_causal=True`
+- Sequence lengths shown on x-axis
+- Results obtained on NVIDIA GB200 GPU
+
+### GB300 - Llama 3.1 Causal (top_left)
+![Llama 3.1 Causal on GB300](https://raw.githubusercontent.com/NVIDIA/cudnn-frontend/main/benchmark/sdpa_benchmark_training/results/gb300_918_only_cudnn/llama3.1_top_left_causal.png)
+- SDPA parameters: `batch=1; num_q_heads=64; num_kv_heads=8; head_dim=128; is_causal=True`
+- Sequence lengths shown on x-axis
+- Results obtained on NVIDIA GB300 GPU
+
+### GB300 - Llama 3.1 Non-Causal (no_mask)
+![Llama 3.1 Non-Causal on GB300](https://raw.githubusercontent.com/NVIDIA/cudnn-frontend/main/benchmark/sdpa_benchmark_training/results/gb300_918_only_cudnn/llama3.1_no_mask.png)
+- SDPA parameters: `batch=1; num_q_heads=64; num_kv_heads=8; head_dim=128; is_causal=False`
+- Sequence lengths shown on x-axis
+- Results obtained on NVIDIA GB300 GPU
+
+### GB300 - DeepSeek V3 Causal (top_left)
+![DeepSeek V3 Causal on GB300](https://raw.githubusercontent.com/NVIDIA/cudnn-frontend/main/benchmark/sdpa_benchmark_training/results/gb300_918_only_cudnn/dsv3_top_left_causal.png)
+- SDPA parameters: `batch=1; num_q_heads=128; num_kv_heads=128; head_dim_qk=192; head_dim_vo=128; is_causal=True`
+- Sequence lengths shown on x-axis
+- Results obtained on NVIDIA GB300 GPU
+
+## API
+(scaled-dot-product-attention-fp16bf16-forward)=
+### SDPA FP16/BF16 Forward 
+
+#### C++ API
 
 ```cpp
 // returns [output, softmax_stats]
@@ -213,84 +267,218 @@ SDPA_attributes& set_implementation(AttentionImplementation_t value);
 SDPA_attributes& set_compute_data_type(DataType_t value);
 ```
 
-### Python API
+#### Python API
 
-```
-Args:
-    q (cudnn_tensor): The query data.
-    k (cudnn_tensor): The key data. When page_table_k is provided, 'k' is a container of non-contiguous key data.
-    v (cudnn_tensor): The value data. When page_table_v is provided, 'v' is a container of non-contiguous value data.
-    attn_scale (Optional[Union[float, cudnn_tensor]]): The scale factor for attention. Default is None.
-    bias (Optional[cudnn_tensor]): The bias data for attention. Default is None.
-    block_mask (Optional[cudnn_tensor]): The block mask data for attention. Default is None.
-    use_alibi_mask (Optional[bool]): Whether to use alibi mask. Default is False.
-    use_padding_mask (Optional[bool]): Whether to use padding mask. Default is False.
-    seq_len_q (Optional[cudnn_tensor]): The sequence length of the query.
-    seq_len_kv (Optional[cudnn_tensor]): The sequence length of the key.
-    dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)], Tuple[mask: cudnn_tensor, scale: cudnn_tensor]]]): Whether to do dropout. Default is None.
-    rng_dump (Optional[cudnn_tensor]): Debug tensor to dump the Philox RNG dropout mask. Default is None.
-    paged_attention_k_table (Optional[cudnn_tensor]): The page table to look up offsets into 'k'
-    paged_attention_v_table (Optional[cudnn_tensor]): The page table to look up offsets into 'v'
-    paged_attention_max_seq_len_kv (Optional[integer]): The maximum sequence length for k/v caches when paged attention is active.
-    compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
-    name (Optional[str]): The name of the operation.
-    generate_stats (Optional[bool]): If true, compute and output softmax stats (useful at training time). Default is None, but one of {generate_stats, is_inference} must be set.
-Preferred masking Args:
-    diagonal_alignment (Optional[cudnn.diagonal_alignment]): One of {"TOP_LEFT", "BOTTOM_RIGHT"}. E.g., causal masking can be performed by setting diagonal_alignment=TOP_LEFT, and right_bound=0. Default is TOP_LEFT.
-    diagonal_band_left_bound (Optional[cudnn.diagonal_alignment]): An integer > 1 specifying the offset to the left of the main diagonal to attend to. Default is None, implying +Inf.
-    diagonal_band_right_bound (Optional[cudnn.diagonal_alignment]): An integer > 0 specifying the offset to the right of the main diagonal to attend to. Default is None, implying +Inf.
-Deprecated masking Args (can cause undetermined behavior when combined with the Preferred masking args):
-    sliding_window_length (Optional[int]): A positive int specifying the left bound sliding window length
-    use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
-    use_causal_mask_bottom_right (Optional[bool]): Whether to use bottom right aligned causal mask. Default is False.
-Other deprecated Args:
-    is_inference (Optional[bool]): If false, compute and output softmax stats. Prefer generate_stats instead (NOTE: generate_stats takes the negation of the argument to is_inference).
-Experimental Args:
-    implementation (Optional[cudnn.attention_implementation]): One of {"AUTO", "COMPOSITE", "UNIFIED"}. Almost all users should use "AUTO" (the default).
-
-Returns:
-    o (cudnn_tensor): The output data.
-    stats (Optional[cudnn_tensor]): The softmax statistics in case generate_stats is true.
+```python
+graph.sdpa(
+    q,                                    # Query tensor
+    k,                                    # Key tensor (or container for paged attention)
+    v,                                    # Value tensor (or container for paged attention)
+    attn_scale=None,                      # Attention scale factor (float or tensor)
+    bias=None,                            # Additive bias mask tensor
+    block_mask=None,                      # Block mask tensor (128x128 tiles, UNIFIED only)
+    use_alibi_mask=False,                 # Enable ALiBi positional encoding
+    use_padding_mask=False,               # Enable variable sequence length masking
+    seq_len_q=None,                       # Per-batch query sequence lengths
+    seq_len_kv=None,                      # Per-batch key/value sequence lengths
+    diagonal_alignment=TOP_LEFT,          # Diagonal alignment: TOP_LEFT or BOTTOM_RIGHT
+    diagonal_band_left_bound=None,        # Left bound for sliding window (None = no bound)
+    diagonal_band_right_bound=None,       # Right bound for causal mask (0 = causal, None = no bound)
+    dropout=None,                         # Dropout config: (prob, seed, offset) or (mask, scale)
+    rng_dump=None,                        # Debug: output tensor for RNG dropout mask
+    paged_attention_k_table=None,         # Page table for K container
+    paged_attention_v_table=None,         # Page table for V container
+    paged_attention_max_seq_len_kv=None,  # Max KV sequence length for paged attention
+    generate_stats=None,                  # Output softmax stats for training (True/False)
+    implementation=AUTO,                  # SDPA implementation: AUTO, COMPOSITE, UNIFIED
+    compute_data_type=NOT_SET,            # Computation data type
+    name=None,                            # Operation name
+)
 ```
 
-(scaled-dot-product-attention-fp16bf16-backward)=
-## Scaled Dot Product Attention FP16/BF16 Backward
+**Args:**
+- `q` (cudnn_tensor): The query data with shape $(B, H_q, S_q, D_{qk})$.
+- `k` (cudnn_tensor): The key data. When `paged_attention_k_table` is provided, this is a container of non-contiguous key blocks.
+- `v` (cudnn_tensor): The value data. When `paged_attention_v_table` is provided, this is a container of non-contiguous value blocks.
+- `attn_scale` (Optional[Union[float, cudnn_tensor]]): Scale factor for attention scores. Typically $\frac{1}{\sqrt{d}}$. Default is None (no scaling).
+- `bias` (Optional[cudnn_tensor]): Additive bias mask for attention scores. Supports broadcasting.
+- `block_mask` (Optional[cudnn_tensor]): Block-level mask for 128x128 tiles. Only supported with UNIFIED implementation.
+- `use_alibi_mask` (Optional[bool]): Enable ALiBi (Attention with Linear Biases) positional encoding. Requires `diagonal_band_right_bound=0`.
+- `use_padding_mask` (Optional[bool]): Enable variable sequence length masking. Must also provide `seq_len_q` and `seq_len_kv`.
+- `seq_len_q` (Optional[cudnn_tensor]): Per-batch query sequence lengths with shape $(B, 1, 1, 1)$.
+- `seq_len_kv` (Optional[cudnn_tensor]): Per-batch key/value sequence lengths with shape $(B, 1, 1, 1)$.
+- `diagonal_alignment` (Optional[cudnn.diagonal_alignment]): Alignment for diagonal masking. `TOP_LEFT` for standard causal, `BOTTOM_RIGHT` for prefix-LM style.
+- `diagonal_band_left_bound` (Optional[int]): Left bound for sliding window attention. Masks columns at or before `row_idx - left_bound`.
+- `diagonal_band_right_bound` (Optional[int]): Right bound for causal masking. Set to 0 for causal mask. Masks columns beyond `row_idx + right_bound`.
+- `dropout` (Optional[tuple]): Dropout configuration. Either `(probability, seed, offset)` for Philox RNG or `(mask, scale)` for custom mask.
+- `rng_dump` (Optional[cudnn_tensor]): Debug tensor to capture the Philox RNG dropout mask.
+- `paged_attention_k_table` (Optional[cudnn_tensor]): Page table with block offsets into the K container.
+- `paged_attention_v_table` (Optional[cudnn_tensor]): Page table with block offsets into the V container.
+- `paged_attention_max_seq_len_kv` (Optional[int]): Maximum sequence length for K/V caches. Recommended when using paged attention.
+- `generate_stats` (Optional[bool]): If True, output softmax statistics for backward pass. Required for training.
+- `implementation` (Optional[cudnn.attention_implementation]): SDPA implementation to use. `AUTO` (default), `COMPOSITE`, or `UNIFIED`.
+- `compute_data_type` (Optional[cudnn.data_type]): Data type for internal computation.
+- `name` (Optional[str]): Name for the operation.
 
-This operation computes gradient tensors for scaled dot product attention (SDPA) using the FlashAttention-2 algorithm as described in the paper [FlashAttention-2: Faster Attention with Better Parallelism and Work Partitioning](https://arxiv.org/abs/2307.08691). You are required to pass the stats tensor from the forward operation to the backward operation as input.
+**Returns:**
+- `o` (cudnn_tensor): The output attention data with shape $(B, H_q, S_q, D_v)$.
+- `stats` (Optional[cudnn_tensor]): Softmax statistics with shape $(B, H_q, S_q, 1)$ when `generate_stats=True`.
 
-- Python sample: [samples/python/51_sdpa_backward.ipynb](https://github.com/NVIDIA/cudnn-frontend/blob/main/samples/python/51_sdpa_backward.ipynb)
+#### Configurable Options
+
+- **Attention scale** (`attn_scale`): Applies a scaling factor to attention scores before the softmax, such as $\frac{1}{\sqrt{\text{d}}}$. Set to 1.0 by default. Can be passed as a float or as a tensor.
+
+- **Bias mask**: Applies an additive bias mask to attention scores. You must pass a bias tensor as specified in the tensors section below. The dimensions that are passed as 1 will apply a broadcasted mask over attention scores.
+
+- **Block mask**: Masks out tiles of attention scores at a 128x128 block granularity. The block mask is a uint8 tensor where each bit represents whether a 128x128 tile should be computed (1) or masked out (0). This is supported with the UNIFIED implementation.
+
+- **ALiBi mask**: Attention with Linear Biases (ALiBi) is an additive mask applied to the attention scores as described in the paper [Train Short, Test Long: Attention with Linear Biases Enables Input Length Extrapolation](https://arxiv.org/abs/2108.12409). When using ALiBi, `diagonal_band_right_bound` must be set to exactly 0 (causal masking).
+
+- **Padding mask** (Variable Sequence Length): Masks out padded time steps to ignore them in computation. You must pass per-batch sequence length tensors as specified in the tensors section below. In padded or ragged layout (discussed below) where the actual seqlen can be less than the max seqlens of a graph, certain batches can be skipped by setting the actual seqlen of the corresponding batch to 0.
+
+- **Diagonal masking options**: These options control causal and sliding window masking:
+
+- **Diagonal Alignment** (`diagonal_alignment`): Specifies where the diagonal starts. Options are:
+  - `TOP_LEFT`: The diagonal starts at the top-left of the attention matrix. Used for standard causal masking.
+  - `BOTTOM_RIGHT`: The diagonal starts at the bottom-right of the attention matrix, aligned with the actual sequence length. Useful for prefix-LM or when $S_q \neq S_{kv}$.
+
+- **Diagonal Band Right Bound** (`diagonal_band_right_bound`): Specifies that attention scores beyond column `row_idx + right_bound` are masked with negative infinity. Setting this to 0 enables causal masking.
+
+- **Diagonal Band Left Bound** (`diagonal_band_left_bound`): Specifies that attention scores at or before column `row_idx - left_bound` are masked with negative infinity. This enables sliding window attention.
+
+- **Common masking patterns**:
+  - Causal mask (top-left): `diagonal_alignment=TOP_LEFT`, `right_bound=0`
+  - Causal mask (bottom-right): `diagonal_alignment=BOTTOM_RIGHT`, `right_bound=0`
+  - Sliding window: Set `left_bound` to window size
+  - Band attention: Set both `left_bound` and `right_bound`
+
+- **Paged attention**: Enables non-contiguous K/V caches to reduce memory fragmentation. See the [PagedAttention paper](https://arxiv.org/abs/2309.06180).
+  - **Requirements**:
+    - Pass `page_table_k` tensor with block offsets into the K container (optional if K is not paged)
+    - Pass `page_table_v` tensor with block offsets into the V container (optional if V is not paged)
+    - Pass sequence length tensors (`seq_len_q`, `seq_len_kv`) for padding mask
+    - Optionally pass `paged_attention_max_seq_len_kv` for the maximum KV sequence length (recommended)
+  - **Offset calculation**:
+    - $K_{cache}[b,h,s,d] = K_{container}[page\_table\_k[b,1,s / bs_k, 1], h, s \mod bs_k, d]$
+    - $V_{cache}[b,h,s,d] = V_{container}[page\_table\_v[b,1,s / bs_v, 1], h, s \mod bs_v, d]$
+  - **Packed page tables**: Page tables can also use ragged offsets to pack only the necessary block indices, useful for frameworks that prefer packed representations.
+
+- **Implementation**: Select the underlying SDPA implementation:
+  - `AUTO` (default): Auto-selects the best implementation. Recommended for most users.
+  - `COMPOSITE`: Standard cuDNN graph representing SDPA as distinct operations.
+  - `UNIFIED`: Optimized fused SDPA operation (cuDNN 9.13.1+). Supports a subset of features including block masking.
+
+- **Generate stats** (`generate_stats`): When `True`, outputs softmax statistics needed for backward pass during training. Set to `True` for training, `False` for inference.
+
+#### Limitations
+
+- Head dimension must be a multiple of 8.
+- ALiBi requires causal masking (`diagonal_band_right_bound=0`).
+- Block masking is only supported with the UNIFIED implementation.
+- Ampere/Ada architectures are limited to head dimensions up to 256 for prefill, 128 for decode and backward.
+
+#### Tensors
+##### Input Tensors
+
+| Tensor Name                                    | Device     | Data Type      | Dimensions                                                                                                     |
+|------------------------------------------------|------------|----------------|----------------------------------------------------------------------------------------------------------------|
+| Q                                              | GPU        | FP16 or BF16   | $(B, H_{q}, S_{q}, D_{qk})$                                                                                    |
+| K                                              | GPU        | FP16 or BF16   | $(B, H_{k}, S_{kv}, D_{qk})$, or $(num\_blocks_{k}, H_{k}, bs_{k}, D_{qk})$ in case of paged K cache           |
+| V                                              | GPU        | FP16 or BF16   | $(B, H_{v}, S_{kv}, D_{v})$, or $(num\_blocks_{v}, H_{v}, bs_{v}, D_{v})$  in case of paged V cache            |
+| (Bias mask) Bias Mask                          | GPU        | FP16 or BF16   | $(1, 1, S_{q}, S_{kv})$, $(1, H_{q}, S_{q}, S_{kv})$, $(B, 1, S_{q}, S_{kv})$, or $(B, H_{q}, S_{q}, S_{kv})$  |
+| (Padding mask/Paged Caches) Sequence Length Q  | GPU        | INT32          | $(B, 1, 1, 1)$                                                                                                 |
+| (Padding mask/Paged Caches) Sequence Length KV | GPU        | INT32          | $(B, 1, 1, 1)$                                                                                                 |
+| (Philox RNG Dropout) Seed                      | CPU or GPU | INT32 or INT64 | $(1, 1, 1, 1)$                                                                                                 |
+| (Philox RNG Dropout) Offset                    | CPU or GPU | INT32 or INT64 | $(1, 1, 1, 1)$                                                                                                 |
+| (Custom Dropout Mask) Mask                     | GPU        | FP16 or BF16   | $(1, 1, S_{q}, S_{kv})$, $(1, H_{q}, S_{q}, S_{kv})$, $(B, 1, S_{q}, S_{kv})$, or $(B, H_{q}, S_{q}, S_{kv})$  |
+| (Custom Dropout Mask) Scale                    | GPU        | FP32           | $(1, 1, 1, 1)$                                                                                                 |
+| (Packed Layout) Ragged Offset                  | GPU        | INT32          | $(B + 1, 1, 1, 1)$                                                                                             |
+| (Paged Attention) Page Table K                 | GPU        | INT32          | $(B, 1, ceil(S_{kv}/bs_{k}), 1)$                                                                               |
+| (Paged Attention) Page Table V                 | GPU        | INT32          | $(B, 1, ceil(S_{kv}/bs_{v}), 1)$                                                                               |
+| (Paged Attention) Max Sequence Length KV       | CPU        | INT32 or INT64 | $(1, 1, 1, 1)$                                                                                                 |
+
+##### Output Tensors
+
+| Tensor Name                         | Device     | Data Type    | Dimensions                   |
+|-------------------------------------|------------|--------------|------------------------------|
+| O                                   | GPU        | FP16 or BF16 | $(B, H_{q}, S_{q}, D_{v})$   |
+| Stats (training only)               | GPU        | FP32         | $(B, H_{q}, S_{q}, 1)$       |
+| (Philox RNG Dropout) RNG Dump       | GPU        | FP32         | $(B, H_{q}, S_{q}, S_{kv})$  |
+
+Where:
+
+- $B$ is the batch size
+- $H_{q}$ is the number of query heads
+- $H_{k}$ is the number of key heads
+- $H_{v}$ is the number of value heads
+- $S_{q}$ is the sequence length of the query
+- $S_{kv}$ is the sequence length of the key and value
+- $D_{qk}$ is the embedding dimension per head of query and key
+- $D_{v}$ is the embedding dimension per head of value
+- $bs_{k}$ is the (power of 2) block size of the K container
+- $bs_{v}$ is the (power of 2) block size of the V container
+- $num\_blocks_{k}$ is the number of blocks in the K container
+- $num\_blocks_{v}$ is the number of blocks in the V container
+
+
+#### Samples and Tests
+
+- Python forward sample: [samples/python/50_sdpa_forward.ipynb](https://github.com/NVIDIA/cudnn-frontend/blob/main/samples/python/50_sdpa_forward.ipynb)
+
+- Python backward sample: [samples/python/51_sdpa_backward.ipynb](https://github.com/NVIDIA/cudnn-frontend/blob/main/samples/python/51_sdpa_backward.ipynb)
+
+- Python prefill sample with paged caches: [samples/python/52_sdpa_with_paged_caches.ipynb](https://github.com/NVIDIA/cudnn-frontend/blob/main/samples/python/52_sdpa_with_paged_caches.ipynb)
+
+- Python decode sample with packed paged caches: [samples/python/53_sdpa_decode_with_paged_caches.ipynb](https://github.com/NVIDIA/cudnn-frontend/blob/main/samples/python/53_sdpa_decode_with_paged_caches.ipynb)
 
 - C++ sample: [samples/cpp/sdpa](https://github.com/NVIDIA/cudnn-frontend/tree/main/samples/cpp/sdpa)
 
-- Python tests: [test/python/test_mhas_v2.py](https://github.com/NVIDIA/cudnn-frontend/blob/main/test/python/test_mhas_v2.py)
+- Python tests (v2 with randomized configurations): [test/python/test_mhas_v2.py](https://github.com/NVIDIA/cudnn-frontend/blob/main/test/python/test_mhas_v2.py)
 
-### Configurable Options
 
-All the [configurable options mentioned in the forward operation](configurable-options-fp16bf16-forward), including ragged tensors and GQA/MQA, are applicable in the backward operation as well.
+**Example Usage:**
 
-### Tensors
+```python
+import cudnn
+import torch
+import math
 
-All the [tensor requirements for the forward operation](tensors-fp16bf16-forward) are applicable in the backward operation as well. The gradient tensors for query, key, value, output, and bias should have the same properties as their non-gradient counterparts.
+# Create graph
+graph = cudnn.pygraph(
+    io_data_type=cudnn.data_type.HALF,
+    intermediate_data_type=cudnn.data_type.FLOAT,
+    compute_data_type=cudnn.data_type.FLOAT,
+)
 
-#### Input Tensors
+# Create tensor descriptors
+q = graph.tensor_like(q_gpu)
+k = graph.tensor_like(k_gpu)
+v = graph.tensor_like(v_gpu)
 
-| Tensor Name           | Device     | Data Type      | Dimensions                 |
-|-----------------------|------------|----------------|----------------------------|
-| dO                    | GPU        | FP16 or BF16   | $(B, H_{q}, S_{q}, D_{v})$ |
+# Forward pass with causal masking
+o, stats = graph.sdpa(
+    name="sdpa",
+    q=q,
+    k=k,
+    v=v,
+    attn_scale=1.0 / math.sqrt(d),
+    generate_stats=True,                          # For training
+    diagonal_band_right_bound=0,                  # Causal mask
+    diagonal_alignment=cudnn.diagonal_alignment.TOP_LEFT,
+)
 
-#### Output Tensors
+o.set_output(True).set_dim(shape_o).set_stride(stride_o)
+stats.set_output(True).set_data_type(cudnn.data_type.FLOAT)
 
-| Tensor Name           | Device     | Data Type    | Dimensions                   |
-|-----------------------|------------|--------------|------------------------------|
-| dQ                    | GPU        | FP16 or BF16 | $(B, H_{q}, S_{q}, D_{qk})$  |
-| dK                    | GPU        | FP16 or BF16 | $(B, H_{k}, S_{kv}, D_{qk})$ |
-| dV                    | GPU        | FP16 or BF16 | $(B, H_{v}, S_{kv}, D_{v})$  |
+# Build and execute
+graph.build([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
+```
+(scaled-dot-product-attention-fp16bf16-backward)=
+### SDPA FP16/BF16 Backward
 
-### Limitations
+This operation computes gradient tensors for scaled dot product attention (SDPA) using the FlashAttention-2 algorithm as described in the paper [FlashAttention-2: Faster Attention with Better Parallelism and Work Partitioning](https://arxiv.org/abs/2307.08691). You are required to pass the stats tensor from the forward operation to the backward operation as input.
 
-All the [limitations mentioned in the forward operation](limitations-fp16bf16-forward) are applicable in the backward operation as well.
-
-### C++ API
+#### C++ API
 ```cpp
 // returns [dQ, dK, dV]
 std::array<std::shared_ptr<Tensor_attributes>, 3>
@@ -321,7 +509,7 @@ SDPA_backward_attributes& set_max_total_seq_len_q(int64_t const value);
 SDPA_backward_attributes& set_max_total_seq_len_kv(int64_t const value);
 // ==========================  END     var len options =====================
 
-// ========================== BEGIN score modoptions =====================
+// ========================== BEGIN score mod options =====================
 SDPA_backward_attributes& set_score_mod(std::function<Tensor_t(Graph_t, Tensor_t)>);
 
 // Use in combination to set_diagonal_alignment to set (bottom right) causal masking
@@ -367,45 +555,130 @@ SDPA_backward_attributes& set_compute_data_type(DataType_t const value);
 
 ```
 
-### Python API 
+#### Python API
 
+```python
+graph.sdpa_backward(
+    q,                                    # Query tensor from forward pass
+    k,                                    # Key tensor from forward pass
+    v,                                    # Value tensor from forward pass
+    o,                                    # Output tensor from forward pass
+    dO,                                   # Gradient of output
+    stats,                                # Softmax statistics from forward pass
+    attn_scale=None,                      # Attention scale factor (must match forward)
+    bias=None,                            # Bias tensor from forward pass
+    dBias=None,                           # Output tensor for bias gradient
+    use_alibi_mask=False,                 # Enable ALiBi (must match forward)
+    use_padding_mask=False,               # Enable variable sequence length masking
+    seq_len_q=None,                       # Per-batch query sequence lengths
+    seq_len_kv=None,                      # Per-batch key/value sequence lengths
+    max_total_seq_len_q=None,             # Max total tokens for Q (ragged tensors)
+    max_total_seq_len_kv=None,            # Max total tokens for KV (ragged tensors)
+    diagonal_alignment=TOP_LEFT,          # Diagonal alignment (must match forward)
+    diagonal_band_left_bound=None,        # Left bound (must match forward)
+    diagonal_band_right_bound=None,       # Right bound (must match forward)
+    dropout=None,                         # Dropout config (must match forward)
+    use_deterministic_algorithm=False,    # Force deterministic gradient computation
+    compute_data_type=NOT_SET,            # Computation data type
+    name=None,                            # Operation name
+)
 ```
-Args:
-    q (cudnn_tensor): The query data.
-    k (cudnn_tensor): The key data.
-    v (cudnn_tensor): The value data.
-    o (cudnn_tensor): The output data.
-    dO (cudnn_tensor): The output loss gradient.
-    stats (cudnn_tensor): The softmax statistics from the forward pass.
-    attn_scale (Optional[Union[float, cudnn_tensor]]): The scale factor for attention. Default is None.
-    bias (Optional[cudnn_tensor]): The bias data for attention. Default is None.
-    dBias (Optional[cudnn_tensor]): The dBias data for attention. Default is None.
-    use_alibi_mask (Optional[bool]): Whether to use alibi mask. Default is False.
-    use_padding_mask (Optional[bool]): Whether to use padding mask. Default is False.
-    seq_len_q (Optional[cudnn_tensor]): The sequence length of the query.
-    seq_len_kv (Optional[cudnn_tensor]): The sequence length of the key.
-    dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)], Tuple[mask: cudnn_tensor, scale: cudnn_tensor]]]): Whether to do dropout. Default is None.
-    rng_dump (Optional[cudnn_tensor]): Debug tensor to dump the Philox RNG dropout mask. Default is None.
-    use_deterministic_algorithm (Optional[bool]): Whether to always use deterministic algorithm. Default is False.
-    compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
-    name (Optional[str]): The name of the operation.
-Preferred masking Args:
-    diagonal_alignment (Optional[cudnn.diagonal_alignment]): One of {"TOP_LEFT", "BOTTOM_RIGHT"}. E.g., causal masking can be performed by setting diagonal_alignment=TOP_LEFT, and right_bound=0. Default is TOP_LEFT.
-    left_bound (Optional[cudnn.diagonal_alignment]): An integer > 1 specifying the offset to the left of the main diagonal to attend to. Default is None, implying +Inf.
-    right_bound (Optional[cudnn.diagonal_alignment]): An integer > 0 specifying the offset to the right of the main diagonal to attend to. Default is None, implying +Inf.
-Deprecated masking Args (can cause undetermined behavior when combined with the Preferred masking args):
-    sliding_window_length (Optional[int]): A positive int specifying the left bound sliding window length
-    use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
-    use_causal_mask_bottom_right (Optional[bool]): Whether to use bottom right aligned causal mask. Default is False.
 
-Returns:
-    dQ (cudnn_tensor): The query gradient data.
-    dK (cudnn_tensor): The key gradient data.
-    dV (cudnn_tensor): The value gradient data.
+**Args:**
+- `q` (cudnn_tensor): The query data from the forward pass.
+- `k` (cudnn_tensor): The key data from the forward pass.
+- `v` (cudnn_tensor): The value data from the forward pass.
+- `o` (cudnn_tensor): The output data from the forward pass.
+- `dO` (cudnn_tensor): The gradient of the loss with respect to the output.
+- `stats` (cudnn_tensor): The softmax statistics tensor from the forward pass (`generate_stats=True`).
+- `attn_scale` (Optional[Union[float, cudnn_tensor]]): The attention scale factor. Must match the forward pass.
+- `bias` (Optional[cudnn_tensor]): The bias tensor from the forward pass.
+- `dBias` (Optional[cudnn_tensor]): Output tensor to store the bias gradient.
+- `use_alibi_mask` (Optional[bool]): Enable ALiBi. Must match the forward pass configuration.
+- `use_padding_mask` (Optional[bool]): Enable variable sequence length masking. Must match forward pass.
+- `seq_len_q` (Optional[cudnn_tensor]): Per-batch query sequence lengths.
+- `seq_len_kv` (Optional[cudnn_tensor]): Per-batch key/value sequence lengths.
+- `max_total_seq_len_q` (Optional[int]): Maximum total sequence tokens for Q when using ragged tensors. Used for workspace allocation. Defaults to $B \times S_q$ if not provided.
+- `max_total_seq_len_kv` (Optional[int]): Maximum total sequence tokens for KV when using ragged tensors. Used for workspace allocation. Defaults to $B \times S_{kv}$ if not provided.
+- `diagonal_alignment` (Optional[cudnn.diagonal_alignment]): Must match the forward pass.
+- `diagonal_band_left_bound` (Optional[int]): Must match the forward pass.
+- `diagonal_band_right_bound` (Optional[int]): Must match the forward pass.
+- `dropout` (Optional[tuple]): Dropout configuration. Must match the forward pass to ensure the same dropout mask is applied.
+- `use_deterministic_algorithm` (Optional[bool]): If True, forces deterministic gradient computation. This ensures bitwise-identical results across multiple runs but may be slower. Default is False.
+- `compute_data_type` (Optional[cudnn.data_type]): Data type for internal computation.
+- `name` (Optional[str]): Name for the operation.
+
+**Returns:**
+- `dQ` (cudnn_tensor): The gradient with respect to the query tensor.
+- `dK` (cudnn_tensor): The gradient with respect to the key tensor.
+- `dV` (cudnn_tensor): The gradient with respect to the value tensor.
+
+**Important Notes:**
+- The backward operation does NOT support paged attention. K and V must be contiguous tensors.
+- All masking and dropout configurations must exactly match the forward pass to ensure correct gradients.
+- When using ragged tensors, set `max_total_seq_len_q` and `max_total_seq_len_kv` to the maximum total tokens (sum of sequence lengths) for proper workspace allocation.
+
+
+- Python sample: [samples/python/51_sdpa_backward.ipynb](https://github.com/NVIDIA/cudnn-frontend/blob/main/samples/python/51_sdpa_backward.ipynb)
+
+- C++ sample: [samples/cpp/sdpa](https://github.com/NVIDIA/cudnn-frontend/tree/main/samples/cpp/sdpa)
+
+- Python tests (v2 with randomized configurations): [test/python/test_mhas_v2.py](https://github.com/NVIDIA/cudnn-frontend/blob/main/test/python/test_mhas_v2.py)
+
+#### Tensors
+
+##### Input Tensors
+
+| Tensor Name           | Device     | Data Type      | Dimensions                 |
+|-----------------------|------------|----------------|----------------------------|
+| dO                    | GPU        | FP16 or BF16   | $(B, H_{q}, S_{q}, D_{v})$ |
+
+##### Output Tensors
+
+| Tensor Name           | Device     | Data Type    | Dimensions                   |
+|-----------------------|------------|--------------|------------------------------|
+| dQ                    | GPU        | FP16 or BF16 | $(B, H_{q}, S_{q}, D_{qk})$  |
+| dK                    | GPU        | FP16 or BF16 | $(B, H_{k}, S_{kv}, D_{qk})$ |
+| dV                    | GPU        | FP16 or BF16 | $(B, H_{v}, S_{kv}, D_{v})$  |
+
+**Example Usage:**
+
+```python
+# Backward pass graph
+graph_backward = cudnn.pygraph(
+    io_data_type=cudnn.data_type.HALF,
+    intermediate_data_type=cudnn.data_type.FLOAT,
+    compute_data_type=cudnn.data_type.FLOAT,
+)
+
+q = graph_backward.tensor_like(q_gpu)
+k = graph_backward.tensor_like(k_gpu)
+v = graph_backward.tensor_like(v_gpu)
+o = graph_backward.tensor_like(o_gpu)
+dO = graph_backward.tensor_like(dO_gpu)
+stats = graph_backward.tensor_like(stats_gpu)
+
+dQ, dK, dV = graph_backward.sdpa_backward(
+    name="sdpa_backward",
+    q=q,
+    k=k,
+    v=v,
+    o=o,
+    dO=dO,
+    stats=stats,
+    attn_scale=attn_scale,
+    diagonal_band_right_bound=0,  # Must match forward
+    diagonal_alignment=cudnn.diagonal_alignment.TOP_LEFT,
+    use_deterministic_algorithm=True,  # For reproducible training
+)
+
+dQ.set_output(True).set_dim(q_gpu.shape).set_stride(q_gpu.stride())
+dK.set_output(True).set_dim(k_gpu.shape).set_stride(k_gpu.stride())
+dV.set_output(True).set_dim(v_gpu.shape).set_stride(v_gpu.stride())
 ```
 
 (scaled-dot-product-attention-fp8-forward)=
-## Scaled Dot Product Attention FP8 Forward
+### SDPA FP8 Forward
 
 This operation computes the scaled dot product attention (SDPA) in the 8-bit floating point (FP8) datatype, using the FlashAttention-2 algorithm as described in the paper [FlashAttention-2: Faster Attention with Better Parallelism and Work Partitioning](https://arxiv.org/abs/2307.08691). It is applicable for both training and inference phases, with an option to generate a stats tensor to be used for backwards training computation.
 
@@ -423,75 +696,7 @@ The suggested value for the descale factor is the reciprocal of the scale factor
 
 Since scaling and descaling are critical for convergence with FP8 datatype, you are required to pass scaling and descaling input tensors, as well as amax output tensors.
 
-- C++ sample: [samples/cpp/sdpa](https://github.com/NVIDIA/cudnn-frontend/tree/main/samples/cpp/sdpa)
-
-(configurable-options-fp8-forward)=
-### Configurable Options
-
-The current FP8 support is a subset of the options supported in FP16 and BF16 support. We are actively working on expanding the support for FP8.
-- Attention scale (`attn_scale`): Applies a scaling factor to attention scores before the softmax, such as $\frac{1}{\sqrt{\text{d}}}$. Set to 1.0 by default.
-- Causal mask: Fills the upper triangular matrix of attention scores with negative infinity.
-
-### Tensors
-
-The tensors in forward operation are defined as the following:
-
-$P = QK^T$
-
-$S = \text{softmax}(P)$
-
-$O = SV$
-
-#### Input Tensors
-
-| Tensor Name           | Device     | Data Type    | Dimensions                   |
-|-----------------------|------------|--------------|------------------------------|
-| Q                     | GPU        | E4M3 or E5M2 | $(B, H_{q}, S_{q}, D_{qk})$  |
-| K                     | GPU        | E4M3 or E5M2 | $(B, H_{k}, S_{kv}, D_{qk})$ |
-| V                     | GPU        | E4M3 or E5M2 | $(B, H_{v}, S_{kv}, D_{v})$  |
-| Descale Q             | GPU        | FP32         | $(1, 1, 1, 1)$               |
-| Descale K             | GPU        | FP32         | $(1, 1, 1, 1)$               |
-| Descale V             | GPU        | FP32         | $(1, 1, 1, 1)$               |
-| (Bias mask) Bias Mask               | GPU        | E4M3 or E5M2   | $(1, 1, S_{q}, S_{kv})$, $(1, H_{q}, S_{q}, S_{kv})$, $(B, 1, S_{q}, S_{kv})$, or $(B, H_{q}, S_{q}, S_{kv})$  |
-| (Padding mask) Sequence Length Q    | GPU        | INT32          | $(B, 1, 1, 1)$                                                                                                 |
-| (Padding mask) Sequence Length KV   | GPU        | INT32          | $(B, 1, 1, 1)$                                                                                                 |
-| (Philox RNG Dropout) Seed           | CPU or GPU | INT32 or INT64 | $(1, 1, 1, 1)$                                                                                                 |
-| (Philox RNG Dropout) Offset         | CPU or GPU | INT32 or INT64 | $(1, 1, 1, 1)$                                                                                                 |
-| (Custom Dropout Mask) Mask          | GPU        | E4M3 or E5M2   | $(1, 1, S_{q}, S_{kv})$, $(1, H_{q}, S_{q}, S_{kv})$, $(B, 1, S_{q}, S_{kv})$, or $(B, H_{q}, S_{q}, S_{kv})$  |
-| (Custom Dropout Mask) Scale         | GPU        | FP32           | $(1, 1, 1, 1)$                                                                                                 |
-| Descale S             | GPU        | FP32         | $(1, 1, 1, 1)$               |
-| Scale S               | GPU        | FP32         | $(1, 1, 1, 1)$               |
-
-#### Output Tensors
-
-| Tensor Name           | Device     | Data Type    | Dimensions                   |
-|-----------------------|------------|--------------|------------------------------|
-| O                     | GPU        | E4M3 or E5M2 | $(B, H_{q}, S_{q}, D_{v})$   |
-| Stats (training only) | GPU        | FP32         | $(B, H_{q}, S_{q}, 1)$       |
-| AMax S                | GPU        | FP32         | $(1, 1, 1, 1)$               |
-| AMax O                | GPU        | FP32         | $(1, 1, 1, 1)$               |
-
-Where:
-
-- $B$ is the batch size
-- $H_{q}$ is the number of query heads
-- $H_{k}$ is the number of key heads
-- $H_{v}$ is the number of value heads
-- $S_{q}$ is the sequence length of the query
-- $S_{kv}$ is the sequence length of the key and value
-- $D_{qk}$ is the embedding dimension per head of query and key
-- $D_{v}$ is the embedding dimension per head of value
-
-### Group-query attention (GQA) and Multi-query attention (MQA)
-
-All the [computations for the FP16/BF16 forward operation](gqa-and-mqa-fp16bf16-forward) apply to the FP8 forward operation as well.
-
-### Limitations
-- The dimension of the embedding dimension per head $D_{qk}$ and $D_{v}$ must be a multiple of 8 with maximum value 128.
-- the stride of the embedding dimension per head $D_{qk}$ and $D_{v}$ for all the tensors above must be 1.
-- this operation is only supported on GPUs with NVIDIA Hopper architecture (SM90) or newer.
-
-### C++ API
+#### C++ API
 ```cpp
 // returns [o, stats, amax_s, amax_o]
 std::array<std::shared_ptr<Tensor_attributes>, 4>
@@ -558,7 +763,7 @@ set_is_inference(bool const value);
 ```
 
 
-### Python API
+#### Python API
 ```
 Args:
     q (cudnn_tensor): The query data.
@@ -585,65 +790,57 @@ Returns:
     amax_o (cudnn_tensor): The absolute maximum of output tensor.
 ```
 
-(scaled-dot-product-attention-fp8-backward)=
-## Scaled Dot Product Attention FP8 Backward
+#### Configurable Options
 
-This operation computes the gradients for scaled dot product attention (SDPA) 8-bit floating point (FP8) datatype, using the FlashAttention-2 algorithm as described in the paper [FlashAttention-2: Faster Attention with Better Parallelism and Work Partitioning](https://arxiv.org/abs/2307.08691). You are required to pass the stats tensor from the forward operation to the backward operation as input.
+The current FP8 support is a subset of the options supported in FP16 and BF16 support.
+- Attention scale (`attn_scale`): Applies a scaling factor to attention scores before the softmax, such as $\frac{1}{\sqrt{\text{d}}}$. Set to 1.0 by default.
+- Causal mask: Fills the upper triangular matrix of attention scores with negative infinity.
 
-- C++ sample: [samples/cpp/sdpa](https://github.com/NVIDIA/cudnn-frontend/tree/main/samples/cpp/sdpa)
+#### Limitations
 
-### Configurable Options
+- Requires Hopper (SM90) or newer architecture.
+- Head dimension must be a multiple of 16.
+- Limited masking options compared to FP16/BF16 (causal mask only).
+- Requires explicit scale/descale tensors for all FP8 inputs and outputs.
 
-All the [configurable options mentioned in the forward FP8 operation](configurable-options-fp8-forward), including ragged tensors and GQA/MQA, are applicable in the backward operation as well.
+#### Tensors
 
-### Tensors
+The tensors in forward operation are defined as the following:
 
-The tensors in backward operation are defined as the following:
+$P = QK^T$
 
-$dV = S^TdO$
+$S = \text{softmax}(P)$
 
-$dS = dOV^T$
+$O = SV$
 
-$dP = \text{dSoftmax}(dS)$
-
-$dQ = dPK$
-
-$dK = QdP$
-
-#### Input Tensors
+##### Input Tensors
 
 | Tensor Name           | Device     | Data Type    | Dimensions                   |
 |-----------------------|------------|--------------|------------------------------|
 | Q                     | GPU        | E4M3 or E5M2 | $(B, H_{q}, S_{q}, D_{qk})$  |
 | K                     | GPU        | E4M3 or E5M2 | $(B, H_{k}, S_{kv}, D_{qk})$ |
 | V                     | GPU        | E4M3 or E5M2 | $(B, H_{v}, S_{kv}, D_{v})$  |
-| O                     | GPU        | E4M3 or E5M2 | $(B, H_{q}, S_{q}, D_{v})$   |
-| dO                    | GPU        | E4M3 or E5M2 | $(B, H_{q}, S_{q}, D_{v})$   |
-| Stats                 | GPU        | FP32         | $(B, H_{q}, S_{q}, 1)$       |
 | Descale Q             | GPU        | FP32         | $(1, 1, 1, 1)$               |
 | Descale K             | GPU        | FP32         | $(1, 1, 1, 1)$               |
 | Descale V             | GPU        | FP32         | $(1, 1, 1, 1)$               |
-| Descale O             | GPU        | FP32         | $(1, 1, 1, 1)$               |
-| Descale dO            | GPU        | FP32         | $(1, 1, 1, 1)$               |
+| (Bias mask) Bias Mask               | GPU        | E4M3 or E5M2   | $(1, 1, S_{q}, S_{kv})$, $(1, H_{q}, S_{q}, S_{kv})$, $(B, 1, S_{q}, S_{kv})$, or $(B, H_{q}, S_{q}, S_{kv})$  |
+| (Padding mask) Sequence Length Q    | GPU        | INT32          | $(B, 1, 1, 1)$                                                                                                 |
+| (Padding mask) Sequence Length KV   | GPU        | INT32          | $(B, 1, 1, 1)$                                                                                                 |
+| (Philox RNG Dropout) Seed           | CPU or GPU | INT32 or INT64 | $(1, 1, 1, 1)$                                                                                                 |
+| (Philox RNG Dropout) Offset         | CPU or GPU | INT32 or INT64 | $(1, 1, 1, 1)$                                                                                                 |
+| (Custom Dropout Mask) Mask          | GPU        | E4M3 or E5M2   | $(1, 1, S_{q}, S_{kv})$, $(1, H_{q}, S_{q}, S_{kv})$, $(B, 1, S_{q}, S_{kv})$, or $(B, H_{q}, S_{q}, S_{kv})$  |
+| (Custom Dropout Mask) Scale         | GPU        | FP32           | $(1, 1, 1, 1)$                                                                                                 |
 | Descale S             | GPU        | FP32         | $(1, 1, 1, 1)$               |
-| Descale dP            | GPU        | FP32         | $(1, 1, 1, 1)$               |
 | Scale S               | GPU        | FP32         | $(1, 1, 1, 1)$               |
-| Scale dQ              | GPU        | FP32         | $(1, 1, 1, 1)$               |
-| Scale dK              | GPU        | FP32         | $(1, 1, 1, 1)$               |
-| Scale dV              | GPU        | FP32         | $(1, 1, 1, 1)$               |
-| Scale dP              | GPU        | FP32         | $(1, 1, 1, 1)$               |
 
-#### Output Tensors
+##### Output Tensors
 
 | Tensor Name           | Device     | Data Type    | Dimensions                   |
 |-----------------------|------------|--------------|------------------------------|
-| dQ                    | GPU        | E4M3 or E5M2 | $(B, H_{q}, S_{q}, D_{qk})$  |
-| dK                    | GPU        | E4M3 or E5M2 | $(B, H_{k}, S_{kv}, D_{qk})$ |
-| dV                    | GPU        | E4M3 or E5M2 | $(B, H_{v}, S_{kv}, D_{v})$  |
-| Amax dQ               | GPU        | FP32         | $(1, 1, 1, 1)$               |
-| Amax dK               | GPU        | FP32         | $(1, 1, 1, 1)$               |
-| Amax dV               | GPU        | FP32         | $(1, 1, 1, 1)$               |
-| Amax dP               | GPU        | FP32         | $(1, 1, 1, 1)$               |
+| O                     | GPU        | E4M3 or E5M2 | $(B, H_{q}, S_{q}, D_{v})$   |
+| Stats (training only) | GPU        | FP32         | $(B, H_{q}, S_{q}, 1)$       |
+| AMax S                | GPU        | FP32         | $(1, 1, 1, 1)$               |
+| AMax O                | GPU        | FP32         | $(1, 1, 1, 1)$               |
 
 Where:
 
@@ -656,10 +853,17 @@ Where:
 - $D_{qk}$ is the embedding dimension per head of query and key
 - $D_{v}$ is the embedding dimension per head of value
 
-### Limitations
-All the limitations mentioned in the forward operation are applicable in the backward operation as well.
+#### Samples and tests
+- C++ sample: [samples/cpp/sdpa](https://github.com/NVIDIA/cudnn-frontend/tree/main/samples/cpp/sdpa)
 
-### C++ API
+(scaled-dot-product-attention-fp8-backward)=
+### SDPA FP8 Backward
+
+This operation computes the gradients for scaled dot product attention (SDPA) 8-bit floating point (FP8) datatype, using the FlashAttention-2 algorithm as described in the paper [FlashAttention-2: Faster Attention with Better Parallelism and Work Partitioning](https://arxiv.org/abs/2307.08691). You are required to pass the stats tensor from the forward operation to the backward operation as input.
+
+- C++ sample: [samples/cpp/sdpa](https://github.com/NVIDIA/cudnn-frontend/tree/main/samples/cpp/sdpa)
+
+#### C++ API
 ```cpp
 // returns [dQ, dK, dV, amax_dQ, amax_dK, amax_dV, amax_dP]
 std::array<std::shared_ptr<Tensor_attributes>, 7>
@@ -684,7 +888,7 @@ Graph::sdpa_fp8_backward(std::shared_ptr<Tensor_attributes> q,
                          SDPA_fp8_backward_attributes attributes);
 ```
 
-The `options` parameter of type `SDPA_fp8_backward_attributes` is used to control the attributes of the forward operation, as detailed below:
+The `options` parameter of type `SDPA_fp8_backward_attributes` is used to control the attributes of the backward operation, as detailed below:
 
 
 ```cpp
@@ -698,7 +902,7 @@ SDPA_fp8_backward_attributes&
 set_causal_mask(bool const value);
 ```
 
-### Python API
+#### Python API
 ```
 Args:
     q (cudnn_tensor): The query data.
@@ -734,75 +938,96 @@ Returns:
     amax_dP (cudnn_tensor): The absolute maximum of dP tensor.
 ```
 
-(supported-tensor-layouts)=
-## Supported Tensor Layouts
+#### Limitations
 
-The cuDNN API expresses the layout of $Q$, $K$, $V$, and $O$ tensors corresponding gradients based on strides.
+- Requires Hopper (SM90) or newer architecture.
+- Dropout is not supported in FP8 backward pass.
+- Only causal masking is supported.
+- Requires explicit scale/descale tensors for all FP8 inputs and outputs.
 
-For example, let $Q$ have dimensions = $[5, 7, 4, 3]$, and strides = $[84, 12, 3, 1]$. An element at index $[i, j, k, l]$ can be accessed at the position of $Q_{ptr} + i * 84 + j * 12 + k * 3 + l * 1$
-. Notice how the strides are multiplied to the indices to get the position of all elements.
+#### Tensors
 
-The following examples show the standard usage of the attention tensors and how they can be expressed in cuDNN.\
+The tensors in backward operation are defined as the following:
 
-The following notation is used in the examples:\
-$B$ is the batch size\
-$H_{q}$ is the number of query heads\
-$H_{k}$ is the number of key heads\
-$H_{v}$ is the number of value heads\
-$S_{q}$ is the sequence length of the query\
-$S_{kv}$ is the sequence length of the key and value\
-$D_{qk}$ is the embedding dimension per head of query and key\
-$D_{v}$ is the embedding dimension per head of value
+$dV = S^TdO$
 
-- Case 1: $Q$, $K$, $V$, $O$ are tensors in dense non-overlapping memory\
-This is the basic case where you can specify dims and strides for each of $Q$, $K$, $V$, $O$ in any stride order. The only limitation is that the stride of the last dimension, embedding dimension per head $D_{qk}$ and $D_v$, must be 1.\
-For instance, for $Q$ with dimensions = $[B, H_q, S_q, D_{qk}]$, cuDNN support includes (but is not limited to):
-    - stride = $[S_q \times H_q \times D_{qk}, D_{qk}, H_q \times D_{qk}, 1]$ which is known as BSHD layout
-    - stride = $[H_q \times D_{qk}, D_{qk}, B \times H_q \times D_{qk}, 1]$ which is known as SBHD layout
+$dS = dOV^T$
 
-- Case 2: $Q$, $K$, $V$ are tensors in dense interleaved layout\
-In some cases, you might need to interleave $Q$, $K$, $V$ tensors together to simplify the matrix multiplication preceding the scaled-dot-product operation. For instance, you can allocate a single tensor of size = $3 \times B \times H \times S \times D$, specify the $Q$, $K$, $V$ dimensions = $[B, H, S, D]$, and cuDNN support includes (but is not limited to):
-     - stride = $[S \times 3 \times H \times D, D, 3 \times H \times D, 1]$ which is known as BS3HD \
-       with $QKV$ variant pack pointers offset as\
-       $Q_{ptr}$ = $Storage_{ptr}$\
-       $K_{ptr}$ = $Storage_{ptr} + 1 \times H \times D$\
-       $V_{ptr}$ = $Storage_{ptr} + 2 \times H \times D$
-     - stride = $[H \times 3 \times D, 3 \times D, B \times H \times 3 \times D, 1]$ aka. SBH3D \
-       with $QKV$ variant pack pointers offset as\
-       $Q_{ptr}$ = $Storage_{ptr}$\
-       $K_{ptr}$ = $Storage_{ptr} + 1 \times D$\
-       $V_{ptr}$ = $Storage_{ptr} + 2 \times D$
+$dP = \text{dSoftmax}(dS)$
 
-- Case 3: $Q$, $K$, $V$ are are tensors where not all tokens are valid\
-Consider a Q tensor with two batches ($B$ = 2) of sequences of different lengths ["aa", "bbb"]. Let the maximum sequence length $S$ = 8, and the number of heads $H = 1$. In this case, you should indicate the actual sequence lengths for each batch using the sequence length tensor `seq_len = [2, 3]`, and pass it to the SDPA node using `set_seq_len_q()` and `set_seq_len_kv()`. Note that every element in the sequence length tensor should always be smaller than the maximum sequence length $S$.\
-\
-cuDNN layout support for variable sequence length includes (but is not limited to):
-  - Fully padded layout\
-    `Q[b=0] = aa000000`\
-    `Q[b=1] = bbb00000`\
-    dimension = $[B=2, H=1, S=8, D=64]$\
-    stride = $[S \times H \times D=512, D=64, H \times D=64, 1]$\
-    \
-    cuDNN reads the data based on the strides.
+$dQ = dPK$
 
-  - Fully packed layout, which is also known as THD, where T = sum(seq_len)\
-    `Q = aabbb`\
-    dimension = $[B=2, H=1, S=8, D=64]$\
-    stride = $[S \times H \times D=512, D=64, H \times D=64, 1]$\
-    \
-    The strides remain the same but they are incorrect as the second batch begins at 64*2. Therefore, you must set **ragged_offset** tensor using `<tensor>.set_ragged_offset(<ragged_offset_tensor>)` API, which is a $B + 1$ sized integer tensor telling where each batch begins. The b+1 element is where the last batch ends. For this case, ragged_offset should be `[0, 2 * H * D, (2+3) * H * D] = [0, 128, 320]`\
-    \
-    If this layout is used with bprop, it is recommended that you use `set_max_total_seq_len_q` to pass the maximum number of tokens used to calculate the size of the workspace.
-    Otherwise, the maximum number of will be assumed as $B \times S$.
+$dK = QdP$
 
-  - Valid tokens in a batch are packed together\
-    `Q = aa00bbb0`\
-    For this case, set ragged offset to `[0, 4 * H * D, (4+3) * H * D] = [0, 256, 448]`
+##### Input Tensors
 
-  - Valid tokens are not packed together\
-    `Q = a0abbb00bb000000`\
-    Ragged offset is insufficient to represent this. This case is NOT supported.
+| Tensor Name           | Device     | Data Type    | Dimensions                   |
+|-----------------------|------------|--------------|------------------------------|
+| Q                     | GPU        | E4M3 or E5M2 | $(B, H_{q}, S_{q}, D_{qk})$  |
+| K                     | GPU        | E4M3 or E5M2 | $(B, H_{k}, S_{kv}, D_{qk})$ |
+| V                     | GPU        | E4M3 or E5M2 | $(B, H_{v}, S_{kv}, D_{v})$  |
+| O                     | GPU        | E4M3 or E5M2 | $(B, H_{q}, S_{q}, D_{v})$   |
+| dO                    | GPU        | E4M3 or E5M2 | $(B, H_{q}, S_{q}, D_{v})$   |
+| Stats                 | GPU        | FP32         | $(B, H_{q}, S_{q}, 1)$       |
+| Descale Q             | GPU        | FP32         | $(1, 1, 1, 1)$               |
+| Descale K             | GPU        | FP32         | $(1, 1, 1, 1)$               |
+| Descale V             | GPU        | FP32         | $(1, 1, 1, 1)$               |
+| Descale O             | GPU        | FP32         | $(1, 1, 1, 1)$               |
+| Descale dO            | GPU        | FP32         | $(1, 1, 1, 1)$               |
+| Descale S             | GPU        | FP32         | $(1, 1, 1, 1)$               |
+| Descale dP            | GPU        | FP32         | $(1, 1, 1, 1)$               |
+| Scale S               | GPU        | FP32         | $(1, 1, 1, 1)$               |
+| Scale dQ              | GPU        | FP32         | $(1, 1, 1, 1)$               |
+| Scale dK              | GPU        | FP32         | $(1, 1, 1, 1)$               |
+| Scale dV              | GPU        | FP32         | $(1, 1, 1, 1)$               |
+| Scale dP              | GPU        | FP32         | $(1, 1, 1, 1)$               |
 
-## cudnn Flex Attention API
+##### Output Tensors
 
-SDPA and SDPA backward operations now accept the functions `set_score_mod` and `set_score_mod_bprop`, which allows modification of the attention score matrix. These functions can be used to program a sub-graph of pointwise operations that can subsequently be used to program the score modifier. Note that this function usage is mutually exclusive to the usage of ready made options. Also, note that the graph argument in the score_mod function is not the same as the sdpa graph. So, any tensor to be passed as input to the score-mod sub-graph must first be registered with main graph and subsequently passed as argument to the score_mod function. The SDPA operation also now accpets the function `set_block_mask`, which applies a block mask to the score matrix. The implementation assumes a 128 x 128 block size.
+| Tensor Name           | Device     | Data Type    | Dimensions                   |
+|-----------------------|------------|--------------|------------------------------|
+| dQ                    | GPU        | E4M3 or E5M2 | $(B, H_{q}, S_{q}, D_{qk})$  |
+| dK                    | GPU        | E4M3 or E5M2 | $(B, H_{k}, S_{kv}, D_{qk})$ |
+| dV                    | GPU        | E4M3 or E5M2 | $(B, H_{v}, S_{kv}, D_{v})$  |
+| Amax dQ               | GPU        | FP32         | $(1, 1, 1, 1)$               |
+| Amax dK               | GPU        | FP32         | $(1, 1, 1, 1)$               |
+| Amax dV               | GPU        | FP32         | $(1, 1, 1, 1)$               |
+| Amax dP               | GPU        | FP32         | $(1, 1, 1, 1)$               |
+
+Where:
+
+- $B$ is the batch size
+- $H_{q}$ is the number of query heads
+- $H_{k}$ is the number of key heads
+- $H_{v}$ is the number of value heads
+- $S_{q}$ is the sequence length of the query
+- $S_{kv}$ is the sequence length of the key and value
+- $D_{qk}$ is the embedding dimension per head of query and key
+- $D_{v}$ is the embedding dimension per head of value
+
+
+## FAQs
+
+### Logical vs Physical Layout
+
+#### BHSD Layout (Batch-Head-Sequence-Dim)
+
+The default logical layout where dimensions are ordered as $(B, H, S, D)$.
+
+- **Dimensions:** $[B, H_q, S_q, D_{qk}]$
+- **Strides:** $[H_q \times S_q \times D_{qk}, S_q \times D_{qk}, D_{qk}, 1]$
+
+This is the most common layout and matches PyTorch's default attention tensor ordering.
+
+#### BSHD Layout (Batch-Sequence-Head-Dim)
+
+A physical layout where sequence comes before heads in memory, while maintaining the logical $(B, H, S, D)$ dimension order.
+
+- **Dimensions:** $[B, H_q, S_q, D_{qk}]$ (logical order, unchanged)
+- **Strides:** $[S_q \times H_q \times D_{qk}, D_{qk}, H_q \times D_{qk}, 1]$
+
+Note: The dimension order remains $(B, H, S, D)$ but strides are reordered so that in memory, sequence varies faster than head.
+
+### cuDNN Flex Attention API
+
+SDPA and SDPA backward operations now accept the functions `set_score_mod` and `set_score_mod_bprop`, which allows modification of the attention score matrix. These functions can be used to program a sub-graph of pointwise operations that can subsequently be used to program the score modifier. Note that this function usage is mutually exclusive to the usage of ready made options. Also, note that the graph argument in the score_mod function is not the same as the sdpa graph. So, any tensor to be passed as input to the score-mod sub-graph must first be registered with main graph and subsequently passed as argument to the score_mod function. The SDPA operation also now accepts the function `set_block_mask`, which applies a block mask to the score matrix. The implementation assumes a 128 x 128 block size.
