@@ -90,11 +90,12 @@ python -m benchmark.sdpa_benchmark_training.runner --config llama --dtype bfloat
 | `seqlens` | List of `(q_seqlen, kv_seqlen)` tuples | Required |
 | `backends` | Backends to compare | `["cudnn"]` |
 | `data_types` | Data types to test | `["bfloat16"]` |
-| `attn_masks` | Attention masks (`top_left`, `no_mask`, `bottom_right`) | `["top_left"]` |
+| `attn_masks` | Attention masks (`top_left`, `no_mask`) | `["top_left"]` |
 | `profile_pass` | Which pass to profile (`fwd`, `bwd`, `both`) | `"fwd"` |
 | `batch_size` | Batch size | `1` |
 | `num_iterations` | Iterations per benchmark | `10` |
 | `deterministic_bwd` | Deterministic modes for backward | `[False]` |
+| `sliding_window_size` | Sliding window attention size (requires `top_left` mask) | `None` |
 
 ### Model Presets
 
@@ -116,6 +117,21 @@ DSV3 = ModelPreset(
     num_kv_heads=128,
     head_dim_qk=192,  # Q/K head dimension
     head_dim_vo=128,  # V/O head dimension
+)
+```
+
+Sliding window attention (GPT-OSS):
+```python
+GPT_OSS = ModelPreset(
+    name="gpt_oss",
+    num_q_heads=64,
+    num_kv_heads=8,  # GQA with 8:1 ratio
+    head_dim=64,
+)
+
+CONFIG = BenchmarkConfig(
+    ...
+    sliding_window_size=128,  # Look back 128 tokens from diagonal (requires top_left mask)
 )
 ```
 

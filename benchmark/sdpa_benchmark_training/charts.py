@@ -50,6 +50,8 @@ def get_backend_display_name(backend: str, data_type: str) -> str:
         return f"{base_name} (FP8)"
     elif data_type == "float16":
         return f"{base_name} (FP16)"
+    elif data_type == "bfloat16":
+        return f"{base_name} (BF16)"
     return base_name
 
 

@@ -146,6 +146,7 @@ class BenchmarkRunner:
                 "num_warmup_iterations": config.num_warmup_iterations,
                 "skip_ref": config.skip_ref,
                 "deterministic_bwd": det_bwd,
+                "sliding_window_size": config.sliding_window_size,
             }
 
     def run_single(self, case: Dict[str, Any]) -> BenchmarkResult:
@@ -184,6 +185,7 @@ class BenchmarkRunner:
                 num_warmup_iterations=case["num_warmup_iterations"],
                 skip_ref=case["skip_ref"],
                 deterministic_bwd=case["deterministic_bwd"],
+                sliding_window_size=case["sliding_window_size"],
             )
 
             return BenchmarkResult(
@@ -201,6 +203,7 @@ class BenchmarkRunner:
                 head_dim_vo=model.head_dim_vo,
                 profile_pass=case["profile_pass"],
                 deterministic_bwd=case["deterministic_bwd"],
+                sliding_window_size=case["sliding_window_size"],
                 fwd_time_ms=result["fwd_time_ms"],
                 bwd_time_ms=result["bwd_time_ms"],
                 fwd_tflops=result["fwd_tflops"],
@@ -230,6 +233,7 @@ class BenchmarkRunner:
                 head_dim_vo=model.head_dim_vo,
                 profile_pass=case["profile_pass"],
                 deterministic_bwd=case["deterministic_bwd"],
+                sliding_window_size=case["sliding_window_size"],
                 fwd_time_ms=float("inf"),
                 bwd_time_ms=float("inf"),
                 fwd_tflops=0.0,
@@ -283,11 +287,12 @@ class BenchmarkRunner:
         for i, case in enumerate(cases, 1):
             model = case["model"]
             det_str = "det" if case["deterministic_bwd"] else "non-det"
+            swa_str = f" | swa={case['sliding_window_size']}" if case["sliding_window_size"] else ""
             logger.info(
                 f"[{i}/{len(cases)}] {model.name} | "
                 f"seq={case['q_seqlen']}x{case['kv_seqlen']} | "
                 f"{case['backend']} | {case['data_type']} | "
-                f"{case['attn_mask']} | {det_str}"
+                f"{case['attn_mask']} | {det_str}{swa_str}"
             )
 
             result = self.run_single(case)
@@ -461,11 +466,12 @@ Examples:
         for i, case in enumerate(cases, 1):
             model = case["model"]
             det_str = "det" if case["deterministic_bwd"] else "non-det"
+            swa_str = f" | swa={case['sliding_window_size']}" if case["sliding_window_size"] else ""
             print(
                 f"  [{i}] {model.name} | "
                 f"seq={case['q_seqlen']}x{case['kv_seqlen']} | "
                 f"{case['backend']} | {case['data_type']} | "
-                f"{case['attn_mask']} | {det_str}"
+                f"{case['attn_mask']} | {det_str}{swa_str}"
             )
         return
 

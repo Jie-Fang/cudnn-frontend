@@ -17,7 +17,6 @@ Can be used as CLI or imported as a module:
 import argparse
 import torch
 from torch.nn.attention import SDPBackend, sdpa_kernel
-from torch.nn.attention.bias import causal_lower_right
 import os
 import numpy as np
 import functools
@@ -99,8 +98,8 @@ def parse_args():
         "--attn_mask",
         default="no_mask",
         type=str,
-        help="Attn mask to use. Can be 'top_left', 'bottom_right', or 'no_mask'.",
-        choices=["top_left", "bottom_right", "no_mask"],
+        help="Attn mask to use. Can be 'top_left' (causal) or 'no_mask' (bidirectional).",
+        choices=["top_left", "no_mask"],
     )
     parser.add_argument(
         "--sdpa_backend",
@@ -130,6 +129,12 @@ def parse_args():
         action="store_true",
         help="Skip reference SDPA implementation",
     )
+    parser.add_argument(
+        "--sliding_window_size",
+        default=None,
+        type=int,
+        help="Sliding window attention size (number of tokens to look back from diagonal)",
+    )
     return parser.parse_args()
 
 
@@ -150,6 +155,7 @@ def run_benchmark(
     num_warmup_iterations: int = 0,
     skip_ref: bool = True,
     deterministic_bwd: bool = False,
+    sliding_window_size: Optional[int] = None,
     verbose: bool = False,
 ) -> Dict[str, Any]:
     """
@@ -169,12 +175,13 @@ def run_benchmark(
         head_dim_vo: Head dimension for V/O (optional, for asymmetric)
         data_type: Data type ("bfloat16", "float16", "fp8")
         backend: Backend name ("cudnn", "flash_attention_4", etc.)
-        attn_mask: Attention mask ("no_mask", "top_left", "bottom_right")
+        attn_mask: Attention mask ("no_mask", "top_left")
         profile_pass: Which pass to profile ("fwd", "bwd", "both")
         num_iterations: Number of benchmark iterations
         num_warmup_iterations: Warmup iterations before measurement
         skip_ref: Skip reference validation
         deterministic_bwd: Use deterministic backward algorithm
+        sliding_window_size: Sliding window attention size (None = no sliding window)
         verbose: Print verbose output
 
     Returns:
@@ -239,6 +246,8 @@ def run_benchmark(
         cmd.append("--skip_ref")
     if deterministic_bwd:
         cmd.append("--deterministic_bwd")
+    if sliding_window_size is not None:
+        cmd.extend(["--sliding_window_size", str(sliding_window_size)])
     if verbose:
         cmd.append("--verbose")
 
@@ -308,13 +317,12 @@ else:
     elif args.data_type == "float":
         target_dtype = torch.float
     elif args.data_type == "fp8":
-        target_dtype = None
+        target_dtype = torch.float8_e4m3fn
     else:
         raise ValueError(f"Invalid data type: {args.data_type}")
 
-    if args.data_type == "fp8":
-        if args.sdpa_backend not in ["cudnn", "flash_attention_3"]:
-            raise ValueError(f"FP8 is only supported for cudnn and flash_attention_3 backends")
+    if args.sliding_window_size is not None and args.attn_mask != "top_left":
+        raise ValueError("Sliding window attention requires attn_mask='top_left' (causal)")
 
     # Parse input arguments
     num_iters = args.num_iterations
@@ -344,7 +352,6 @@ else:
         run_fwd = True
         run_bwd = False
     enable_gqa = num_q_heads != num_kv_heads
-    assert args.attn_mask != "bottom_right" or q_seqlen <= kv_seqlen, "Bottom right causal mask not supported when q_seqlen > kv_seqlen"
     # if args.sdpa_backend in ["flash_attention", "flash_attention_3", "pyt_flash_attention"]:
     #     assert args.attn_mask != "top_left", "Flash Attention does not support top left causal mask"
 
@@ -384,38 +391,21 @@ else:
                 return cudnn.data_type.INT32
             elif torch_type == torch.int64:
                 return cudnn.data_type.INT64
+            elif torch_type == torch.float8_e4m3fn:
+                return cudnn.data_type.FP8_E4M3
             else:
                 raise ValueError("Unsupported tensor data type.")
 
         ## Will define tensors to set up cuDNN graph once.
-        if args.data_type == "fp8":
-            query = torch.randint(
-                256,
-                (batch_size, q_seqlen, num_q_heads, head_dim_qk),
-                dtype=torch.uint8,
-                device=device,
-            ).transpose(1, 2)
-            key = torch.randint(
-                256,
-                (batch_size, kv_seqlen, num_kv_heads, head_dim_qk),
-                dtype=torch.uint8,
-                device=device,
-            ).transpose(1, 2)
-            value = torch.randint(
-                256,
-                (batch_size, kv_seqlen, num_kv_heads, head_dim_vo),
-                dtype=torch.uint8,
-                device=device,
-            ).transpose(1, 2)
-            output = torch.empty(
-                batch_size,
-                q_seqlen,
-                num_q_heads,
-                head_dim_vo,
-                dtype=torch.uint8,
-                device=device,
-            ).transpose(1, 2)
+        # FP8 needs randn in bfloat16 then convert (randn doesn't support fp8 well)
+        randn_dtype = torch.bfloat16 if args.data_type == "fp8" else target_dtype
+        query = torch.randn(batch_size, q_seqlen, num_q_heads, head_dim_qk, dtype=randn_dtype, device=device).to(target_dtype).transpose(1, 2)
+        key = torch.randn(batch_size, kv_seqlen, num_kv_heads, head_dim_qk, dtype=randn_dtype, device=device).to(target_dtype).transpose(1, 2)
+        value = torch.randn(batch_size, kv_seqlen, num_kv_heads, head_dim_vo, dtype=randn_dtype, device=device).to(target_dtype).transpose(1, 2)
+        output = torch.empty(batch_size, q_seqlen, num_q_heads, head_dim_vo, dtype=target_dtype, device=device).transpose(1, 2)
 
+        # FP8-specific descale/scale/amax tensors
+        if args.data_type == "fp8":
             descale_q_gpu = torch.ones(1, 1, 1, 1, dtype=torch.float, device=device)
             descale_k_gpu = torch.ones(1, 1, 1, 1, dtype=torch.float, device=device)
             descale_v_gpu = torch.ones(1, 1, 1, 1, dtype=torch.float, device=device)
@@ -435,50 +425,11 @@ else:
             amax_dK_gpu = torch.zeros(1, 1, 1, 1, dtype=torch.float, device=device)
             amax_dV_gpu = torch.zeros(1, 1, 1, 1, dtype=torch.float, device=device)
             amax_dP_gpu = torch.zeros(1, 1, 1, 1, dtype=torch.float, device=device)
-        else:
-            query = torch.randn(
-                batch_size,
-                q_seqlen,
-                num_q_heads,
-                head_dim_qk,
-                dtype=target_dtype,
-                device=device,
-            ).transpose(1, 2)
-            key = torch.randn(
-                batch_size,
-                kv_seqlen,
-                num_kv_heads,
-                head_dim_qk,
-                dtype=target_dtype,
-                device=device,
-            ).transpose(1, 2)
-            value = torch.randn(
-                batch_size,
-                kv_seqlen,
-                num_kv_heads,
-                head_dim_vo,
-                dtype=target_dtype,
-                device=device,
-            ).transpose(1, 2)
-            output = torch.empty(
-                batch_size,
-                q_seqlen,
-                num_q_heads,
-                head_dim_vo,
-                dtype=target_dtype,
-                device=device,
-            ).transpose(1, 2)
 
         dQuery = torch.empty_like(query)
         dKey = torch.empty_like(key)
         dValue = torch.empty_like(value)
-        if args.data_type == "fp8":
-            # Create as bfloat16, convert to FP8, then view as uint8 to avoid DLPack issues
-            dOutput_bf16 = torch.randn(output.shape, dtype=torch.bfloat16, device=device)
-            dOutput_fp8 = dOutput_bf16.to(torch.float8_e4m3fn)
-            dOutput = dOutput_fp8.view(torch.uint8)
-        else:
-            dOutput = torch.randn_like(output)
+        dOutput = torch.randn(output.shape, dtype=randn_dtype, device=device).to(target_dtype)
         stats = torch.randn(batch_size, q_seqlen, num_q_heads, 1, dtype=torch.float32, device=device).transpose(1, 2)
         if is_dropout:
             dropout_seed = torch.full((1, 1, 1, 1), 123456, dtype=torch.int64, device="cuda")
@@ -486,7 +437,7 @@ else:
 
         # cuDNN graph forward
         graph_fwd = cudnn.pygraph(
-            io_data_type=(cudnn.data_type.FP8_E4M3 if args.data_type == "fp8" else convert_to_cudnn_type(target_dtype)),
+            io_data_type=convert_to_cudnn_type(target_dtype),
             intermediate_data_type=cudnn.data_type.FLOAT,
             compute_data_type=cudnn.data_type.FLOAT,
         )
@@ -495,6 +446,10 @@ else:
             seed_fwd = graph_fwd.tensor_like(dropout_seed)
             offset_fwd = graph_fwd.tensor_like(dropout_offset)
             dropout_tuple = (dropout_prob, seed_fwd, offset_fwd)
+
+        # Compute diagonal band bounds for masking (shared by FP8 and non-FP8)
+        right_bound = None if args.attn_mask == "no_mask" else 0
+        left_bound = args.sliding_window_size if args.sliding_window_size else None
 
         if args.data_type == "fp8":
             q_fwd = graph_fwd.tensor_like(query).set_data_type(cudnn.data_type.FP8_E4M3)
@@ -521,8 +476,9 @@ else:
                 # generate_stats=not is_infer,
                 is_inference=is_infer,
                 attn_scale=attn_scale,
-                diagonal_alignment=(cudnn.diagonal_alignment.BOTTOM_RIGHT if args.attn_mask == "bottom_right" else cudnn.diagonal_alignment.TOP_LEFT),
-                right_bound=None if args.attn_mask == "no_mask" else 0,
+                diagonal_alignment=cudnn.diagonal_alignment.TOP_LEFT,
+                left_bound=left_bound,
+                right_bound=right_bound,
                 # dropout=dropout_tuple if is_dropout else None,
             )
         else:
@@ -536,8 +492,9 @@ else:
                 # generate_stats=not is_infer,
                 is_inference=is_infer,
                 attn_scale=attn_scale,
-                diagonal_alignment=(cudnn.diagonal_alignment.BOTTOM_RIGHT if args.attn_mask == "bottom_right" else cudnn.diagonal_alignment.TOP_LEFT),
-                diagonal_band_right_bound=None if args.attn_mask == "no_mask" else 0,
+                diagonal_alignment=cudnn.diagonal_alignment.TOP_LEFT,
+                diagonal_band_left_bound=left_bound,
+                diagonal_band_right_bound=right_bound,
                 dropout=dropout_tuple if is_dropout else None,
             )
 
@@ -625,8 +582,8 @@ else:
                     scale_dV=scale_dV_bwd,
                     scale_dP=scale_dP_bwd,
                     attn_scale=attn_scale,
-                    use_causal_mask=args.attn_mask != "no_mask" and args.attn_mask != "bottom_right",
-                    use_causal_mask_bottom_right=args.attn_mask == "bottom_right",
+                    use_causal_mask=args.attn_mask == "top_left",
+                    use_causal_mask_bottom_right=False,
                     dropout=dropout_tuple if is_dropout else None,
                     use_deterministic_algorithm=args.deterministic_bwd,
                 )
@@ -645,8 +602,9 @@ else:
                     dO=dO_bwd,
                     stats=stats_bwd,
                     attn_scale=attn_scale,
-                    diagonal_alignment=(cudnn.diagonal_alignment.BOTTOM_RIGHT if args.attn_mask == "bottom_right" else cudnn.diagonal_alignment.TOP_LEFT),
-                    diagonal_band_right_bound=None if args.attn_mask == "no_mask" else 0,
+                    diagonal_alignment=cudnn.diagonal_alignment.TOP_LEFT,
+                    diagonal_band_left_bound=left_bound,
+                    diagonal_band_right_bound=right_bound,
                     dropout=dropout_tuple if is_dropout else None,
                     use_deterministic_algorithm=args.deterministic_bwd,
                 )
@@ -787,7 +745,6 @@ else:
                 value,
                 enable_gqa=enable_gqa,
                 is_causal=args.attn_mask == "top_left",
-                attn_mask=causal_lower_right(q_seqlen, kv_seqlen) if args.attn_mask == "bottom_right" else None,
             )
 
     if args.sdpa_backend == "flash_attention":
@@ -796,20 +753,23 @@ else:
 
         # Flash Attention Native
         def flash_attention_sdpa(query, key, value):
-            return flash_attn_func(query, key, value, causal=args.attn_mask != "no_mask")
+            window_size = (args.sliding_window_size, 0) if args.sliding_window_size else (None, None)
+            return flash_attn_func(query, key, value, causal=args.attn_mask != "no_mask", window_size=window_size)
 
     if args.sdpa_backend == "flash_attention_3":
         import flash_attn_interface
 
         def flash_attention_3_sdpa(query, key, value):
-            output, _ = flash_attn_interface.flash_attn_func(query, key, value, causal=args.attn_mask != "no_mask")
+            window_size = (args.sliding_window_size, 0) if args.sliding_window_size else (None, None)
+            output, _ = flash_attn_interface.flash_attn_func(query, key, value, causal=args.attn_mask != "no_mask", window_size=window_size)
             return output
 
     if args.sdpa_backend == "flash_attention_4" or (not args.skip_ref):
         import flash_attn.cute.interface as flash_attn_interface
 
         def flash_attention_4_sdpa(query, key, value):
-            output, _ = flash_attn_interface.flash_attn_func(query, key, value, causal=args.attn_mask != "no_mask")
+            window_size = (args.sliding_window_size, 0) if args.sliding_window_size else (None, None)
+            output, _ = flash_attn_interface.flash_attn_func(query, key, value, causal=args.attn_mask != "no_mask", window_size=window_size)
             return output
 
     def get_sdpa_function(backend):
@@ -879,19 +839,30 @@ else:
         num_q_heads,
         attn_mask,
         mode="fwd",
+        sliding_window_size=None,
     ):
         assert mode in ["fwd", "bwd", "fwd_bwd"]
 
         if attn_mask == "no_mask":
             num_nonmasked_elems = q_seqlen * kv_seqlen
         elif attn_mask == "top_left":
-            num_nonmasked_elems = torch.tril(torch.ones((q_seqlen, kv_seqlen), dtype=torch.bool)).sum()
-        elif attn_mask == "bottom_right":
-            diagonal_offset = kv_seqlen - q_seqlen
-            num_nonmasked_elems = torch.tril(
-                torch.ones((q_seqlen, kv_seqlen), dtype=torch.bool),
-                diagonal=diagonal_offset,
-            ).sum()
+            if sliding_window_size is not None:
+                # With sliding window: each query attends to at most W keys
+                # (left_bound is exclusive, right_bound is inclusive)
+                # For positions 0 to W-1: 1, 2, ..., W keys (partial window)
+                # For positions W to S-1: W keys each (full window)
+                W = sliding_window_size
+                S = min(q_seqlen, kv_seqlen)
+                if S <= W:
+                    # Sequence shorter than window, use full causal
+                    num_nonmasked_elems = S * (S + 1) // 2
+                else:
+                    # Partial window (first W positions) + full window (remaining positions)
+                    num_nonmasked_elems = W * (W + 1) // 2 + (S - W) * W
+            else:
+                num_nonmasked_elems = torch.tril(torch.ones((q_seqlen, kv_seqlen), dtype=torch.bool)).sum()
+        else:
+            raise ValueError(f"Unknown attn_mask: {attn_mask}")
         # BMM FLOPs: 2 * M * N * K.
         # Here, M*N = num_nonmasked_elems per head; add batch_size * num_q_heads multiplier.
         # Forward: 2 BMMs => (1 x head_dim_qk) + (1 x head_dim_vo)
@@ -915,6 +886,7 @@ else:
         attn_mask,
         time,
         mode="fwd",
+        sliding_window_size=None,
     ):
         assert mode in ["fwd", "bwd", "fwd_bwd"]
         f = flops(
@@ -926,6 +898,7 @@ else:
             num_q_heads,
             attn_mask,
             mode,
+            sliding_window_size,
         )
         return f / time / 1e9 if not math.isnan(time) else 0.0  # Assume time is in msec
 
@@ -956,25 +929,20 @@ else:
     first_error = True  # For suppressing error message beyond first error
     sdpa_function = get_sdpa_function(args.sdpa_backend)
     for i in range(total_iters):
+        # FP8 needs randn in bfloat16 then convert (randn doesn't support fp8 well)
+        randn_dtype = torch.bfloat16 if args.data_type == "fp8" else target_dtype
+        query = (
+            torch.randn(batch_size, q_seqlen, num_q_heads, head_dim_qk, dtype=randn_dtype, device=device, requires_grad=True).to(target_dtype).transpose(1, 2)
+        )
+        key = (
+            torch.randn(batch_size, kv_seqlen, num_kv_heads, head_dim_qk, dtype=randn_dtype, device=device, requires_grad=True).to(target_dtype).transpose(1, 2)
+        )
+        value = (
+            torch.randn(batch_size, kv_seqlen, num_kv_heads, head_dim_vo, dtype=randn_dtype, device=device, requires_grad=True).to(target_dtype).transpose(1, 2)
+        )
+
+        # cuDNN-specific FP8 descale/scale/amax tensors
         if args.data_type == "fp8" and args.sdpa_backend == "cudnn":
-            query = torch.randint(
-                256,
-                (batch_size, q_seqlen, num_q_heads, head_dim_qk),
-                dtype=torch.uint8,
-                device=device,
-            ).transpose(1, 2)
-            key = torch.randint(
-                256,
-                (batch_size, kv_seqlen, num_kv_heads, head_dim_qk),
-                dtype=torch.uint8,
-                device=device,
-            ).transpose(1, 2)
-            value = torch.randint(
-                256,
-                (batch_size, kv_seqlen, num_kv_heads, head_dim_vo),
-                dtype=torch.uint8,
-                device=device,
-            ).transpose(1, 2)
             descale_q_gpu = torch.ones(1, 1, 1, 1, dtype=torch.float, device=device)
             descale_k_gpu = torch.ones(1, 1, 1, 1, dtype=torch.float, device=device)
             descale_v_gpu = torch.ones(1, 1, 1, 1, dtype=torch.float, device=device)
@@ -994,93 +962,12 @@ else:
             amax_dK_gpu = torch.zeros(1, 1, 1, 1, dtype=torch.float, device=device)
             amax_dV_gpu = torch.zeros(1, 1, 1, 1, dtype=torch.float, device=device)
             amax_dP_gpu = torch.zeros(1, 1, 1, 1, dtype=torch.float, device=device)
-        elif args.data_type == "fp8" and args.sdpa_backend == "flash_attention_3":
-            query = (
-                torch.randn(
-                    batch_size,
-                    q_seqlen,
-                    num_q_heads,
-                    head_dim_qk,
-                    dtype=torch.bfloat16,
-                    device=device,
-                    requires_grad=True,
-                )
-                .to(torch.float8_e4m3fn)
-                .transpose(1, 2)
-            )
-            key = (
-                torch.randn(
-                    batch_size,
-                    kv_seqlen,
-                    num_kv_heads,
-                    head_dim_qk,
-                    dtype=torch.bfloat16,
-                    device=device,
-                    requires_grad=True,
-                )
-                .to(torch.float8_e4m3fn)
-                .transpose(1, 2)
-            )
-            value = (
-                torch.randn(
-                    batch_size,
-                    kv_seqlen,
-                    num_kv_heads,
-                    head_dim_vo,
-                    dtype=torch.bfloat16,
-                    device=device,
-                    requires_grad=True,
-                )
-                .to(torch.float8_e4m3fn)
-                .transpose(1, 2)
-            )
-        else:
-            query = torch.randn(
-                batch_size,
-                q_seqlen,
-                num_q_heads,
-                head_dim_qk,
-                dtype=target_dtype,
-                device=device,
-                requires_grad=True,
-            ).transpose(1, 2)
-            key = torch.randn(
-                batch_size,
-                kv_seqlen,
-                num_kv_heads,
-                head_dim_qk,
-                dtype=target_dtype,
-                device=device,
-                requires_grad=True,
-            ).transpose(1, 2)
-            value = torch.randn(
-                batch_size,
-                kv_seqlen,
-                num_kv_heads,
-                head_dim_vo,
-                dtype=target_dtype,
-                device=device,
-                requires_grad=True,
-            ).transpose(1, 2)
 
         query, key, value = preprocess_qkv(query, key, value, args.sdpa_backend)
-        if args.data_type == "fp8" and args.sdpa_backend == "cudnn":
-            # Create as bfloat16, convert to FP8, then view as uint8 to avoid DLPack issues
-            dOutput_bf16 = torch.randn(query.shape, dtype=torch.bfloat16, device=device)
-            dOutput_fp8 = dOutput_bf16.to(torch.float8_e4m3fn)
-            dOutput = dOutput_fp8.view(torch.uint8)
-        else:
-            dOutput = torch.randn_like(query)
+        dOutput = torch.randn(query.shape, dtype=randn_dtype, device=device).to(target_dtype)
 
         if args.sdpa_backend == "cudnn":
-            output = torch.empty(
-                batch_size,
-                q_seqlen,
-                num_q_heads,
-                head_dim_vo,
-                dtype=torch.uint8 if args.data_type == "fp8" else target_dtype,
-                device=device,
-            ).transpose(1, 2)
+            output = torch.empty(batch_size, q_seqlen, num_q_heads, head_dim_vo, dtype=target_dtype, device=device).transpose(1, 2)
             dQuery = torch.empty_like(query)
             dKey = torch.empty_like(key)
             dValue = torch.empty_like(value)
@@ -1332,6 +1219,7 @@ else:
             args.attn_mask,
             fwd_median_time,
             "fwd",
+            args.sliding_window_size,
         )
 
     bwd_median_time = (
@@ -1349,6 +1237,7 @@ else:
             args.attn_mask,
             bwd_median_time,
             "bwd",
+            args.sliding_window_size,
         )
 
     if args.format_output:
