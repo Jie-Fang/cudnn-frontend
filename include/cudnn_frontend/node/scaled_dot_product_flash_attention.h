@@ -1033,12 +1033,11 @@ class CompositeSDPABackwardNode : public NodeCRTP<CompositeSDPABackwardNode> {
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "s_q = s_kv = 1 is not supported.");
 
-        cudaDeviceProp prop;
-        int device;
-        _CUDNN_CHECK_CUDA_ERROR(detail::cuda_get_device(&device));
-        _CUDNN_CHECK_CUDA_ERROR(detail::cuda_get_device_properties(&prop, device));
+        CHECK_CUDNN_FRONTEND_ERROR(context.populate_sm_version_from_device());
+        int32_t const sm_version = context.get_sm_version();
+        int32_t const prop_major = sm_version / 10;
 
-        if (prop.major == 9) { 
+        if (prop_major == 9) { 
             // validate basic dimension requirements
 
             if ((detail::get_backend_version() >= 91100) && (detail::get_backend_version() < 91300)) {
@@ -1056,7 +1055,7 @@ class CompositeSDPABackwardNode : public NodeCRTP<CompositeSDPABackwardNode> {
                         error_code_t::GRAPH_NOT_SUPPORTED,
                         "Num hidden_dim should be less than or equal to 256 and hidden_dim should be multiple of 8");
 
-        } else if (prop.major == 10 && detail::get_backend_version() >= 91100) {
+        } else if (prop_major == 10 && detail::get_backend_version() >= 91100) {
             // validate basic dimension requirements
             if (d_qk == 192) { // special case for 192 hidden dim
                 RETURN_CUDNN_FRONTEND_ERROR_IF( (d_v != 128),
@@ -1148,7 +1147,7 @@ class CompositeSDPABackwardNode : public NodeCRTP<CompositeSDPABackwardNode> {
                                        error_code_t::INVALID_VALUE,
                                        "Left bound (Sliding window length) should be greater than or equals to zero when set.");
 
-         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.left_bound.has_value() && (s_q * attributes.left_bound.value() == s_kv * attributes.left_bound.value()) && (detail::get_backend_version() <= 90900) && (prop.major == 9) && attributes.has_causal_mask_bottom_right(),
+         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.left_bound.has_value() && (s_q * attributes.left_bound.value() == s_kv * attributes.left_bound.value()) && (detail::get_backend_version() <= 90900) && (prop_major == 9) && attributes.has_causal_mask_bottom_right(),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "On Hopper architecture, this specific combination of s_q, s_kv, and left_bound + right_bound + bottom right diagonal alignment is not supported for backend version 9.9 or below");
 
@@ -1180,7 +1179,7 @@ class CompositeSDPABackwardNode : public NodeCRTP<CompositeSDPABackwardNode> {
                                        "Dropout probability cannot be 1 as corresponding scale wont be well formed.");
 
         // validate options for deterministic algorithm
-        if(attributes.is_deterministic_algorithm && (prop.major == 10)) {
+        if(attributes.is_deterministic_algorithm && (prop_major == 10)) {
             RETURN_CUDNN_FRONTEND_ERROR_IF( (detail::get_backend_version() < 91800),
                                         error_code_t::GRAPH_NOT_SUPPORTED,
                                         "Deterministic algorithm is not supported on blackwell architecture with cudnn version below 9.18.0");
@@ -1194,7 +1193,7 @@ class CompositeSDPABackwardNode : public NodeCRTP<CompositeSDPABackwardNode> {
         }
 
         if(detail::get_backend_version() >= 91801) {
-            RETURN_CUDNN_FRONTEND_ERROR_IF(is_ragged && (8 == prop.major || 12 == prop.major) && attributes.is_deterministic_algorithm,
+            RETURN_CUDNN_FRONTEND_ERROR_IF(is_ragged && (8 == prop_major || 12 == prop_major) && attributes.is_deterministic_algorithm,
                                         error_code_t::GRAPH_NOT_SUPPORTED,
                                         "Deterministic algorithm is not supported for bprop thd on SM8X and SM12X GPUs");
         }
@@ -1233,12 +1232,12 @@ class CompositeSDPABackwardNode : public NodeCRTP<CompositeSDPABackwardNode> {
                                        "For cuDNN version below 9.6.0, group-query attention with raggged offset is not supported");
 
         // TODO add version check once fixed
-        RETURN_CUDNN_FRONTEND_ERROR_IF(prop.major == 10 && is_rng,
+        RETURN_CUDNN_FRONTEND_ERROR_IF(prop_major == 10 && is_rng,
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "Dropout RNG dump is not supported for SM Major version 10");
 
         // TODO add version check once fixed
-        RETURN_CUDNN_FRONTEND_ERROR_IF(prop.major == 10 && is_ragged && is_dbias,
+        RETURN_CUDNN_FRONTEND_ERROR_IF(prop_major == 10 && is_ragged && is_dbias,
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "dbias with ragged is not supported for SM Major version 10");
 
@@ -1275,11 +1274,8 @@ class CompositeSDPABackwardNode : public NodeCRTP<CompositeSDPABackwardNode> {
 
 
         if(detail::get_backend_version() >= 91801) {
-            cudaDeviceProp prop;
-            int device;
-            _CUDNN_CHECK_CUDA_ERROR(detail::cuda_get_device(&device));
-            _CUDNN_CHECK_CUDA_ERROR(detail::cuda_get_device_properties(&prop, device));
-            if((8 == prop.major || 12 == prop.major) && (attributes.max_total_seq_len_q.has_value() || attributes.max_total_seq_len_kv.has_value())) {
+            int32_t const prop_major = context.get_sm_version() / 10;
+            if((8 == prop_major || 12 == prop_major) && (attributes.max_total_seq_len_q.has_value() || attributes.max_total_seq_len_kv.has_value())) {
                 attributes.max_total_seq_len_q.reset();
                 attributes.max_total_seq_len_kv.reset();
             }
@@ -1363,14 +1359,7 @@ class CompositeSDPABackwardNode : public NodeCRTP<CompositeSDPABackwardNode> {
 
         bool use_dp_workspace = false;
 
-        cudaDeviceProp prop;
-        if (context.get_sm_version() > 0) {
-            prop.major = context.get_sm_version() / 10;
-        } else {
-            int device;
-            _CUDNN_CHECK_CUDA_ERROR(detail::cuda_get_device(&device));
-            _CUDNN_CHECK_CUDA_ERROR(detail::cuda_get_device_properties(&prop, device));
-        }
+        int32_t const prop_major = context.get_sm_version() / 10;
 
         if (detail::get_backend_version() >= 8905 && detail::get_backend_version() < 90000) {
             // workspace optimization is enabled by default when:
@@ -1386,7 +1375,7 @@ class CompositeSDPABackwardNode : public NodeCRTP<CompositeSDPABackwardNode> {
             // CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT=n      - enable workspace opt. until the n byte limit
 
             // hopper or above
-            if (prop.major >= 9) {
+            if (prop_major >= 9) {
                 // default upper limit for workspace 256MB
                 int64_t max_dp_workspace_bytes = 256 * 1024 * 1024;
 

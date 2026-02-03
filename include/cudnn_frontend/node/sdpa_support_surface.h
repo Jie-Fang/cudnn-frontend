@@ -57,11 +57,10 @@ SDPA_attributes::validate_sdpa_support_surface(const detail::Context& context,
     // validation TODO:
     //    - validate stats has valid dims
 
-    // Get device properties
-    cudaDeviceProp prop;
-    int device;
-    _CUDNN_CHECK_CUDA_ERROR(detail::cuda_get_device(&device));
-    _CUDNN_CHECK_CUDA_ERROR(detail::cuda_get_device_properties(&prop, device));
+    // Get device SM version from context
+    CHECK_CUDNN_FRONTEND_ERROR(context.populate_sm_version_from_device());
+    int32_t const sm_version = context.get_sm_version();
+    int32_t const prop_major = sm_version / 10;
 
     // Common FP16 and FP8 validation
     // validate basic dimension requirements
@@ -152,7 +151,7 @@ SDPA_attributes::validate_sdpa_support_surface(const detail::Context& context,
                                        "sdpa fp8 forward operation is not supported on cudnn 9.10.0. Please "
                                        "consider upgrading your current version.");
         RETURN_CUDNN_FRONTEND_ERROR_IF(
-            prop.major < 9,
+            prop_major < 9,
             error_code_t::GRAPH_NOT_SUPPORTED,
             "sdpa fp8 forward operation is only supported on Hopper architecture and newer. Please "
             "consider using a newer architecture.");
@@ -160,7 +159,7 @@ SDPA_attributes::validate_sdpa_support_surface(const detail::Context& context,
         // validate basic dimension requirements
         // d_qk=192 with d_v=128 is only supported starting from cuDNN 9.19
         bool const d192_v128_supported = (detail::get_backend_version() >= 91900);
-        if (prop.major >= 10) {
+        if (prop_major >= 10) {
             RETURN_CUDNN_FRONTEND_ERROR_IF(
                 ((d_qk > 128) || (d_qk % 16 != 0)) && !(d192_v128_supported && d_qk == 192 && d_v == 128),
                 error_code_t::GRAPH_NOT_SUPPORTED,
@@ -183,7 +182,7 @@ SDPA_attributes::validate_sdpa_support_surface(const detail::Context& context,
                                        "For cuDNN version below 9.7.0, bottom right causal masking is not supported.");
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(
-            has_causal_mask_bottom_right() && prop.major < 10,
+            has_causal_mask_bottom_right() && prop_major < 10,
             error_code_t::GRAPH_NOT_SUPPORTED,
             "sdpa fp8 forward operation is only supported on Blackwell architecture and newer. Please "
             "consider using a newer architecture.");
@@ -191,7 +190,7 @@ SDPA_attributes::validate_sdpa_support_surface(const detail::Context& context,
         // if output data type is half or bfloat16, and version is below 9.13 or is not blackwell, return NOT_SUPPORTED
         RETURN_CUDNN_FRONTEND_ERROR_IF(
             (output_data_type == DataType_t::HALF || output_data_type == DataType_t::BFLOAT16) &&
-                (detail::get_backend_version() < 91300 || prop.major < 10),
+                (detail::get_backend_version() < 91300 || prop_major < 10),
             error_code_t::GRAPH_NOT_SUPPORTED,
             "sdpa fp8 forward operation is only supported on cuDNN version 9.13.0 and newer. Please "
             "consider upgrading your current version.");
@@ -240,7 +239,7 @@ SDPA_attributes::validate_sdpa_support_surface(const detail::Context& context,
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(
             left_bound.has_value() && (s_q * left_bound.value() == s_kv * left_bound.value()) &&
-                (detail::get_backend_version() <= 90900) && (prop.major == 9) && has_causal_mask_bottom_right(),
+                (detail::get_backend_version() <= 90900) && (prop_major == 9) && has_causal_mask_bottom_right(),
             error_code_t::GRAPH_NOT_SUPPORTED,
             "On Hopper architecture, this specific combination of s_q, s_kv, and left_bound + right_bound + bottom "
             "right diagonal alignment is not supported for backend version 9.9 or below");
@@ -259,7 +258,7 @@ SDPA_attributes::validate_sdpa_support_surface(const detail::Context& context,
 
         // Validate options for s_q == 1
         const bool is_decode_only = (s_q == 1);
-        RETURN_CUDNN_FRONTEND_ERROR_IF(is_decode_only && (prop.major == 10) && (d_qk > 128 || d_v > 128) &&
+        RETURN_CUDNN_FRONTEND_ERROR_IF(is_decode_only && (prop_major == 10) && (d_qk > 128 || d_v > 128) &&
                                            (detail::get_backend_version() <= 90900),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "decode only mode, i.e. s_q == 1 not supported for blackwell architecture with "
@@ -327,19 +326,19 @@ SDPA_attributes::validate_sdpa_support_surface(const detail::Context& context,
         // (cudnn_runtime_version < 8907 && num_attn_heads == num_gqa_groups FIXME
 
         // version specific validation
-        if (prop.major == 8) {
+        if (prop_major == 8) {
             RETURN_CUDNN_FRONTEND_ERROR_IF(
                 detail::get_backend_version() <= 90900 && ((d_qk > 128) || (d_v > 128)),
                 error_code_t::GRAPH_NOT_SUPPORTED,
                 "head_dim should be less than or equal to 128 for backend version 9.9 or below on ampere architecture");
         }
-        if (prop.major == 9) {
+        if (prop_major == 9) {
             RETURN_CUDNN_FRONTEND_ERROR_IF(
                 detail::get_backend_version() <= 90900 && ((d_qk > 256) || (d_v > 256)),
                 error_code_t::GRAPH_NOT_SUPPORTED,
                 "head_dim should be less than or equal to 256 for backend version 9.9 or below on hopper architecture");
         }
-        if (prop.major == 10) {
+        if (prop_major == 10) {
             RETURN_CUDNN_FRONTEND_ERROR_IF((detail::get_backend_version() < 90900) && ((d_qk > 128) || (d_v > 128)),
                                            error_code_t::GRAPH_NOT_SUPPORTED,
                                            "head_dim should be less than or equal to 128 for backend version 9.8 or "
@@ -370,12 +369,14 @@ SDPA_attributes::validate_sdpa_support_surface(const detail::Context& context,
                                        "For cuDNN version below 9.5.0, paged caches are not supported");
 
         if (is_ragged) {
-            RETURN_CUDNN_FRONTEND_ERROR_IF((context.get_sm_version() > 0 && context.get_sm_version() < 90),
+            RETURN_CUDNN_FRONTEND_ERROR_IF((context.get_sm_version() > 0 && context.get_sm_version() < 90 &&
+                                            detail::get_backend_version() < 91801),
                                            error_code_t::GRAPH_NOT_SUPPORTED,
-                                           "THD (ragged offset) is only supported in Hopper and above");
+                                           "THD (ragged offset) is only supported in Hopper and above : " +
+                                               std::to_string(context.get_sm_version()));
         }
         // TODO add version check once fixed
-        RETURN_CUDNN_FRONTEND_ERROR_IF(prop.major == 10 && is_rng,
+        RETURN_CUDNN_FRONTEND_ERROR_IF(prop_major == 10 && is_rng,
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "dropout RNG dump is not supported for Blackwell architecture");
     } else {

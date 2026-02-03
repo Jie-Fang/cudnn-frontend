@@ -40,12 +40,11 @@ class SDPAFP8BackwardNode : public NodeCRTP<SDPAFP8BackwardNode> {
                                        "sdpa fp8 backward operation is only supported starting cudnn 9.1.0. Please "
                                        "consider upgrading your current version.");
 
-        cudaDeviceProp prop;
-        int device;
-        _CUDNN_CHECK_CUDA_ERROR(detail::cuda_get_device(&device));
-        _CUDNN_CHECK_CUDA_ERROR(detail::cuda_get_device_properties(&prop, device));
+        CHECK_CUDNN_FRONTEND_ERROR(context.populate_sm_version_from_device());
+        int32_t const sm_version = context.get_sm_version();
+        int32_t const prop_major = sm_version / 10;
         RETURN_CUDNN_FRONTEND_ERROR_IF(
-            prop.major < 9,
+            prop_major < 9,
             error_code_t::GRAPH_NOT_SUPPORTED,
             "sdpa fp8 forward operation is only supported on Hopper architecture and newer. Please "
             "consider using a newer architecture.");
@@ -108,7 +107,7 @@ class SDPAFP8BackwardNode : public NodeCRTP<SDPAFP8BackwardNode> {
         //    - validate stats has valid dims
 
         // validate basic dimension requirements
-        if(prop.major >= 10) {
+        if(prop_major >= 10) {
             RETURN_CUDNN_FRONTEND_ERROR_IF(((d_qk > 128) || (d_qk % 16 != 0)) && !(d_qk == 192 && d_v == 128),
                                             error_code_t::GRAPH_NOT_SUPPORTED,
                                             "hidden_dim d_qk shoud be less than or equal to 128 and hidden_dim d_qk should be multiple of 16 unless d_qk == 192 and d_v == 128");
@@ -167,7 +166,7 @@ class SDPAFP8BackwardNode : public NodeCRTP<SDPAFP8BackwardNode> {
             error_code_t::GRAPH_NOT_SUPPORTED,
             "For cuDNN version below 9.7.0, bottom right causal masking is not supported.");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.causal_mask_bottom_right && prop.major < 10, 
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.causal_mask_bottom_right && prop_major < 10, 
             error_code_t::GRAPH_NOT_SUPPORTED,
             "sdpa fp8 forward operation is only supported on Blackwell architecture and newer. Please "
             "consider using a newer architecture.");
@@ -194,7 +193,7 @@ class SDPAFP8BackwardNode : public NodeCRTP<SDPAFP8BackwardNode> {
                                        "Intermediate tensor data type needs to be set as internal tensors require it.");
 
         // validate options for deterministic algorithm
-        if (attributes.is_deterministic_algorithm && (prop.major == 10)) {
+        if (attributes.is_deterministic_algorithm && (prop_major == 10)) {
             RETURN_CUDNN_FRONTEND_ERROR_IF((detail::get_backend_version() < 91900),
                                            error_code_t::GRAPH_NOT_SUPPORTED,
                                            "FP8 deterministic algorithm is not supported on blackwell architecture with cudnn version below 9.19.0");
@@ -212,7 +211,7 @@ class SDPAFP8BackwardNode : public NodeCRTP<SDPAFP8BackwardNode> {
             (dq_data_type == DataType_t::HALF || dq_data_type == DataType_t::BFLOAT16 ||
              dk_data_type == DataType_t::HALF || dk_data_type == DataType_t::BFLOAT16 ||
              dv_data_type == DataType_t::HALF || dv_data_type == DataType_t::BFLOAT16) &&
-                (detail::get_backend_version() < 91300 || prop.major < 10),
+                (detail::get_backend_version() < 91300 || prop_major < 10),
             error_code_t::GRAPH_NOT_SUPPORTED,
             "sdpa fp8 forward operation is only supported on cuDNN version 9.13.0 and newer. Please "
             "consider upgrading your current version.");
