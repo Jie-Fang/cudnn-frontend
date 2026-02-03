@@ -5,6 +5,8 @@ import math
 from enum import IntEnum
 from looseversion import LooseVersion
 
+from .helpers import fill_sparse_small_int
+
 # Try to import CUTLASS for scale factor conversion
 try:
     import cutlass.cute as cute
@@ -365,10 +367,14 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
     except Exception as e:
         pytest.fail(f"Error building MXFP8 SDPA graph: {e}")
 
-    # Create FP8 input tensors
-    q_f32 = torch.randn(b, h_q, s_qo, d_qk, dtype=torch.float32, device="cuda").clamp(-2.0, 2.0)
-    k_f32 = torch.randn(b, h_k, s_kv, d_qk, dtype=torch.float32, device="cuda").clamp(-2.0, 2.0)
-    v_f32 = torch.randn(b, h_v, s_kv, d_vo, dtype=torch.float32, device="cuda").clamp(-2.0, 2.0)
+    # Create FP8 input tensors using sparse small integers for better low-precision testing
+    rng_data = torch.Generator(device="cuda").manual_seed(cfg.rng_data_seed)
+    q_f32 = torch.empty(b, h_q, s_qo, d_qk, dtype=torch.float32, device="cuda")
+    fill_sparse_small_int(q_f32, rng_data, sparsity=0.8, abs_max=2)
+    k_f32 = torch.empty(b, h_k, s_kv, d_qk, dtype=torch.float32, device="cuda")
+    fill_sparse_small_int(k_f32, rng_data, sparsity=0.8, abs_max=2)
+    v_f32 = torch.empty(b, h_v, s_kv, d_vo, dtype=torch.float32, device="cuda")
+    fill_sparse_small_int(v_f32, rng_data, sparsity=0.8, abs_max=2)
 
     q_fp8 = q_f32.to(torch.float8_e4m3fn)
     k_fp8 = k_f32.to(torch.float8_e4m3fn)

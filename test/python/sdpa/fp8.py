@@ -6,7 +6,7 @@ from enum import IntEnum
 from looseversion import LooseVersion
 
 from .fp8_ref import compute_ref
-from .helpers import get_fp8_scale_factor, get_fp8_descale_factor, convert_to_cudnn_type
+from .helpers import get_fp8_scale_factor, get_fp8_descale_factor, convert_to_cudnn_type, create_sparse_int_tensor, print_tensor_stats
 
 # fmt: off
 
@@ -215,9 +215,10 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
 
     rng_data = torch.Generator(device="cuda").manual_seed(cfg.rng_data_seed)
 
-    q_gen = torch.clamp(torch.randn(b, s_qo, h_q, d_qk, dtype=torch.float, device="cuda", generator=rng_data), min=-2.0, max=2.0)
-    k_gen = torch.clamp(torch.randn(b, s_kv, h_k, d_qk, dtype=torch.float, device="cuda", generator=rng_data), min=-2.0, max=2.0)
-    v_gen = torch.clamp(torch.randn(b, s_kv, h_v, d_vo, dtype=torch.float, device="cuda", generator=rng_data), min=-2.0, max=2.0)
+    # Use sparse small integers for better low-precision testing
+    q_gen = create_sparse_int_tensor((b, s_qo, h_q, d_qk), torch.float, rng_data)
+    k_gen = create_sparse_int_tensor((b, s_kv, h_k, d_qk), torch.float, rng_data)
+    v_gen = create_sparse_int_tensor((b, s_kv, h_v, d_vo), torch.float, rng_data)
 
     q_amax = q_gen.abs().max().item()
     k_amax = k_gen.abs().max().item()
@@ -292,7 +293,7 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
         torch.testing.assert_close(o_gpu_comp, o_ref, atol=atol, rtol=rtol)
 
     else:
-        dO_gen = torch.clamp(torch.randn(b, s_qo, h_q, d_vo, dtype=torch.float, device="cuda", generator=rng_data), min=-2.0, max=2.0)
+        dO_gen = create_sparse_int_tensor((b, s_qo, h_q, d_vo), torch.float, rng_data)
         dO_amax = dO_gen.abs().max().item()
 
         q_gpu = q_gen.to(torch_itype)
@@ -382,3 +383,17 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
         torch.testing.assert_close(dQ_out, dQ_ref, atol=atol, rtol=rtol)
         torch.testing.assert_close(dK_out, dK_ref, atol=atol, rtol=rtol)
         torch.testing.assert_close(dV_out, dV_ref, atol=atol, rtol=rtol)
+
+    # Print hash and stats for determinism verification
+    print_tensor_stats(o_gpu, tag="o_gpu")
+    print_tensor_stats(s_amax_gpu, tag="s_amax_gpu")
+    print_tensor_stats(o_amax_gpu, tag="o_amax_gpu")
+    if not cfg.is_infer:
+        print_tensor_stats(stats_gpu, tag="stats_gpu")
+        print_tensor_stats(dQ_gpu, tag="dQ_gpu")
+        print_tensor_stats(dK_gpu, tag="dK_gpu")
+        print_tensor_stats(dV_gpu, tag="dV_gpu")
+        print_tensor_stats(dQ_amax_gpu, tag="dQ_amax_gpu")
+        print_tensor_stats(dK_amax_gpu, tag="dK_amax_gpu")
+        print_tensor_stats(dV_amax_gpu, tag="dV_amax_gpu")
+        print_tensor_stats(dP_amax_gpu, tag="dP_amax_gpu")

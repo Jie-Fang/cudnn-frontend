@@ -16,6 +16,7 @@ from .helpers import (
     create_container_and_page_table,
     time_execution,
     profile_execution,
+    print_tensor_stats,
 )
 
 # fmt: off
@@ -552,6 +553,24 @@ def compute_and_compare_reference(cfg, allocs, tensors, diffs):
         dV_ref = convert_uniform_to_packed(dV_ref, seq_len_kv_ref, max_t_kv)
         stats_ref = convert_uniform_to_packed(stats_ref, seq_len_q_ref, max_t_q)
 
+    # Print hash and stats BEFORE comparison (approx_equal destroys tensor contents)
+    print_tensor_stats(allocs[TensorUid.o][0], tag="o_gpu")
+    if not cfg.is_infer:
+        print_tensor_stats(allocs[TensorUid.stats][0], tag="stats_gpu")
+        print_tensor_stats(allocs[TensorUid.dQ][0], tag="dQ_gpu")
+        print_tensor_stats(allocs[TensorUid.dK][0], tag="dK_gpu")
+        print_tensor_stats(allocs[TensorUid.dV][0], tag="dV_gpu")
+        if cfg.is_bias:
+            print_tensor_stats(allocs[TensorUid.dBias][0], tag="dBias_gpu")
+
+    # Sanity check: fail if output is all NaN (indicates computation failure)
+    # o_tensor = allocs[TensorUid.o][0]
+    # nan_ratio = torch.isnan(o_tensor).sum().item() / o_tensor.numel()
+    # if nan_ratio > 0.5:
+    #     print(f"%%%% ERROR: Output is {nan_ratio*100:.1f}% NaN - computation likely failed")
+    #     pytest.fail(f"Output is {nan_ratio*100:.1f}% NaN - computation failed", pytrace=False)
+
+    # Compare tensors (note: approx_equal fills tensors with NaN for boundary checks)
     err_count = 0
     err_count += approx_equal(allocs[TensorUid.o], o_ref, atol=2e-2, rtol=2e-2, tag="o", disp_elems=diffs)
     if cfg.is_train:

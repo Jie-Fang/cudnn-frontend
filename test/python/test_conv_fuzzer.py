@@ -32,6 +32,7 @@ from datetime import datetime
 from dataclasses import dataclass
 from typing import Optional, Tuple
 from enum import IntEnum
+from sdpa.helpers import create_sparse_int_tensor, print_tensor_stats, compare_tensors
 
 # fmt: off
 
@@ -477,30 +478,25 @@ def create_tensors(config: ConvConfig, rng: random.Random):
     # Create tensors - which ones are input (random) vs output (garbage) depends on conv_type
     # Output tensors are filled with garbage (random + NaNs) to catch bugs where cuDNN
     # doesn't write all output locations
+    # Input tensors use sparse small integers for better low-precision testing
     if config.conv_type == ConvType.FPROP:
         # FPROP: X,W are inputs, Y is output
-        X = torch.empty(x_shape, device='cuda', dtype=config.x_dtype).to(memory_format=memory_format)
-        X.normal_(mean=0.5, std=0.1, generator=torch_rng)
-        W = torch.empty(w_shape, device='cuda', dtype=config.w_dtype).to(memory_format=memory_format)
-        W.normal_(mean=0.5, std=0.1, generator=torch_rng)
+        X = create_sparse_int_tensor(x_shape, config.x_dtype, torch_rng, memory_format=memory_format)
+        W = create_sparse_int_tensor(w_shape, config.w_dtype, torch_rng, memory_format=memory_format)
         Y = torch.empty(y_shape, device='cuda', dtype=config.y_dtype).to(memory_format=memory_format)
         fill_with_garbage(Y)  # Output - fill with garbage
 
     elif config.conv_type == ConvType.DGRAD:
         # DGRAD: Y(dY),W are inputs, X(dX) is output
-        Y = torch.empty(y_shape, device='cuda', dtype=config.y_dtype).to(memory_format=memory_format)
-        Y.normal_(mean=0.5, std=0.1, generator=torch_rng)  # dY - gradient from upstream
-        W = torch.empty(w_shape, device='cuda', dtype=config.w_dtype).to(memory_format=memory_format)
-        W.normal_(mean=0.5, std=0.1, generator=torch_rng)  # weights
+        Y = create_sparse_int_tensor(y_shape, config.y_dtype, torch_rng, memory_format=memory_format)  # dY
+        W = create_sparse_int_tensor(w_shape, config.w_dtype, torch_rng, memory_format=memory_format)  # weights
         X = torch.empty(x_shape, device='cuda', dtype=config.x_dtype).to(memory_format=memory_format)
         fill_with_garbage(X)  # dX output - fill with garbage
 
     else:  # WGRAD
         # WGRAD: X,Y(dY) are inputs, W(dW) is output
-        X = torch.empty(x_shape, device='cuda', dtype=config.x_dtype).to(memory_format=memory_format)
-        X.normal_(mean=0.5, std=0.1, generator=torch_rng)  # input image
-        Y = torch.empty(y_shape, device='cuda', dtype=config.y_dtype).to(memory_format=memory_format)
-        Y.normal_(mean=0.5, std=0.1, generator=torch_rng)  # dY - gradient from upstream
+        X = create_sparse_int_tensor(x_shape, config.x_dtype, torch_rng, memory_format=memory_format)  # input
+        Y = create_sparse_int_tensor(y_shape, config.y_dtype, torch_rng, memory_format=memory_format)  # dY
         W = torch.empty(w_shape, device='cuda', dtype=config.w_dtype).to(memory_format=memory_format)
         fill_with_garbage(W)  # dW output - fill with garbage
 
@@ -519,8 +515,7 @@ def create_tensors(config: ConvConfig, rng: random.Random):
     bias = None
     if config.conv_type == ConvType.FPROP and config.epilogue in [EpilogueType.BIAS, EpilogueType.BIAS_RELU]:
         bias_shape = (1, config.out_channels) + (1,) * config.spatial_dims
-        bias = torch.empty(bias_shape, device='cuda', dtype=config.y_dtype).contiguous()
-        bias.normal_(mean=0.0, std=0.1, generator=torch_rng)
+        bias = create_sparse_int_tensor(bias_shape, config.y_dtype, torch_rng)
 
         config.bias_shape = tuple(bias.size())
         config.bias_strides = tuple(bias.stride())
@@ -546,106 +541,108 @@ def compute_reference(config: ConvConfig, X: torch.Tensor, W: torch.Tensor,
     """
     compute_dtype = torch.float32
 
-    if config.conv_type == ConvType.FPROP:
-        # FPROP: Y = conv(X, W)
-        X_f = X.to(compute_dtype).contiguous()
-        W_f = W.to(compute_dtype).contiguous()
+    # Disable cuDNN for reference to avoid comparing cuDNN with itself
+    with torch.backends.cudnn.flags(enabled=False):
+        if config.conv_type == ConvType.FPROP:
+            # FPROP: Y = conv(X, W)
+            X_f = X.to(compute_dtype).contiguous()
+            W_f = W.to(compute_dtype).contiguous()
 
-        try:
-            if config.spatial_dims == 2:
-                ref = torch.nn.functional.conv2d(
-                    X_f, W_f,
-                    padding=config.padding,
-                    stride=config.stride,
-                    dilation=config.dilation
-                )
-            else:
-                ref = torch.nn.functional.conv3d(
-                    X_f, W_f,
-                    padding=config.padding,
-                    stride=config.stride,
-                    dilation=config.dilation
-                )
+            try:
+                if config.spatial_dims == 2:
+                    ref = torch.nn.functional.conv2d(
+                        X_f, W_f,
+                        padding=config.padding,
+                        stride=config.stride,
+                        dilation=config.dilation
+                    )
+                else:
+                    ref = torch.nn.functional.conv3d(
+                        X_f, W_f,
+                        padding=config.padding,
+                        stride=config.stride,
+                        dilation=config.dilation
+                    )
 
-            # Apply epilogue
-            if bias is not None and config.epilogue in [EpilogueType.BIAS, EpilogueType.BIAS_RELU]:
-                ref = ref + bias.to(compute_dtype)
-            if config.epilogue in [EpilogueType.RELU, EpilogueType.BIAS_RELU]:
-                ref = torch.relu(ref)
+                # Apply epilogue
+                if bias is not None and config.epilogue in [EpilogueType.BIAS, EpilogueType.BIAS_RELU]:
+                    ref = ref + bias.to(compute_dtype)
+                if config.epilogue in [EpilogueType.RELU, EpilogueType.BIAS_RELU]:
+                    ref = torch.relu(ref)
 
-            return ref.to(config.y_dtype)
-        finally:
-            del X_f, W_f
+                return ref.to(config.y_dtype)
+            finally:
+                del X_f, W_f
 
-    elif config.conv_type == ConvType.DGRAD:
-        # DGRAD: dX = conv_dgrad(dY, W)
-        # Y contains dY (gradient from upstream), W contains weights
-        # We compute dX (gradient w.r.t. input)
-        dY_f = Y.to(compute_dtype).contiguous()
-        W_f = W.to(compute_dtype).contiguous()
+        elif config.conv_type == ConvType.DGRAD:
+            # DGRAD: dX = conv_dgrad(dY, W)
+            # Y contains dY (gradient from upstream), W contains weights
+            # We compute dX (gradient w.r.t. input)
+            dY_f = Y.to(compute_dtype).contiguous()
+            W_f = W.to(compute_dtype).contiguous()
 
-        # Use autograd to compute the reference
-        # Create a dummy input and run forward, then backward to get dX
-        dummy_X = torch.zeros(config.x_shape, device='cuda', dtype=compute_dtype, requires_grad=True)
+            # Use autograd to compute the reference
+            # Create a dummy input and run forward, then backward to get dX
+            dummy_X = torch.zeros(config.x_shape, device='cuda', dtype=compute_dtype, requires_grad=True)
 
-        try:
-            if config.spatial_dims == 2:
-                dummy_Y = torch.nn.functional.conv2d(
-                    dummy_X, W_f,
-                    padding=config.padding,
-                    stride=config.stride,
-                    dilation=config.dilation
-                )
-            else:
-                dummy_Y = torch.nn.functional.conv3d(
-                    dummy_X, W_f,
-                    padding=config.padding,
-                    stride=config.stride,
-                    dilation=config.dilation
-                )
+            try:
+                if config.spatial_dims == 2:
+                    dummy_Y = torch.nn.functional.conv2d(
+                        dummy_X, W_f,
+                        padding=config.padding,
+                        stride=config.stride,
+                        dilation=config.dilation
+                    )
+                else:
+                    dummy_Y = torch.nn.functional.conv3d(
+                        dummy_X, W_f,
+                        padding=config.padding,
+                        stride=config.stride,
+                        dilation=config.dilation
+                    )
 
-            # Backward pass to get dX
-            dummy_Y.backward(dY_f)
-            dX_ref = dummy_X.grad.clone()
+                # Backward pass to get dX
+                dummy_Y.backward(dY_f)
+                dX_ref = dummy_X.grad.clone()
 
-            return dX_ref.to(config.x_dtype)
-        finally:
-            del dY_f, W_f, dummy_X, dummy_Y
+                return dX_ref.to(config.x_dtype)
+            finally:
+                del dY_f, W_f, dummy_X, dummy_Y
 
-    else:  # WGRAD
-        # WGRAD: dW = conv_wgrad(X, dY)
-        # X contains input, Y contains dY (gradient from upstream)
-        # We compute dW (gradient w.r.t. weights)
-        X_f = X.to(compute_dtype).contiguous()
-        dY_f = Y.to(compute_dtype).contiguous()
+        else:  # WGRAD
+            # WGRAD: dW = conv_wgrad(X, dY)
+            # X contains input, Y contains dY (gradient from upstream)
+            # We compute dW (gradient w.r.t. weights)
+            X_f = X.to(compute_dtype).contiguous()
+            dY_f = Y.to(compute_dtype).contiguous()
 
-        # Use autograd to compute the reference
-        # Create a dummy weight and run forward, then backward to get dW
-        dummy_W = torch.zeros(config.w_shape, device='cuda', dtype=compute_dtype, requires_grad=True)
+            # Use autograd to compute the reference
+            # Create a dummy weight and run forward, then backward to get dW
+            dummy_W = torch.zeros(config.w_shape, device='cuda', dtype=compute_dtype, requires_grad=True)
 
-        try:
-            if config.spatial_dims == 2:
-                dummy_Y = torch.nn.functional.conv2d(
-                    X_f, dummy_W,
-                    padding=config.padding,
-                    stride=config.stride,
-                    dilation=config.dilation
-                )
-            else:
-                dummy_Y = torch.nn.functional.conv3d(
-                    X_f, dummy_W,
-                    padding=config.padding,
-                    stride=config.stride,
-                    dilation=config.dilation
-                )
+            try:
+                if config.spatial_dims == 2:
+                    dummy_Y = torch.nn.functional.conv2d(
+                        X_f, dummy_W,
+                        padding=config.padding,
+                        stride=config.stride,
+                        dilation=config.dilation
+                    )
+                else:
+                    dummy_Y = torch.nn.functional.conv3d(
+                        X_f, dummy_W,
+                        padding=config.padding,
+                        stride=config.stride,
+                        dilation=config.dilation
+                    )
 
-            # Backward pass to get dW
-            dummy_Y.backward(dY_f)
-            dW_ref = dummy_W.grad.clone()
+                # Backward pass to get dW
+                dummy_Y.backward(dY_f)
+                dW_ref = dummy_W.grad.clone()
 
-            return dW_ref.to(config.w_dtype)
-        finally:
-            del X_f, dY_f, dummy_W, dummy_Y
+                return dW_ref.to(config.w_dtype)
+            finally:
+                del X_f, dY_f, dummy_W, dummy_Y
 
 
 def run_cudnn_conv(config: ConvConfig, X: torch.Tensor, W: torch.Tensor, Y: torch.Tensor,
@@ -797,48 +794,12 @@ def compare_results(actual: torch.Tensor, ref: torch.Tensor, _dtype: torch.dtype
                     num_diffs: int = 10) -> Tuple[bool, str]:
     """Compare cuDNN result with reference."""
     # Base tolerances - TF32/FP16/BF16 all have similar effective precision
-    # (TF32 and FP16 have 10-bit mantissa, BF16 has 7-bit but we use same tolerance)
     # cuDNN uses TF32 for FP32 tensor core ops
     # _dtype kept for potential future per-dtype tolerance tuning
     rtol, atol = 1e-2, 1e-2
 
-    if ref.shape != actual.shape:
-        return False, f"Shape mismatch: actual={actual.shape}, ref={ref.shape}"
-
-    # Compare
-    actual_f = actual.to(torch.float32).contiguous()
-    ref_f = ref.to(torch.float32).contiguous()
-
-    diff = torch.abs(actual_f - ref_f)
-    max_diff = diff.max().item()
-    mean_diff = diff.mean().item()
-
-    # Relative difference
-    denom = torch.maximum(torch.abs(ref_f), torch.tensor(1e-6, device='cuda'))
-    rel_diff = diff / denom
-    max_rel_diff = rel_diff.max().item()
-
-    # Find mismatches - element fails if it exceeds BOTH tolerances
-    # mismatch_mask = (diff > atol) & (rel_diff > rtol)
-    mismatch_mask =  (diff > torch.abs(atol + rtol * ref_f))
-    mismatch_indices = torch.nonzero(mismatch_mask)
-    num_mismatches = mismatch_indices.shape[0]
-
-    # Pass if no elements fail both tolerance checks
-    passed = num_mismatches == 0
-
-    if passed:
-        return True, f"max_diff={max_diff:.2e}, mean_diff={mean_diff:.2e}, max_rel_diff={max_rel_diff:.2e}"
-    else:
-        msg = f"MISMATCH: {num_mismatches} elements differ (max_diff={max_diff:.2e}, max_rel_diff={max_rel_diff:.2e})\n"
-        for i in range(min(num_diffs, num_mismatches)):
-            idx = tuple(mismatch_indices[i].tolist())
-            act_val = actual_f[idx].item()
-            ref_val = ref_f[idx].item()
-            d = diff[idx].item()
-            msg += f"  [{idx}]: actual={act_val:.6f}, expected={ref_val:.6f}, diff={d:.2e} tol={atol + rtol * ref_f[idx].item():.2e}\n"
-
-        return False, msg
+    passed, _, msg = compare_tensors(actual, ref, rtol=rtol, atol=atol, num_diffs=num_diffs)
+    return passed, msg
 
 
 def estimate_memory_mb(config: ConvConfig) -> float:
@@ -982,6 +943,7 @@ def test_conv_random_L0_0(test_num: int, total_tests: int, config_seed: int, con
         # Print test header
         test_name = f"test_conv_random_L0_0[{make_test_id((test_num, total_tests, config_seed, config))}]"
         print(format_test_header(config, test_num, total_tests, test_name))
+        sys.stdout.flush()
 
         # Run cuDNN
         success, msg = run_cudnn_conv(config, X, W, Y, bias, cudnn_handle)
@@ -1011,6 +973,9 @@ def test_conv_random_L0_0(test_num: int, total_tests: int, config_seed: int, con
             print(f"%%%% {compare_msg}")
             print("@@@@ Overall result: FAILED, numerical mismatch!")
             pytest.fail(f"Numerical mismatch: {compare_msg}")
+
+        # Print hash and stats for determinism verification
+        print_tensor_stats(actual, tag=f"{name}_gpu")
     finally:
         # Explicit cleanup to prevent GPU memory accumulation
         del X, W, Y
@@ -1035,6 +1000,7 @@ def test_conv_random_L0_1(test_num: int, total_tests: int, config_seed: int, con
         # Print test header
         test_name = f"test_conv_random_L0_1[{make_test_id((test_num, total_tests, config_seed, config), prefix='u')}]"
         print(format_test_header(config, test_num, total_tests, test_name))
+        sys.stdout.flush()
 
         # Run cuDNN
         success, msg = run_cudnn_conv(config, X, W, Y, bias, cudnn_handle)
@@ -1064,6 +1030,9 @@ def test_conv_random_L0_1(test_num: int, total_tests: int, config_seed: int, con
             print(f"%%%% {compare_msg}")
             print("@@@@ Overall result: FAILED, numerical mismatch!")
             pytest.fail(f"Numerical mismatch: {compare_msg}")
+
+        # Print hash and stats for determinism verification
+        print_tensor_stats(actual, tag=f"{name}_gpu")
     finally:
         # Explicit cleanup to prevent GPU memory accumulation
         del X, W, Y
@@ -1117,8 +1086,9 @@ def test_repro(cudnn_handle, num_diffs, request):
     ref = None
 
     try:
-        # Print test header
+        # Print test header and flush to ensure repro info is saved before any potential crash
         print(format_test_header(config, 1, 1, "test_repro"))
+        sys.stdout.flush()
 
         # Run cuDNN
         success, msg = run_cudnn_conv(config, X, W, Y, bias, cudnn_handle)
@@ -1148,6 +1118,9 @@ def test_repro(cudnn_handle, num_diffs, request):
             print(f"%%%% {compare_msg}")
             print("@@@@ Overall result: FAILED, numerical mismatch!")
             pytest.fail(f"Numerical mismatch: {compare_msg}")
+
+        # Print hash and stats for determinism verification
+        print_tensor_stats(actual, tag=f"{name}_gpu")
     finally:
         # Explicit cleanup to prevent GPU memory accumulation
         del X, W, Y
