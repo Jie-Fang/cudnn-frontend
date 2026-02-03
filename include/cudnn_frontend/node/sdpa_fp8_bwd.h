@@ -40,6 +40,13 @@ class SDPAFP8BackwardNode : public NodeCRTP<SDPAFP8BackwardNode> {
                                        "sdpa fp8 backward operation is only supported starting cudnn 9.1.0. Please "
                                        "consider upgrading your current version.");
 
+        // Bug workaround for 9.10.0 (TE constraint)
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            detail::get_backend_version() == 91000,
+            error_code_t::GRAPH_NOT_SUPPORTED,
+            "sdpa fp8 backward operation is not supported on cudnn 9.10.0 due to known bugs. "
+            "Please consider upgrading to 9.10.2 or newer.");
+
         CHECK_CUDNN_FRONTEND_ERROR(context.populate_sm_version_from_device());
         int32_t const sm_version = context.get_sm_version();
         int32_t const prop_major = sm_version / 10;

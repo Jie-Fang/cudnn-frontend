@@ -78,15 +78,6 @@ SDPA_attributes::validate_sdpa_support_surface(const detail::Context& context,
     RETURN_CUDNN_FRONTEND_ERROR_IF(is_bias && (bias_mask->second->get_data_type() == DataType_t::BOOLEAN),
                                    error_code_t::GRAPH_NOT_SUPPORTED,
                                    "Bias mask data type cannot be boolean");
-    RETURN_CUDNN_FRONTEND_ERROR_IF(is_bias && detail::get_backend_version() < 8906,
-                                   error_code_t::GRAPH_NOT_SUPPORTED,
-                                   "Bias mask is not supported below cudnn version 8.9.6");
-
-    RETURN_CUDNN_FRONTEND_ERROR_IF((detail::get_backend_version() >= 8906 && detail::get_backend_version() < 90000) &&
-                                       (context.get_sm_version() > 0 && context.get_sm_version() < 90),
-                                   error_code_t::GRAPH_NOT_SUPPORTED,
-                                   "Post scale Bias mask is not supported below Hopper for cudnn version" +
-                                       std::to_string(detail::get_backend_version()));
 
     // validate options for padding mask
     RETURN_CUDNN_FRONTEND_ERROR_IF(padding_mask && (!has_seq_len_q || !has_seq_len_kv),
@@ -112,11 +103,6 @@ SDPA_attributes::validate_sdpa_support_surface(const detail::Context& context,
 
     // validate options for causal mask and bottom right causal mask
     RETURN_CUDNN_FRONTEND_ERROR_IF(
-        (padding_mask || alibi_mask || has_causal_mask_bottom_right()) && (detail::get_backend_version() < 8906),
-        error_code_t::GRAPH_NOT_SUPPORTED,
-        "Only causal mask is supported in cudnn versions below 8.9.6");
-
-    RETURN_CUDNN_FRONTEND_ERROR_IF(
         has_causal_mask_bottom_right() && (!padding_mask) && s_q > s_kv,
         error_code_t::GRAPH_NOT_SUPPORTED,
         "Bottom right causal mask does not support max_s_q > max_s_kv. Please virtually slice the Q tensor and pass it "
@@ -132,6 +118,12 @@ SDPA_attributes::validate_sdpa_support_surface(const detail::Context& context,
                                    error_code_t::GRAPH_NOT_SUPPORTED,
                                    "Bottom right causal mask is only supported with s_q multiple of 64, and s_kv "
                                    "multiple of 64, for cudnn version below 9.6.0");
+
+    RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 90600 && left_bound.has_value() &&
+                                       has_causal_mask_bottom_right() && s_q != s_kv,
+                                   error_code_t::GRAPH_NOT_SUPPORTED,
+                                   "Sliding window attention with bottom right causal mask requires s_q == s_kv "
+                                   "for cuDNN version below 9.6.0");
 
     // validate that datatype is set for the graph
     RETURN_CUDNN_FRONTEND_ERROR_IF(context.get_intermediate_data_type() == DataType_t::NOT_SET,
@@ -155,6 +147,9 @@ SDPA_attributes::validate_sdpa_support_surface(const detail::Context& context,
             error_code_t::GRAPH_NOT_SUPPORTED,
             "sdpa fp8 forward operation is only supported on Hopper architecture and newer. Please "
             "consider using a newer architecture.");
+
+        // FP8 does not support bias (TE constraint)
+        RETURN_CUDNN_FRONTEND_ERROR_IF(is_bias, error_code_t::GRAPH_NOT_SUPPORTED, "SDPA FP8 does not support bias");
 
         // validate basic dimension requirements
         // d_qk=192 with d_v=128 is only supported starting from cuDNN 9.19
@@ -197,6 +192,21 @@ SDPA_attributes::validate_sdpa_support_surface(const detail::Context& context,
     } else if (mma_core_mode == DataType_t::HALF) {
         // FP16 specific validation
 
+        // Bug workarounds for known problematic versions
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            detail::get_backend_version() == 91000 || detail::get_backend_version() == 91001,
+            error_code_t::GRAPH_NOT_SUPPORTED,
+            "SDPA FP16/BF16 forward is not supported on cuDNN 9.10.0/9.10.1 due to known bugs. "
+            "Please consider upgrading to 9.10.2 or newer.");
+
+        // 9.14.0 sliding window bug: non-causal + s_kv > 1024 + sliding window
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            detail::get_backend_version() == 91400 && s_kv > 1024 && left_bound.has_value() &&
+                !has_causal_like_masking(),
+            error_code_t::GRAPH_NOT_SUPPORTED,
+            "cuDNN 9.14.0 has a known bug with non-causal + s_kv > 1024 + sliding window attention. "
+            "Please consider upgrading to 9.14.1 or newer.");
+
         RETURN_CUDNN_FRONTEND_ERROR_IF(
             (attention_score_modifier != nullptr) &&
                 (alibi_mask || has_causal_like_masking() || padding_mask || left_bound.has_value()),
@@ -212,21 +222,10 @@ SDPA_attributes::validate_sdpa_support_surface(const detail::Context& context,
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "When alibi mask is used, diagonal_band_right_bound needs to be set to 0.");
 
-        // validate options for bottom right causal mask
-        RETURN_CUDNN_FRONTEND_ERROR_IF(has_causal_mask_bottom_right() && (detail::get_backend_version() < 90300),
+        // ALiBI requires causal masking without padding (TE constraint)
+        RETURN_CUDNN_FRONTEND_ERROR_IF(alibi_mask && (!has_causal_like_masking() || padding_mask),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "Causal bottom right masking requires cudnn 9.3.0 and above");
-
-        // Combination of mask and bias
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            (is_bias && (has_causal_like_masking() || padding_mask) && (detail::get_backend_version() < 8906)),
-            error_code_t::GRAPH_NOT_SUPPORTED,
-            "Bias + padding or causal mask is only supported in 8.9.6 and above");
-
-        // validate options for sliding window length
-        RETURN_CUDNN_FRONTEND_ERROR_IF((left_bound.has_value() && detail::get_backend_version() < 90200),
-                                       error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "sliding window is only supported 9.2.0 and above");
+                                       "ALiBI requires causal masking without padding mask.");
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(
             left_bound.has_value() && left_bound.value() <= 0 && detail::get_backend_version() < 91000,
@@ -312,20 +311,12 @@ SDPA_attributes::validate_sdpa_support_surface(const detail::Context& context,
             error_code_t::GRAPH_NOT_SUPPORTED,
             "Paged attention with packed page tables only supported with cudnn version 9.10.2 and above");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 8903,
+        // SM version check for SDPA
+        RETURN_CUDNN_FRONTEND_ERROR_IF(prop_major < 8,
                                        error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "SDPA OP requires cudnn version 8.9.3 and above");
+                                       "SDPA FP16/BF16 requires SM80 (Ampere) or newer architecture");
 
-        // If user has set sm_version allow SM specific checks
-        if (context.get_sm_version() > 0) {
-            RETURN_CUDNN_FRONTEND_ERROR_IF(80 > context.get_sm_version(),
-                                           error_code_t::GRAPH_NOT_SUPPORTED,
-                                           "cudnn SDPA operation requires Ampere and above");
-        }
-
-        // (cudnn_runtime_version < 8907 && num_attn_heads == num_gqa_groups FIXME
-
-        // version specific validation
+        // version specific validation by architecture
         if (prop_major == 8) {
             RETURN_CUDNN_FRONTEND_ERROR_IF(
                 detail::get_backend_version() <= 90900 && ((d_qk > 128) || (d_v > 128)),
@@ -344,25 +335,6 @@ SDPA_attributes::validate_sdpa_support_surface(const detail::Context& context,
                                            "head_dim should be less than or equal to 128 for backend version 9.8 or "
                                            "below on blackwell architecture");
         }
-
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            detail::get_backend_version() < 8906 && ((s_kv % 64 != 0) || (d_qk % 64 != 0)),
-            error_code_t::GRAPH_NOT_SUPPORTED,
-            "For cuDNN version below 8.9.6, s_kv not a multiple of 64 or d not a multiple of 64 is not supported");
-
-        RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 8907 && (s_kv % 64 != 0) && (!(padding_mask)),
-                                       error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "For cuDNN version below 8.9.7, s_kv not a multiple of 64 is not supported");
-
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            detail::get_backend_version() < 90000 && ((s_q % 64 != 0) || (s_kv % 64 != 0)) &&
-                (padding_mask || is_dropout),
-            error_code_t::GRAPH_NOT_SUPPORTED,
-            "For cuDNN version below 9.0.0, s_q/s_kv not a multiple of 64 with padding/dropout mask is not supported");
-
-        RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 90200 && left_bound.has_value(),
-                                       error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "For cuDNN version below 9.2.0, sliding window attention is not supported");
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 90500 && is_paged,
                                        error_code_t::GRAPH_NOT_SUPPORTED,

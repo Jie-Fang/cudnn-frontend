@@ -1031,3 +1031,73 @@ Note: The dimension order remains $(B, H, S, D)$ but strides are reordered so th
 ### cuDNN Flex Attention API
 
 SDPA and SDPA backward operations now accept the functions `set_score_mod` and `set_score_mod_bprop`, which allows modification of the attention score matrix. These functions can be used to program a sub-graph of pointwise operations that can subsequently be used to program the score modifier. Note that this function usage is mutually exclusive to the usage of ready made options. Also, note that the graph argument in the score_mod function is not the same as the sdpa graph. So, any tensor to be passed as input to the score-mod sub-graph must first be registered with main graph and subsequently passed as argument to the score_mod function. The SDPA operation also now accepts the function `set_block_mask`, which applies a block mask to the score matrix. The implementation assumes a 128 x 128 block size.
+
+## cuDNN Version History for SDPA
+
+This section documents features and fixes introduced in each cuDNN version for SDPA operations.
+
+### Version 9.19.0
+- FP8 deterministic algorithm support on Blackwell
+- d_qk=192 with d_v=128 support for FP8
+
+### Version 9.18.0
+- THD/Ragged support on Ampere and Ada (SM80/SM89)
+- Deterministic algorithm on Blackwell for FP16/BF16
+
+### Version 9.15.0
+- Padding mask support for Unified SDPA
+- Paged attention inputs for Unified SDPA
+
+### Version 9.14.0
+- Block mask support for Unified SDPA
+- **Known Issue**: Non-causal + s_kv > 1024 + sliding window may have issues
+
+### Version 9.13.0
+- Unified SDPA implementation (requires 9.13.1)
+- FP8 output in FP16/BF16 format on Blackwell
+- Sink token support
+
+### Version 9.11.0
+- DeepSeek configuration (d_qk=192, d_v=128) backward on Hopper
+- Blackwell backward support with d_qk=192
+
+### Version 9.10.2
+- Paged attention with packed page tables
+
+### Version 9.10.0/9.10.1
+- **Known Issues**: General stability issues - recommend using 9.10.2+
+
+### Version 9.9.0
+- Various head dimension expansions for decode mode
+
+### Version 9.7.0
+- Bottom-right causal masking for FP8 (SM100+)
+- Paged + ragged combination support
+
+### Version 9.6.0
+- GQA with ragged offset support
+- Bottom-right causal mask seqlen flexibility
+
+### Version 9.5.0
+- Paged attention support
+- dBias with variable sequence lengths
+
+### Version 9.3.0
+- Bottom-right causal masking for FP16/BF16
+- **Minimum recommended version for new deployments**
+
+### Version 9.2.0
+- Sliding window attention
+
+### Version 9.1.0
+- FP8 SDPA support (Hopper+)
+
+### Version 9.0.0
+- Sequence length flexibility (s_q, s_kv not required to be multiples of 64)
+
+### Version 8.9.6
+- Padding mask, ALiBi mask support
+- Bias mask support
+
+### Version 8.9.3
+- Initial SDPA support (SM80+)
