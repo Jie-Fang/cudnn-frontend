@@ -295,8 +295,6 @@ class PytorchReference:
         lhs = kwargs[lhs_key].to(dtype=compute_type)
         rhs = kwargs[rhs_key].to(dtype=compute_type)
 
-        compute_type, out_type = PytorchReference._get_computation_types(kwargs, test_tensor_out_list)
-
         # Apply operation
         compute_result = op_func(lhs, rhs).to(dtype=compute_type)
 
@@ -317,8 +315,27 @@ class PytorchReference:
         # Update kwargs in-place with the potentially expanded tensors
         kwargs.update({"A": lhs, "B": rhs})
 
-        # Use the binary operation handler with torch.bmm
-        return PytorchReference._handle_binary_op(kwargs, test_tensor_out_list, torch.bmm, "A", "B")
+        compute_type, out_type = PytorchReference._get_computation_types(kwargs, test_tensor_out_list)
+
+        # Check if we need CPU fallback for integer matmul
+        # PyTorch's torch.bmm doesn't support integer types on CUDA
+        is_integer_type = compute_type in [torch.int8, torch.int16, torch.int32, torch.int64, torch.uint8]
+
+        if is_integer_type and lhs.is_cuda:
+            # Convert to compute type and move to CPU
+            lhs_cpu = lhs.to(dtype=compute_type).cpu()
+            rhs_cpu = rhs.to(dtype=compute_type).cpu()
+            # Perform matmul on CPU
+            compute_result = torch.bmm(lhs_cpu, rhs_cpu)
+            # Move result back to CUDA
+            compute_result = compute_result.cuda()
+            # Store results
+            test_tensor_out_list[0].compute_data = compute_result
+            test_tensor_out_list[0].ref_data = compute_result.to(dtype=out_type)
+            return [test_tensor_out_list[0].ref_data]
+        else:
+            # Use the standard binary operation handler for non-integer types
+            return PytorchReference._handle_binary_op(kwargs, test_tensor_out_list, torch.bmm, "A", "B")
 
     @staticmethod
     def scaled_matmul(kwargs, test_tensor_out_list):
