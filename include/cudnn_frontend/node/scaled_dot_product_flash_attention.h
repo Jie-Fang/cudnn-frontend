@@ -1040,6 +1040,14 @@ class CompositeSDPABackwardNode : public NodeCRTP<CompositeSDPABackwardNode> {
             "SDPA FP16/BF16 backward is not supported on cuDNN 9.10.0/9.10.1 due to known bugs. "
             "Please consider upgrading to 9.10.2 or newer.");
 
+        // 9.14.0 sliding window bug: non-causal + s_kv > 1024 + sliding window
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            detail::get_backend_version() == 91400 && s_kv > 1024 && attributes.left_bound.has_value() &&
+                !attributes.has_causal_like_masking(),
+            error_code_t::GRAPH_NOT_SUPPORTED,
+            "cuDNN 9.14.0 has a known bug with non-causal + s_kv > 1024 + sliding window attention. "
+            "Please consider upgrading to 9.14.1 or newer.");
+
         CHECK_CUDNN_FRONTEND_ERROR(context.populate_sm_version_from_device());
         int32_t const sm_version = context.get_sm_version();
         int32_t const prop_major = sm_version / 10;

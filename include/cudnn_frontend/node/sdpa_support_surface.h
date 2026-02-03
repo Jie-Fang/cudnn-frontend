@@ -222,11 +222,6 @@ SDPA_attributes::validate_sdpa_support_surface(const detail::Context& context,
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "When alibi mask is used, diagonal_band_right_bound needs to be set to 0.");
 
-        // ALiBI requires causal masking without padding (TE constraint)
-        RETURN_CUDNN_FRONTEND_ERROR_IF(alibi_mask && (!has_causal_like_masking() || padding_mask),
-                                       error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "ALiBI requires causal masking without padding mask.");
-
         RETURN_CUDNN_FRONTEND_ERROR_IF(
             left_bound.has_value() && left_bound.value() <= 0 && detail::get_backend_version() < 91000,
             error_code_t::INVALID_VALUE,
