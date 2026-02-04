@@ -1028,6 +1028,18 @@ A physical layout where sequence comes before heads in memory, while maintaining
 
 Note: The dimension order remains $(B, H, S, D)$ but strides are reordered so that in memory, sequence varies faster than head.
 
+### Determinism Support
+
+#### Fprop
+Always deterministic on all architectures
+
+#### Bprop
+SM100 - Deterministic requires cuDNN backend version 9.19.0 or later.
+SM80 and SM120 do not support deterministic algorithm with ragged input tensor.
+SM90 - Determinism is supported.
+
+
+
 ### cuDNN Flex Attention API
 
 SDPA and SDPA backward operations now accept the functions `set_score_mod` and `set_score_mod_bprop`, which allows modification of the attention score matrix. These functions can be used to program a sub-graph of pointwise operations that can subsequently be used to program the score modifier. Note that this function usage is mutually exclusive to the usage of ready made options. Also, note that the graph argument in the score_mod function is not the same as the sdpa graph. So, any tensor to be passed as input to the score-mod sub-graph must first be registered with main graph and subsequently passed as argument to the score_mod function. The SDPA operation also now accepts the function `set_block_mask`, which applies a block mask to the score matrix. The implementation assumes a 128 x 128 block size.
