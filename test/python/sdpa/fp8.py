@@ -5,7 +5,7 @@ import math
 from enum import IntEnum
 from looseversion import LooseVersion
 
-from .fp8_ref import compute_ref
+from .fp8_ref import compute_amax, compute_backward_amax, compute_ref, compute_ref_backward
 from .helpers import get_fp8_scale_factor, get_fp8_descale_factor, convert_to_cudnn_type, create_sparse_int_tensor, print_tensor_stats
 
 # fmt: off
@@ -139,9 +139,9 @@ def generate_graph_bwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d
         attn_scale=attn_scale, use_padding_mask=False, use_deterministic_algorithm=deterministic,
     )
 
-    dQ.set_uid(GraphBwdUid.dQ).set_output(True).set_dim((b, h_q, s_qo, d_qk)).set_stride((s_qo * h_q * d_qk, d_qk, h_q * d_qk, 1)).set_data_type(cudnn_itype)
-    dK.set_uid(GraphBwdUid.dK).set_output(True).set_dim((b, h_k, s_kv, d_qk)).set_stride((s_kv * h_k * d_qk, d_qk, h_k * d_qk, 1)).set_data_type(cudnn_itype)
-    dV.set_uid(GraphBwdUid.dV).set_output(True).set_dim((b, h_v, s_kv, d_vo)).set_stride((s_kv * h_v * d_vo, d_vo, h_v * d_vo, 1)).set_data_type(cudnn_itype)
+    dQ.set_uid(GraphBwdUid.dQ).set_output(True).set_dim((b, h_q, s_qo, d_qk)).set_stride((s_qo * h_q * d_qk, d_qk, h_q * d_qk, 1)).set_data_type(cudnn_otype)
+    dK.set_uid(GraphBwdUid.dK).set_output(True).set_dim((b, h_k, s_kv, d_qk)).set_stride((s_kv * h_k * d_qk, d_qk, h_k * d_qk, 1)).set_data_type(cudnn_otype)
+    dV.set_uid(GraphBwdUid.dV).set_output(True).set_dim((b, h_v, s_kv, d_vo)).set_stride((s_kv * h_v * d_vo, d_vo, h_v * d_vo, 1)).set_data_type(cudnn_otype)
 
     amax_dQ.set_uid(GraphBwdUid.dQ_amax).set_output(True).set_dim((1, 1, 1, 1)).set_stride((1, 1, 1, 1)).set_data_type(cudnn.data_type.FLOAT)
     amax_dK.set_uid(GraphBwdUid.dK_amax).set_output(True).set_dim((1, 1, 1, 1)).set_stride((1, 1, 1, 1)).set_data_type(cudnn.data_type.FLOAT)
@@ -223,7 +223,8 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
     q_amax = q_gen.abs().max().item()
     k_amax = k_gen.abs().max().item()
     v_amax = v_gen.abs().max().item()
-    s_amax, o_amax = compute_ref(q_gen, k_gen, v_gen, attn_scale, return_type="amax")
+    s_amax = 1.0
+    o_amax = compute_amax(q_gen, k_gen, v_gen, attn_scale)
 
     q_gpu = (q_gen * get_fp8_scale_factor(q_amax, torch_itype)).to(torch_itype)
     k_gpu = (k_gen * get_fp8_scale_factor(k_amax, torch_itype)).to(torch_itype)
@@ -279,22 +280,21 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
         graph.execute(variant_pack, workspace, handle=cudnn_handle)
         torch.cuda.synchronize()
 
-        q_ref = q_gpu.detach().float() * get_fp8_descale_factor(q_amax, torch_itype)
-        k_ref = k_gpu.detach().float() * get_fp8_descale_factor(k_amax, torch_itype)
-        v_ref = v_gpu.detach().float() * get_fp8_descale_factor(v_amax, torch_itype)
-        o_ref = compute_ref(q_ref, k_ref, v_ref, attn_scale=attn_scale)
+        o_ref = compute_ref(q_gpu, k_gpu, v_gpu, attn_scale=attn_scale,
+                            q_descale=q_descale_gpu, k_descale=k_descale_gpu, v_descale=v_descale_gpu,
+                            s_scale=s_scale_gpu, s_descale=s_descale_gpu, torch_itype=torch_itype,
+                            o_scale=o_scale_gpu, torch_otype=torch_otype)
 
         o_gpu_comp = o_gpu.detach().float() * get_fp8_descale_factor(o_amax, torch_otype)
+        o_ref_comp = o_ref.detach().float() * get_fp8_descale_factor(o_amax, torch_otype)
 
         atol, rtol = 0.08, 0.2
-        if torch_itype == torch.float8_e5m2:
-            atol, rtol = 0.16, 0.4
-
-        torch.testing.assert_close(o_gpu_comp, o_ref, atol=atol, rtol=rtol)
+        torch.testing.assert_close(o_gpu_comp, o_ref_comp, atol=atol, rtol=rtol)
 
     else:
         dO_gen = create_sparse_int_tensor((b, s_qo, h_q, d_vo), torch.float, rng_data)
         dO_amax = dO_gen.abs().max().item()
+        dO_gpu = (dO_gen * get_fp8_scale_factor(dO_amax, torch_itype)).to(torch_itype)
 
         q_gpu = q_gen.to(torch_itype)
         k_gpu = k_gen.to(torch_itype)
@@ -307,7 +307,6 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
 
         o_gpu = torch.full((b, s_qo, h_q, d_vo), float('nan'), dtype=torch_otype, device="cuda")
         stats_gpu = torch.full((b, h_q, s_qo, 1), float('nan'), dtype=torch.float, device="cuda")
-        dO_gpu = dO_gen.to(torch_itype)
 
         q_descale_gpu = torch.tensor([1.0], dtype=torch.float, device="cuda")
         k_descale_gpu = torch.tensor([1.0], dtype=torch.float, device="cuda")
@@ -331,17 +330,20 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
         graph_fwd.execute(variant_pack_fwd, workspace_fwd, handle=cudnn_handle)
         torch.cuda.synchronize()
 
-        o_descale_gpu = torch.tensor([1.0], dtype=torch.float, device="cuda")
-        dO_descale_gpu = torch.tensor([1.0], dtype=torch.float, device="cuda")
-        dP_descale_gpu = torch.tensor([1.0], dtype=torch.float, device="cuda")
-        dQ_scale_gpu = torch.tensor([1.0], dtype=torch.float, device="cuda")
-        dK_scale_gpu = torch.tensor([1.0], dtype=torch.float, device="cuda")
-        dV_scale_gpu = torch.tensor([1.0], dtype=torch.float, device="cuda")
-        dP_scale_gpu = torch.tensor([1.0], dtype=torch.float, device="cuda")
+        o_gen = o_gpu.float()
+        dP_amax, dQ_amax, dK_amax, dV_amax = compute_backward_amax(q_gen, k_gen, v_gen, o_gen, dO_gen, attn_scale)
 
-        dQ_gpu = torch.full((b, s_qo, h_q, d_qk), float('nan'), dtype=torch_itype, device="cuda")
-        dK_gpu = torch.full((b, s_kv, h_k, d_qk), float('nan'), dtype=torch_itype, device="cuda")
-        dV_gpu = torch.full((b, s_kv, h_v, d_vo), float('nan'), dtype=torch_itype, device="cuda")
+        o_descale_gpu = torch.tensor([get_fp8_descale_factor(o_amax, torch_otype)], dtype=torch.float, device="cuda")
+        dO_descale_gpu = torch.tensor([get_fp8_descale_factor(dO_amax, torch_itype)], dtype=torch.float, device="cuda")
+        dP_descale_gpu = torch.tensor([get_fp8_descale_factor(dP_amax, torch_itype)], dtype=torch.float, device="cuda")
+        dQ_scale_gpu = torch.tensor([get_fp8_scale_factor(dQ_amax, torch_otype)], dtype=torch.float, device="cuda")
+        dK_scale_gpu = torch.tensor([get_fp8_scale_factor(dK_amax, torch_otype)], dtype=torch.float, device="cuda")
+        dV_scale_gpu = torch.tensor([get_fp8_scale_factor(dV_amax, torch_otype)], dtype=torch.float, device="cuda")
+        dP_scale_gpu = torch.tensor([get_fp8_scale_factor(dP_amax, torch_otype)], dtype=torch.float, device="cuda")
+
+        dQ_gpu = torch.full((b, s_qo, h_q, d_qk), float('nan'), dtype=torch_otype, device="cuda")
+        dK_gpu = torch.full((b, s_kv, h_k, d_qk), float('nan'), dtype=torch_otype, device="cuda")
+        dV_gpu = torch.full((b, s_kv, h_v, d_vo), float('nan'), dtype=torch_otype, device="cuda")
         dQ_amax_gpu = torch.tensor([float('nan')], dtype=torch.float, device="cuda")
         dK_amax_gpu = torch.tensor([float('nan')], dtype=torch.float, device="cuda")
         dV_amax_gpu = torch.tensor([float('nan')], dtype=torch.float, device="cuda")
@@ -365,24 +367,27 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
         graph.execute(variant_pack_bwd, workspace_bwd, handle=cudnn_handle)
         torch.cuda.synchronize()
 
-        q_ref = q_gpu.detach().float()
-        k_ref = k_gpu.detach().float()
-        v_ref = v_gpu.detach().float()
+        dQ_ref, dK_ref, dV_ref = compute_ref_backward(
+            q_gpu, k_gpu, v_gpu, o_gpu, dO_gpu, attn_scale=attn_scale,
+            q_descale=q_descale_gpu, k_descale=k_descale_gpu, v_descale=v_descale_gpu,
+            s_scale=s_scale_gpu, s_descale=s_descale_gpu, torch_itype=torch_itype,
+            o_descale=o_descale_gpu, dO_descale=dO_descale_gpu,
+            dP_scale=dP_scale_gpu, dP_descale=dP_descale_gpu,
+            dQ_scale=dQ_scale_gpu, dK_scale=dK_scale_gpu, dV_scale=dV_scale_gpu, torch_otype=torch_otype
+        )
 
-        q_ref.requires_grad_(True)
-        k_ref.requires_grad_(True)
-        v_ref.requires_grad_(True)
-        o_tmp = compute_ref(q_ref, k_ref, v_ref, attn_scale=attn_scale)
-        dQ_ref, dK_ref, dV_ref = torch.autograd.grad(outputs=o_tmp, inputs=[q_ref, k_ref, v_ref], grad_outputs=dO_gen)
+        dQ_out = dQ_gpu.detach().float() * get_fp8_descale_factor(dQ_amax, torch_otype)
+        dK_out = dK_gpu.detach().float() * get_fp8_descale_factor(dK_amax, torch_otype)
+        dV_out = dV_gpu.detach().float() * get_fp8_descale_factor(dV_amax, torch_otype)
 
-        dQ_out = dQ_gpu.detach().float()
-        dK_out = dK_gpu.detach().float()
-        dV_out = dV_gpu.detach().float()
+        dQ_ref_float = dQ_ref.detach().float() * get_fp8_descale_factor(dQ_amax, torch_otype)
+        dK_ref_float = dK_ref.detach().float() * get_fp8_descale_factor(dK_amax, torch_otype)
+        dV_ref_float = dV_ref.detach().float() * get_fp8_descale_factor(dV_amax, torch_otype)
 
-        atol, rtol = 0.16, 0.2
-        torch.testing.assert_close(dQ_out, dQ_ref, atol=atol, rtol=rtol)
-        torch.testing.assert_close(dK_out, dK_ref, atol=atol, rtol=rtol)
-        torch.testing.assert_close(dV_out, dV_ref, atol=atol, rtol=rtol)
+        atol, rtol = 0.04, 0.2
+        torch.testing.assert_close(dQ_out, dQ_ref_float, atol=atol, rtol=rtol)
+        torch.testing.assert_close(dK_out, dK_ref_float, atol=atol, rtol=rtol)
+        torch.testing.assert_close(dV_out, dV_ref_float, atol=atol, rtol=rtol)
 
     # Print hash and stats for determinism verification
     print_tensor_stats(o_gpu, tag="o_gpu")
