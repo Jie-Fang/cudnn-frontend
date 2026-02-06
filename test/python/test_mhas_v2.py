@@ -709,7 +709,7 @@ def test_sdpa_fp8_fwd_paged_L0(env_info, test_no, request, cudnn_handle):
 
 @pytest.mark.parametrize("test_no", generate_test_seeds(num_tests=32, rng_seed=996), ids=lambda p: f"test{p[0]}")
 @pytest.mark.L0
-def test_sdpa_fp8_fwd_thd_L0(env_info, test_no, request, cudnn_handle):
+def test_sdpa_fp8_fwd_ragged_L0(env_info, test_no, request, cudnn_handle):
 
     test = SDPATestConfig(**env_info, implementation=cudnn.attention_implementation.AUTO)
 
