@@ -966,7 +966,7 @@ class test_tensor:
 
         self.is_by_value = False
 
-        self.is_virtual = True
+        self.is_virtual = False
 
     @property
     def data_type(self):
