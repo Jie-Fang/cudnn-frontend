@@ -8,6 +8,7 @@
 #include "../graph_helpers.h"
 #include "../node_interface.h"
 
+#include "diagonal_band_mask.h"
 #include "matmul.h"
 #include "pointwise.h"
 #include "reduction.h"
@@ -450,7 +451,7 @@ class SDPANodeBase : public NodeCRTP<DerivedT> {
     virtual void
     serialize(json& j) const override final {
         j = attributes;
-        j.update(R"({"tag": "SDPA_FWD"})"_json);
+        j.update(R"({"tag": "SDPA"})"_json);
     }
 #endif
 };
@@ -1988,7 +1989,7 @@ class UnifiedSDPANode : public SDPANodeBase<UnifiedSDPANode> {
 
     Type
     getType() override final {
-        return Type::UNIFIED_SDPA;
+        return Type::SDPA;
     }
 
     error_t

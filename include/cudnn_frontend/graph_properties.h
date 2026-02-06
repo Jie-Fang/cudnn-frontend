@@ -2336,6 +2336,40 @@ class Softmax_attributes : public Attributes<Softmax_attributes> {
     }
 };
 
+class CompositeDiagonalBandMaskNode;
+class UnifiedDiagonalBandMaskNode;
+
+class DiagonalBandMask_attributes : public Attributes<DiagonalBandMask_attributes> {
+    friend class Attributes<DiagonalBandMask_attributes>;
+    friend class CompositeDiagonalBandMaskNode;
+    friend class UnifiedDiagonalBandMaskNode;
+
+    PointwiseMode_t comparison_mode = PointwiseMode_t::CMP_GT;
+
+   public:
+    enum class input_names { X, SEQ_LEN_Q, SEQ_LEN_KV, LeftBound, ShiftRightBound, B };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+    enum class output_names { Y };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(DiagonalBandMask_attributes,
+                                   name,
+                                   compute_data_type,
+                                   inputs,
+                                   outputs,
+                                   comparison_mode)
+
+    PointwiseMode_t
+    get_comparison_mode() const {
+        return comparison_mode;
+    }
+
+    DiagonalBandMask_attributes&
+    set_comparison_mode(PointwiseMode_t value) {
+        comparison_mode = value;
+        return *this;
+    }
+};
+
 class Conv_wgrad_attributes : public Attributes<Conv_wgrad_attributes> {
     friend class Attributes<Conv_wgrad_attributes>;
     friend class WgradNode;

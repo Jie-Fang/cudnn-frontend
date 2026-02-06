@@ -1741,7 +1741,7 @@ class Graph : public ICudnn, public INode {
                         FILL_GLOBAL_IO_TENSOR_MAP(reduction_attributes);
                         sub_nodes.emplace_back(
                             std::make_unique<ReductionNode>(std::move(reduction_attributes), context));
-                    } else if (tag == "SDPA_FWD") {
+                    } else if (tag == "SDPA") {
                         auto sdpa_attributes = j_sub_node.get<SDPA_attributes>();
                         CHECK_TENSORS(sdpa_attributes);
                         FILL_GLOBAL_IO_TENSOR_MAP(sdpa_attributes);
