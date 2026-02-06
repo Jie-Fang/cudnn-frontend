@@ -394,7 +394,6 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
         if is_ragged:
             seq_len_q_ref = torch.tensor(seq_len_q_list, dtype=torch.int32, device="cuda")
             seq_len_kv_ref = torch.tensor(seq_len_kv_list, dtype=torch.int32, device="cuda")
-            # convert_packed_to_uniform returns BHSD, transpose to BSHD for fp8_ref
             q_ref = torch.einsum("bhsd->bshd", convert_packed_to_uniform(q_gpu, seq_len_q_ref, s_qo))
             k_ref = torch.einsum("bhsd->bshd", convert_packed_to_uniform(k_gpu, seq_len_kv_ref, s_kv))
             v_ref = torch.einsum("bhsd->bshd", convert_packed_to_uniform(v_gpu, seq_len_kv_ref, s_kv))
@@ -403,10 +402,12 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
             k_ref = k_gpu
             v_ref = v_gpu
 
+        padding = (seq_len_q_ref, seq_len_kv_ref) if is_ragged else None
         o_ref = compute_ref(q_ref, k_ref, v_ref, attn_scale=attn_scale,
                             q_descale=q_descale_gpu, k_descale=k_descale_gpu, v_descale=v_descale_gpu,
                             s_scale=s_scale_gpu, s_descale=s_descale_gpu, torch_itype=torch_itype,
-                            o_scale=o_scale_gpu, torch_otype=torch_otype)
+                            o_scale=o_scale_gpu, torch_otype=torch_otype,
+                            padding=padding)
 
         if is_ragged:
             # compute_ref returns BSHD, transpose to BHSD for convert_uniform_to_packed
@@ -414,6 +415,14 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
 
         o_gpu_comp = o_gpu.detach().float() * get_fp8_descale_factor(o_amax, torch_otype)
         o_ref_comp = o_ref.detach().float() * get_fp8_descale_factor(o_amax, torch_otype)
+
+        if is_ragged:
+            # Zero out padding tokens beyond valid sequence lengths
+            t_idx = 0
+            for s in seq_len_q_list:
+                t_idx += s
+            o_gpu_comp[t_idx:] = 0
+            o_ref_comp[t_idx:] = 0
 
         atol, rtol = 0.08, 0.2
         torch.testing.assert_close(o_gpu_comp, o_ref_comp, atol=atol, rtol=rtol)
@@ -574,13 +583,15 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
             o_ref_bwd = o_gpu
             dO_ref_bwd = dO_gpu
 
+        padding_bwd = (seq_len_q_ref, seq_len_kv_ref) if is_ragged else None
         dQ_ref, dK_ref, dV_ref = compute_ref_backward(
             q_ref_bwd, k_ref_bwd, v_ref_bwd, o_ref_bwd, dO_ref_bwd, attn_scale=attn_scale,
             q_descale=q_descale_gpu, k_descale=k_descale_gpu, v_descale=v_descale_gpu,
             s_scale=s_scale_gpu, s_descale=s_descale_gpu, torch_itype=torch_itype,
             o_descale=o_descale_gpu, dO_descale=dO_descale_gpu,
             dP_scale=dP_scale_gpu, dP_descale=dP_descale_gpu,
-            dQ_scale=dQ_scale_gpu, dK_scale=dK_scale_gpu, dV_scale=dV_scale_gpu, torch_otype=torch_otype
+            dQ_scale=dQ_scale_gpu, dK_scale=dK_scale_gpu, dV_scale=dV_scale_gpu, torch_otype=torch_otype,
+            padding=padding_bwd
         )
 
         if is_ragged:
@@ -596,6 +607,16 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
         dQ_ref_float = dQ_ref.detach().float() * get_fp8_descale_factor(dQ_amax, torch_otype)
         dK_ref_float = dK_ref.detach().float() * get_fp8_descale_factor(dK_amax, torch_otype)
         dV_ref_float = dV_ref.detach().float() * get_fp8_descale_factor(dV_amax, torch_otype)
+
+        if is_ragged:
+            t_idx_q = sum(seq_len_q_list)
+            dQ_out[t_idx_q:] = 0
+            dQ_ref_float[t_idx_q:] = 0
+            t_idx_kv = sum(seq_len_kv_list)
+            dK_out[t_idx_kv:] = 0
+            dK_ref_float[t_idx_kv:] = 0
+            dV_out[t_idx_kv:] = 0
+            dV_ref_float[t_idx_kv:] = 0
 
         atol, rtol = 0.04, 0.2
         torch.testing.assert_close(dQ_out, dQ_ref_float, atol=atol, rtol=rtol)

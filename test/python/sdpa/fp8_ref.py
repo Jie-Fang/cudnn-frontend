@@ -73,7 +73,8 @@ def compute_backward_amax(q, k, v, o, dO, attn_scale):
 def compute_ref(q, k, v, attn_scale,
                 q_descale, k_descale, v_descale,
                 s_scale, s_descale, torch_itype,
-                o_scale, torch_otype):
+                o_scale, torch_otype,
+                padding=None):
     """Compute forward pass reference with online softmax tiling."""
     b, s_q, h_q, d_qk = q.shape
     _, s_kv, h_k, _ = k.shape
@@ -106,6 +107,12 @@ def compute_ref(q, k, v, attn_scale,
         # Q (FP8) @ K^T (FP8) -> S (FP32)
         s_block = torch.einsum("bhqd,bhkd->bhqk", q.float(), k_block.float()) * q_descale * k_descale * attn_scale
 
+        if padding is not None:
+            seq_len_q_pad, seq_len_kv_pad = padding
+            key_indices = torch.arange(start_idx, end_idx, device=s_block.device)
+            kv_mask = key_indices.unsqueeze(0) >= seq_len_kv_pad.view(-1, 1)
+            s_block = s_block.masked_fill(kv_mask.unsqueeze(1).unsqueeze(2), float('-inf'))
+
         m_block = s_block.max(dim=-1, keepdim=True).values
         m_new = torch.maximum(m_old, m_block)
 
@@ -136,7 +143,8 @@ def compute_ref_backward(q, k, v, o, dO, attn_scale,
                          s_scale, s_descale, torch_itype,
                          o_descale, dO_descale,
                          dP_scale, dP_descale,
-                         dQ_scale, dK_scale, dV_scale, torch_otype):
+                         dQ_scale, dK_scale, dV_scale, torch_otype,
+                         padding=None):
     """Compute backward pass reference."""
     _, _, h_q, _ = q.shape
     _, _, h_k, _ = k.shape
@@ -151,6 +159,13 @@ def compute_ref_backward(q, k, v, o, dO, attn_scale,
 
     # Compute P from Q and K
     s = torch.einsum("bqhd,bkhd->bhqk", q.float(), k.float()) * q_descale * k_descale * attn_scale
+
+    if padding is not None:
+        seq_len_q_pad, seq_len_kv_pad = padding
+        kv_indices = torch.arange(s.shape[-1], device=s.device)
+        kv_mask = kv_indices.unsqueeze(0) >= seq_len_kv_pad.view(-1, 1)
+        s = s.masked_fill(kv_mask.unsqueeze(1).unsqueeze(2), float('-inf'))
+
     p = s.softmax(dim=-1)
 
     # P (FP32) -> P (FP8)
