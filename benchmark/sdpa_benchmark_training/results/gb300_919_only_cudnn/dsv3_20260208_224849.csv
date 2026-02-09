@@ -1,0 +1,11 @@
+config_name,model_name,backend,data_type,attn_mask,batch_size,q_seqlen,kv_seqlen,num_q_heads,num_kv_heads,head_dim_qk,head_dim_vo,profile_pass,deterministic_bwd,fwd_time_ms,bwd_time_ms,fwd_tflops,bwd_tflops,max_diff,num_iterations,success,error_message,gpu_name,cudnn_version,cudnn_backend_version
+dsv3,dsv3,cudnn,bfloat16,top_left,1,32768,32768,128,128,192,128,both,True,21.057,79.330,2089.000,1441.000,0.000,10,True,,NVIDIA GB300,1.18.0,91900
+dsv3,dsv3,cudnn,fp8,top_left,1,32768,32768,128,128,192,128,both,True,13.304,55.659,3306.000,2055.000,0.000,10,True,,NVIDIA GB300,1.18.0,91900
+dsv3,dsv3,cudnn,bfloat16,top_left,1,16384,16384,128,128,192,128,both,True,5.529,20.162,1989.000,1418.000,0.000,10,True,,NVIDIA GB300,1.18.0,91900
+dsv3,dsv3,cudnn,fp8,top_left,1,16384,16384,128,128,192,128,both,True,3.566,14.618,3084.000,1956.000,0.000,10,True,,NVIDIA GB300,1.18.0,91900
+dsv3,dsv3,cudnn,bfloat16,top_left,1,8192,8192,128,128,192,128,both,True,1.509,5.366,1821.000,1332.000,0.000,10,True,,NVIDIA GB300,1.18.0,91900
+dsv3,dsv3,cudnn,fp8,top_left,1,8192,8192,128,128,192,128,both,True,1.002,4.112,2745.000,1738.000,0.000,10,True,,NVIDIA GB300,1.18.0,91900
+dsv3,dsv3,cudnn,bfloat16,top_left,1,4096,4096,128,128,192,128,both,True,0.440,1.535,1564.000,1164.000,0.000,10,True,,NVIDIA GB300,1.18.0,91900
+dsv3,dsv3,cudnn,fp8,top_left,1,4096,4096,128,128,192,128,both,True,0.306,1.202,2247.000,1487.000,0.000,10,True,,NVIDIA GB300,1.18.0,91900
+dsv3,dsv3,cudnn,bfloat16,top_left,1,2048,2048,128,128,192,128,both,True,0.149,0.493,1153.000,906.000,0.000,10,True,,NVIDIA GB300,1.18.0,91900
+dsv3,dsv3,cudnn,fp8,top_left,1,2048,2048,128,128,192,128,both,True,0.108,0.383,1598.000,1168.000,0.000,10,True,,NVIDIA GB300,1.18.0,91900
