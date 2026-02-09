@@ -69,7 +69,7 @@ class GraphBwdUid(IntEnum):
     kv_seq_len = 131
     q_seq_len = 132
 
-def generate_graph_fwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, block_size, is_ragged=False, generate_stats=True):
+def generate_graph_fwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, block_size, is_ragged=False, generate_stats=True, left_bound=None, right_bound=None, diag_align=None):
     graph_fwd = cudnn.pygraph(io_data_type=cudnn_itype, intermediate_data_type=cudnn.data_type.FLOAT, compute_data_type=cudnn.data_type.FLOAT)
 
     use_padding_mask = None
@@ -130,6 +130,7 @@ def generate_graph_fwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d
         use_padding_mask=use_padding_mask, seq_len_kv=kv_seq_len, seq_len_q=q_seq_len,
         paged_attention_k_table=k_block_table, paged_attention_v_table=v_block_table,
         paged_attention_max_seq_len_kv=s_kv,
+        left_bound=left_bound, right_bound=right_bound, diagonal_alignment=diag_align,
     )
 
     stride_o = (s_qo * h_q * d_vo, d_vo, h_q * d_vo, 1)
@@ -269,6 +270,9 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
     block_size = cfg.block_size if cfg.is_paged else 0
     deterministic = cfg.is_determin if hasattr(cfg, 'is_determin') else False
     is_ragged = cfg.is_ragged if hasattr(cfg, 'is_ragged') else False
+    left_bound = cfg.left_bound if hasattr(cfg, 'left_bound') else None
+    right_bound = cfg.right_bound if hasattr(cfg, 'right_bound') else None
+    diag_align = cfg.diag_align if hasattr(cfg, 'diag_align') else None
 
     attn_scale = 0.125
 
@@ -291,7 +295,7 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
 
     try:
         if cfg.is_infer:
-            graph = generate_graph_fwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, block_size, is_ragged=is_ragged)
+            graph = generate_graph_fwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, block_size, is_ragged=is_ragged, left_bound=left_bound, right_bound=right_bound, diag_align=diag_align)
         else:
             graph = generate_graph_bwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, deterministic, is_ragged=is_ragged)
         graph.validate()
@@ -443,7 +447,7 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
             v_gpu = convert_uniform_to_packed(torch.einsum("bshd->bhsd", v_gpu), torch.tensor(seq_len_kv_list, dtype=torch.int32, device="cuda"), max_t_kv)
             dO_gpu = convert_uniform_to_packed(torch.einsum("bshd->bhsd", dO_gpu), torch.tensor(seq_len_q_list, dtype=torch.int32, device="cuda"), max_t_q)
 
-        graph_fwd = generate_graph_fwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, 0, is_ragged=is_ragged)
+        graph_fwd = generate_graph_fwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, 0, is_ragged=is_ragged, left_bound=left_bound, right_bound=right_bound, diag_align=diag_align)
         try:
             graph_fwd.validate()
         except cudnn.cudnnGraphNotSupportedError as e:
