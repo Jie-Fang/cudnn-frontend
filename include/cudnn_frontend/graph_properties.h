@@ -868,7 +868,7 @@ class Matmul_attributes : public Attributes<Matmul_attributes> {
 class Pointwise_attributes : public Attributes<Pointwise_attributes> {
     friend class Attributes<Pointwise_attributes>;
     friend class PointwiseNode;
-    friend class SoftmaxNode;
+    friend class CompositeSoftmaxNode;
     friend class INode;
 
     PointwiseMode_t mode = PointwiseMode_t::NOT_SET;
@@ -2317,9 +2317,13 @@ class SDPA_fp8_backward_attributes : public Attributes<SDPA_fp8_backward_attribu
 using Scaled_dot_product_flash_attention_attributes [[deprecated]]          = SDPA_attributes;
 using Scaled_dot_product_flash_attention_backward_attributes [[deprecated]] = SDPA_backward_attributes;
 
+class CompositeSoftmaxNode;
+class UnifiedSoftmaxNode;
+
 class Softmax_attributes : public Attributes<Softmax_attributes> {
     friend class Attributes<Softmax_attributes>;
-    friend class SoftmaxNode;
+    friend class CompositeSoftmaxNode;
+    friend class UnifiedSoftmaxNode;
     friend class INode;
 
    public:
@@ -2336,6 +2340,8 @@ class Softmax_attributes : public Attributes<Softmax_attributes> {
     }
 };
 
+template <typename DerivedClass>
+class DiagonalBandMaskNodeBase;
 class CompositeDiagonalBandMaskNode;
 class UnifiedDiagonalBandMaskNode;
 

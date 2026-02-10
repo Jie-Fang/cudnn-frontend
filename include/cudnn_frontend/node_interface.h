@@ -34,7 +34,8 @@ class ReductionNode;
 class ResampleNode;
 class ReshapeNode;
 class RngNode;
-class SoftmaxNode;
+class CompositeSoftmaxNode;
+class UnifiedSoftmaxNode;
 class MoeGroupedMatmulNode;
 class UnifiedDiagonalBandMaskNode;
 
@@ -142,6 +143,7 @@ class INode {
         SDPA,
         MOE_GROUPED_MATMUL,
         DIAGONAL_BAND_MASK,
+        SOFTMAX,
     };
     Type tag;
 
