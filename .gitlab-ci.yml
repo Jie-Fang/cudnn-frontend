@@ -110,11 +110,6 @@ before_script:
         - pip install -v .
         - ci/run_python_samples.sh
 
-.L4_graph_runner:template:
-    stage: L4_graph_runner
-    script:
-        - ci/run_L4_graph_runner.sh
-
 .L4_graph_runner_large:template:
     stage: L4_graph_runner
     script:
@@ -225,7 +220,6 @@ mha_v2_tests:cudnn_dev_latest:
         - .fetch_cudnn_dev:template
         - .mha_v2_tests:template
     needs: ["build:cudnn_dev_latest"]
-    resource_group: memory_heavy_${ARCH}
 
 mha_v1_tests:cudnn_dev_latest:
     extends:
@@ -235,7 +229,6 @@ mha_v1_tests:cudnn_dev_latest:
         - .fetch_cudnn_dev:template
         - .mha_v1_tests:template
     needs: ["build:cudnn_dev_latest"]
-    resource_group: memory_heavy_${ARCH}
 
 python_tests:cudnn_dev_latest:
     extends:
@@ -245,7 +238,6 @@ python_tests:cudnn_dev_latest:
         - .fetch_cudnn_dev:template
         - .python_tests:template
     needs: ["build:cudnn_dev_latest"]
-    resource_group: memory_heavy_${ARCH}
 
 pycudnntest:cudnn_dev_latest:
     extends:
@@ -264,15 +256,6 @@ cpp_tests:cudnn_dev_latest:
         - .cudnn_dev_image:template
         - .fetch_cudnn_dev:template
         - .cpp_tests:template
-    needs: ["build:cudnn_dev_latest"]
-
-L4_graph_runner:cudnn_dev_latest:
-    extends:
-        - .default_job_template
-        - .device_matrix:template
-        - .cudnn_dev_image:template
-        - .fetch_cudnn_dev:template
-        - .L4_graph_runner:template
     needs: ["build:cudnn_dev_latest"]
     
 L4_graph_runner_large:cudnn_dev_latest:
@@ -311,7 +294,6 @@ mha_v2_tests:cudnn_rel_latest:
         - .fetch_cudnn_rel:template
         - .mha_v2_tests:template
     needs: ["build:cudnn_rel_latest"]
-    resource_group: memory_heavy_${ARCH}
 
 mha_v1_tests:cudnn_rel_latest:
     extends:
@@ -321,7 +303,6 @@ mha_v1_tests:cudnn_rel_latest:
         - .fetch_cudnn_rel:template
         - .mha_v1_tests:template
     needs: ["build:cudnn_rel_latest"]
-    resource_group: memory_heavy_${ARCH}
 
 oss_tests:
     extends:
@@ -340,7 +321,6 @@ python_tests:cudnn_rel_latest:
         - .fetch_cudnn_rel:template
         - .python_tests:template
     needs: ["build:cudnn_rel_latest"]
-    resource_group: memory_heavy_${ARCH}
 
 pycudnntest:cudnn_rel_latest:
     extends:
@@ -358,15 +338,6 @@ cpp_tests:cudnn_rel_latest:
         - .cudnn_rel_image:template
         - .fetch_cudnn_rel:template
         - .cpp_tests:template
-    needs: ["build:cudnn_rel_latest"]
-
-L4_graph_runner:cudnn_rel_latest:
-    extends:
-        - .default_job_template
-        - .device_matrix:template
-        - .cudnn_rel_image:template
-        - .fetch_cudnn_rel:template
-        - .L4_graph_runner:template
     needs: ["build:cudnn_rel_latest"]
     
 L4_graph_runner_large:cudnn_rel_latest:
