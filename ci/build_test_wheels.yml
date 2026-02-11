@@ -39,7 +39,7 @@ deploy:build_bdist_wheels_3.14:
     extends: .windows_wheel_builder_template
     variables:
         PYTHON_VERSION: "314"
-        PYTHON_FULL_VERSION: "3.14.3"
+        PYTHON_FULL_VERSION: "3.14.2"
 
 deploy:build_bdist_wheels_3.13:
     extends: .windows_wheel_builder_template
