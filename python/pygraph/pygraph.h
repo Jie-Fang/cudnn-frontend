@@ -251,8 +251,8 @@ class PyGraph {
 
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     swish(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input,
-          cudnn_frontend::DataType_t const& compute_data_type,
           std::optional<float> const& swish_beta,
+          cudnn_frontend::DataType_t const& compute_data_type,
           std::string const& name);
 
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
