@@ -11,6 +11,8 @@ We are now shipping **OSS kernels**, allowing you to inspect, modify, and contri
 
 *   **[GEMM + Amax](https://github.com/NVIDIA/cudnn-frontend/tree/main/python/cudnn/gemm_amax):** Optimized FP8 matrix multiplication with absolute maximum calculation.
 *   **[GEMM + SwiGLU](https://github.com/NVIDIA/cudnn-frontend/tree/main/python/cudnn/gemm_swiglu):** High-performance implementation of the SwiGLU activation fused with GEMM.
+*   **[Grouped GEMM + SwiGLU](https://github.com/NVIDIA/cudnn-frontend/tree/main/python/cudnn/grouped_gemm/grouped_gemm_swiglu):** SwiGLU activation fused with Grouped GEMM.
+*   **[Grouped GEMM + dSwiglu](https://github.com/NVIDIA/cudnn-frontend/tree/main/python/cudnn/gemm_dswiglu):** dSwiglu activation fused with Grouped GEMM.
 *   **[NSA](https://github.com/NVIDIA/cudnn-frontend/tree/main/python/cudnn/native_sparse_attention/):** Native Sparse attention as described in the Native Sparse Attention: Hardware-Aligned and Natively Trainable Sparse Attention.
 
 ## Key Features

@@ -604,7 +604,7 @@ class APIBase(ABC):
         tensor_ptr = self._make_cute_pointer(tensor, assumed_align=assumed_align)
         tensor_shape = self._tensor_shape(tensor, name=name)
         tensor_stride = self._tensor_stride(tensor, name=name)
-        tensor_stride_order = tuple(i for i, s in sorted(enumerate(tensor_stride), key=lambda x: x[1]))
+        tensor_stride_order = tuple(i for i, s in sorted(enumerate(tensor_stride), key=lambda x: (x[1], tensor_shape[x[0]])))
         return tensor_ptr, tensor_shape, tensor_stride_order
 
 
