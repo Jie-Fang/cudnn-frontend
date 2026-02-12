@@ -307,11 +307,11 @@ class SDPANodeBase : public NodeCRTP<DerivedT> {
             RETURN_CUDNN_FRONTEND_ERROR_IF(descale_v->get_reordering_type() != TensorReordering_t::F8_128x4,
                                            error_code_t::ATTRIBUTE_NOT_SET,
                                            "MXFP8 SDPA requires Descale_V to have F8_128x4 reordering");
-            // SF_V scales along s dimension (not d), so s_scale must be contiguous
-            RETURN_CUDNN_FRONTEND_ERROR_IF(
-                descale_v->get_stride()[2] != 1,
-                error_code_t::GRAPH_NOT_SUPPORTED,
-                "MXFP8 SDPA requires Descale_V to have contiguous s_scale dimension (stride[2] == 1)");
+            // // SF_V scales along s dimension (not d), so s_scale must be contiguous
+            // RETURN_CUDNN_FRONTEND_ERROR_IF(
+            //     descale_v->get_stride()[2] != 1,
+            //     error_code_t::GRAPH_NOT_SUPPORTED,
+            //     "MXFP8 SDPA requires Descale_V to have contiguous s_scale dimension (stride[2] == 1)");
 
             // Validate dimension consistency for SF_Q: [b, h_q, s_q_padded, d_scale_padded]
             auto const& sf_q_dim = descale_q->get_dim();
