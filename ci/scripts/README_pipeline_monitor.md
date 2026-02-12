@@ -41,41 +41,17 @@ python gitlab_pipeline_monitor.py --ref main
 ### As a Python Module
 
 ```python
-from pipeline_agent import check_pipeline_status, get_new_failures, get_pipeline_summary
+from gitlab_pipeline_monitor import GitLabPipelineMonitor
 
-# Get full status report
-result = check_pipeline_status()
-print(result["summary"])
+monitor = GitLabPipelineMonitor(
+    gitlab_url="https://gitlab-master.nvidia.com",
+    project_path="cudnn/cudnn_frontend",
+    private_token="your_token_here",
+    verbose=False,
+)
 
-if result["has_new_failures"]:
-    for failure in result["new_failures"]:
-        print(f"❌ {failure['name']}: {failure['url']}")
-
-# Quick check for new failures only
-failures = get_new_failures()
-if failures:
-    print(f"Found {len(failures)} new failures!")
-
-# One-line summary
-print(get_pipeline_summary())
-```
-
-### AI Assistant Integration
-
-The agent is designed to be easily called by AI assistants:
-
-```python
-# AI can call this to check pipeline status
-from pipeline_agent import check_pipeline_status
-
-result = check_pipeline_status()
-
-# AI-friendly fields:
-# - result["summary"]: Human-readable one-line summary
-# - result["has_new_failures"]: Boolean for quick check
-# - result["new_failures"]: List of new failures with URLs
-# - result["fixed_failures"]: List of failures that were fixed
-# - result["persistent_failures"]: List of recurring failures
+result = monitor.analyze_nightly_runs(ref="develop")
+print(result)
 ```
 
 ## Output Example
@@ -136,9 +112,7 @@ SUMMARY
 ## Files
 
 - `gitlab_pipeline_monitor.py`: Main monitoring agent with full functionality
-- `pipeline_agent.py`: Simplified interface for AI assistants
 - `pipeline_slack_notifier.py`: Slack notification script
-- `gitlab_ci_slack_job.yml`: GitLab CI job configuration
 - `README_pipeline_monitor.md`: This documentation
 
 ---
@@ -318,4 +292,3 @@ summary = get_pipeline_summary(token=None, ref="develop")
 # Format failures as report
 report = format_failure_report(failures, title="Failures")
 ```
-
