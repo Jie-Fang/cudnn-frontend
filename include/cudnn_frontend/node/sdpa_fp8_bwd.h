@@ -167,30 +167,25 @@ class SDPAFP8BackwardNode : public NodeCRTP<SDPAFP8BackwardNode> {
             error_code_t::ATTRIBUTE_NOT_SET,
             "Dropout probability cannot be 1 as corresponding scale wont be well formed.");
 
-
         // Validate options for causal_mask_bottom_right
-        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.causal_mask_bottom_right && detail::get_backend_version() < 90700,
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.has_causal_mask_bottom_right() && detail::get_backend_version() < 90700,
             error_code_t::GRAPH_NOT_SUPPORTED,
             "For cuDNN version below 9.7.0, bottom right causal masking is not supported.");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.causal_mask_bottom_right && prop_major < 10, 
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.has_causal_mask_bottom_right() && prop_major < 10, 
             error_code_t::GRAPH_NOT_SUPPORTED,
             "sdpa fp8 forward operation is only supported on Blackwell architecture and newer. Please "
             "consider using a newer architecture.");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.causal_mask && attributes.causal_mask_bottom_right,
-            error_code_t::GRAPH_NOT_SUPPORTED,
-            "Bottom right causal mask and causal mask cannot be both enabled");
-
-        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.causal_mask_bottom_right && s_q > s_kv,
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.has_causal_mask_bottom_right() && s_q > s_kv,
             error_code_t::GRAPH_NOT_SUPPORTED,
             "Bottom right causal mask does not support s_q > s_kv. Please virtually slice the Q tensor and pass it as s_q == s_kv");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.causal_mask_bottom_right && (is_bias || is_dropout),
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.has_causal_mask_bottom_right() && (is_bias || is_dropout),
             error_code_t::GRAPH_NOT_SUPPORTED,
             "Bottom right causal mask is only supported with is_bias=False, is_dropout=False.");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.causal_mask_bottom_right && ((s_q % 64 != 0) || (s_kv % 64 != 0)),
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.has_causal_mask_bottom_right() && ((s_q % 64 != 0) || (s_kv % 64 != 0)),
                 error_code_t::GRAPH_NOT_SUPPORTED,
                 "Bottom right causal mask is only supported with s_q multiple of 64, and s_kv multiple of 64");
 
@@ -424,7 +419,7 @@ class SDPAFP8BackwardNode : public NodeCRTP<SDPAFP8BackwardNode> {
         }
 
         //// Optional causal masking
-        if (attributes.causal_mask) {
+        if (attributes.has_causal_like_masking()) {
             auto row_index_attributes =
                 Pointwise_attributes().set_name("gen_row_index").set_mode(PointwiseMode_t::GEN_INDEX).set_axis(2);
             std::shared_ptr<Tensor_attributes> row_index_output = pointwise(last_dV, row_index_attributes);
@@ -435,7 +430,7 @@ class SDPAFP8BackwardNode : public NodeCRTP<SDPAFP8BackwardNode> {
             auto const& col_index_output = pointwise(last_dV, col_index_attributes);
             col_index_output->set_data_type(DataType_t::INT32);
 
-            if (attributes.causal_mask_bottom_right) {
+            if (attributes.has_causal_mask_bottom_right()) {
                 if (attributes.inputs[input_names::SEQ_LEN_KV]) {
                     row_index_output = pointwise(row_index_output,
                                           attributes.inputs[input_names::SEQ_LEN_KV],

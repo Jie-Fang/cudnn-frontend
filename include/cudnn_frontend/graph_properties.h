@@ -1635,10 +1635,6 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
     AttentionScoreModifier_t attention_score_modifier = nullptr;
     DataType_t mma_core_mode                          = DataType_t::NOT_SET;
 
-    // Deprecated fields for backward compatibility with SDPA_fp8_attributes
-    bool causal_mask              = false;
-    bool causal_mask_bottom_right = false;
-
     AttentionImplementation_t implementation = AttentionImplementation_t::AUTO;
 
     bool
@@ -1705,8 +1701,6 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
                                    left_bound,
                                    right_bound,
                                    diagonal_alignment,
-                                   causal_mask,
-                                   causal_mask_bottom_right,
                                    implementation)
 
     SDPA_attributes&
@@ -1800,11 +1794,8 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
     set_causal_mask(bool const value) {
         if (value) {
             set_diagonal_alignment(DiagonalAlignment_t::TOP_LEFT);
-            if (!right_bound.has_value()) {
-                set_diagonal_band_right_bound(0);
-            }
+            set_diagonal_band_right_bound(0);
         }
-        causal_mask = value;
         return *this;
     }
 
@@ -1815,11 +1806,8 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
     set_causal_mask_bottom_right(bool const value) {
         if (value) {
             set_diagonal_alignment(DiagonalAlignment_t::BOTTOM_RIGHT);
-            if (!right_bound.has_value()) {
-                set_diagonal_band_right_bound(0);
-            }
+            set_diagonal_band_right_bound(0);
         }
-        causal_mask_bottom_right = value;
         return *this;
     }
 
@@ -2092,9 +2080,7 @@ class SDPA_backward_attributes : public Attributes<SDPA_backward_attributes> {
     set_causal_mask(bool const value) {
         if (value) {
             set_diagonal_alignment(DiagonalAlignment_t::TOP_LEFT);
-            if (!right_bound.has_value()) {
-                set_diagonal_band_right_bound(0);
-            }
+            set_diagonal_band_right_bound(0);
         }
         return *this;
     }
@@ -2106,9 +2092,7 @@ class SDPA_backward_attributes : public Attributes<SDPA_backward_attributes> {
     set_causal_mask_bottom_right(bool const value) {
         if (value) {
             set_diagonal_alignment(DiagonalAlignment_t::BOTTOM_RIGHT);
-            if (!right_bound.has_value()) {
-                set_diagonal_band_right_bound(0);
-            }
+            set_diagonal_band_right_bound(0);
         }
         return *this;
     }
@@ -2184,9 +2168,9 @@ class SDPA_fp8_backward_attributes : public Attributes<SDPA_fp8_backward_attribu
     friend class Graph;
 
     bool padding_mask               = false;
-    bool causal_mask                = false;
-    bool causal_mask_bottom_right   = false;
     bool is_deterministic_algorithm = false;
+    std::optional<int64_t> right_bound;
+    DiagonalAlignment_t diagonal_alignment = DiagonalAlignment_t::TOP_LEFT;
 
     std::optional<float> dropout_probability;
     std::optional<float> attn_scale_value;
@@ -2233,9 +2217,9 @@ class SDPA_fp8_backward_attributes : public Attributes<SDPA_fp8_backward_attribu
                                    inputs,
                                    outputs,
                                    padding_mask,
-                                   causal_mask,
                                    dropout_probability,
-                                   causal_mask_bottom_right,
+                                   right_bound,
+                                   diagonal_alignment,
                                    attn_scale_value,
                                    is_deterministic_algorithm)
 
@@ -2275,15 +2259,43 @@ class SDPA_fp8_backward_attributes : public Attributes<SDPA_fp8_backward_attribu
         return *this;
     }
 
+    bool
+    has_causal_like_masking() const {
+        return right_bound.has_value();
+    }
+
+    bool
+    has_causal_mask_bottom_right() const {
+        return right_bound.has_value() && diagonal_alignment == DiagonalAlignment_t::BOTTOM_RIGHT;
+    }
+
     SDPA_fp8_backward_attributes&
     set_causal_mask(bool const value) {
-        causal_mask = value;
+        if (value) {
+            set_diagonal_alignment(DiagonalAlignment_t::TOP_LEFT);
+            set_diagonal_band_right_bound(0);
+        }
         return *this;
     }
 
     SDPA_fp8_backward_attributes&
     set_causal_mask_bottom_right(bool const value) {
-        causal_mask_bottom_right = value;
+        if (value) {
+            set_diagonal_alignment(DiagonalAlignment_t::BOTTOM_RIGHT);
+            set_diagonal_band_right_bound(0);
+        }
+        return *this;
+    }
+
+    SDPA_fp8_backward_attributes&
+    set_diagonal_alignment(DiagonalAlignment_t const alignment) {
+        diagonal_alignment = alignment;
+        return *this;
+    }
+
+    SDPA_fp8_backward_attributes&
+    set_diagonal_band_right_bound(int const value) {
+        right_bound = value;
         return *this;
     }
 

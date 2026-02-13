@@ -809,6 +809,7 @@ class Graph : public ICudnn, public INode {
                           void *workspace,
                           int64_t plan_index) const {
         CUDNN_FE_LOG_BANNER(" EXECUTE PLAN AT INDEX  for plan index (with Tensor keys) " << plan_index << "  ");
+        CUDNN_FE_LOG(*this << std::endl;);
         // First get all the uids from the map
         std::unordered_map<int64_t, void *> tensor_uid_to_pointer_map;
         for (auto const &[tensor, pointer] : tensor_to_pointer_map) {
@@ -823,7 +824,7 @@ class Graph : public ICudnn, public INode {
             std::unordered_map<std::shared_ptr<Tensor_attributes>, void *> &tensor_to_pointer_map,
             void *workspace) const {
         CUDNN_FE_LOG_BANNER(" EXECUTE PLAN (with Tensor keys) ");
-
+        CUDNN_FE_LOG(*this << std::endl;);
         // First get all the uids from the map
         std::unordered_map<int64_t, void *> tensor_uid_to_pointer_map;
         for (auto const &[tensor, pointer] : tensor_to_pointer_map) {
@@ -844,6 +845,7 @@ class Graph : public ICudnn, public INode {
         // Using cached values to avoid repeated tree traversal overhead.
         // Object lifetime is controlled by cached_pass_by_value which persists for the Graph's lifetime.
         CUDNN_FE_LOG_BANNER("  EXECUTE PLAN AT INDEX  for plan index " << plan_index << "  ");
+        CUDNN_FE_LOG(*this << std::endl;);
 
         CHECK_CUDNN_FRONTEND_ERROR(
             extend_tensor_map_with_pass_by_value_tensors_(tensor_uid_to_pointer_map, cached_pass_by_value));
@@ -950,6 +952,8 @@ class Graph : public ICudnn, public INode {
                           std::unordered_map<int64_t, void *> &tensor_uid_to_pointer_map,
                           void *workspace,
                           int64_t plan_index) const {
+        CUDNN_FE_LOG_BANNER(" EXECUTE PLAN AT INDEX  for plan index " << plan_index << "  ");
+        CUDNN_FE_LOG(*this << std::endl;);
         // Add pass_by_value data pointers to uid_to_pointer map
         // object lifetime is controlled by tensor_to_pass_by_value which means the pointer should stay valid during
         // execute.
@@ -965,6 +969,7 @@ class Graph : public ICudnn, public INode {
         // Add pass_by_value data pointers to uid_to_pointer map.
         // Using cached values to avoid repeated tree traversal overhead.
         CUDNN_FE_LOG_BANNER(" EXECUTE PLAN  ");
+        CUDNN_FE_LOG(*this << std::endl;);
 
         CHECK_CUDNN_FRONTEND_ERROR(
             extend_tensor_map_with_pass_by_value_tensors_(tensor_uid_to_pointer_map, cached_pass_by_value));
@@ -1584,14 +1589,31 @@ class Graph : public ICudnn, public INode {
                     continue;
                 }
 
-                std::string tensor_name = tensor_info["name"].get<std::string>();
+                // Determine the key to use for this tensor
+                std::string tensor_key;
+                json tensor_ref;
+                bool uid_assigned = tensor_info.contains("uid_assigned") && tensor_info["uid_assigned"].get<bool>();
+
+                if (uid_assigned && tensor_info.contains("uid") && tensor_info["uid"].is_number_integer()) {
+                    // Use numeric UID if it was explicitly assigned
+                    int64_t tensor_uid = tensor_info["uid"].get<int64_t>();
+                    tensor_key         = std::to_string(tensor_uid);
+                    tensor_ref         = json(tensor_uid);
+                } else if (tensor_info.contains("name")) {
+                    // Fall back to tensor name if UID not assigned
+                    tensor_key = tensor_info["name"].get<std::string>();
+                    tensor_ref = tensor_key;
+                } else {
+                    continue;
+                }
+
                 // Update short_node inputs
-                short_node["inputs"][port_name] = tensor_name;
+                short_node["inputs"][port_name] = tensor_ref;
 
                 // Check if the tensor is already in the tensors map
-                if (tensors.find(tensor_name) == tensors.end()) {
+                if (tensors.find(tensor_key) == tensors.end()) {
                     // If not, add it to the j["tensors"]
-                    j["tensors"][tensor_name] = tensor_info;
+                    j["tensors"][tensor_key] = tensor_info;
                 }
             }
 
@@ -1605,15 +1627,31 @@ class Graph : public ICudnn, public INode {
                     continue;
                 }
 
-                std::string tensor_name = tensor_info["name"].get<std::string>();
+                // Determine the key to use for this tensor
+                std::string tensor_key;
+                json tensor_ref;
+                bool uid_assigned = tensor_info.contains("uid_assigned") && tensor_info["uid_assigned"].get<bool>();
+
+                if (uid_assigned && tensor_info.contains("uid") && tensor_info["uid"].is_number_integer()) {
+                    // Use numeric UID if it was explicitly assigned
+                    int64_t tensor_uid = tensor_info["uid"].get<int64_t>();
+                    tensor_key         = std::to_string(tensor_uid);
+                    tensor_ref         = json(tensor_uid);
+                } else if (tensor_info.contains("name")) {
+                    // Fall back to tensor name if UID not assigned
+                    tensor_key = tensor_info["name"].get<std::string>();
+                    tensor_ref = tensor_key;
+                } else {
+                    continue;
+                }
 
                 // Update short_node outputs
-                short_node["outputs"][port_name] = tensor_name;
+                short_node["outputs"][port_name] = tensor_ref;
 
                 // Check if the tensor is already in the tensors map
-                if (tensors.find(tensor_name) == tensors.end()) {
+                if (tensors.find(tensor_key) == tensors.end()) {
                     // If not, add it to the j["tensors"]
-                    j["tensors"][tensor_name] = tensor_info;
+                    j["tensors"][tensor_key] = tensor_info;
                 }
             }
 
@@ -1663,10 +1701,15 @@ class Graph : public ICudnn, public INode {
 
                 // Iterate through each input of the sub-node
                 if (j_sub_node.contains("inputs") && j_sub_node["inputs"].is_object()) {
-                    for (auto &[port_name, tensor_name] : j_sub_node["inputs"].items()) {
-                        if (j.contains("tensors") && j["tensors"].contains(tensor_name)) {
+                    for (auto &[port_name, tensor_ref] : j_sub_node["inputs"].items()) {
+                        // Convert tensor reference (either numeric UID or string name) to string key
+                        std::string tensor_key = tensor_ref.is_number_integer()
+                                                     ? std::to_string(tensor_ref.get<int64_t>())
+                                                     : tensor_ref.get<std::string>();
+
+                        if (j.contains("tensors") && j["tensors"].contains(tensor_key)) {
                             // Add the input to the inputs JSON object
-                            inputs.push_back({port_name, j["tensors"][tensor_name]});
+                            inputs.push_back({port_name, j["tensors"][tensor_key]});
                         }
                     }
                 }
@@ -1676,10 +1719,15 @@ class Graph : public ICudnn, public INode {
 
                 // Iterate through each output of the sub-node
                 if (j_sub_node.contains("outputs") && j_sub_node["outputs"].is_object()) {
-                    for (auto &[port_name, tensor_name] : j_sub_node["outputs"].items()) {
-                        if (j.contains("tensors") && j["tensors"].contains(tensor_name)) {
+                    for (auto &[port_name, tensor_ref] : j_sub_node["outputs"].items()) {
+                        // Convert tensor reference (either numeric UID or string name) to string key
+                        std::string tensor_key = tensor_ref.is_number_integer()
+                                                     ? std::to_string(tensor_ref.get<int64_t>())
+                                                     : tensor_ref.get<std::string>();
+
+                        if (j.contains("tensors") && j["tensors"].contains(tensor_key)) {
                             // Add the output to the outputs JSON object
-                            outputs.push_back({port_name, j["tensors"][tensor_name]});
+                            outputs.push_back({port_name, j["tensors"][tensor_key]});
                         }
                     }
                 }
