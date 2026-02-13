@@ -8,7 +8,11 @@ before_script:
 
 .default_job_template:
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_DRAFT == "true"'
+    # CI_MERGE_REQUEST_DRAFT is not available in older GitLab versions (requires 17.10+), commented until GitLab is upgraded
+    # - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_DRAFT == "true"'
+    #   when: never
+    # Workaround: Check MR title for draft prefixes (Draft:, WIP:, [WIP])
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TITLE =~ /^(Draft:|WIP:|\[WIP\])/'
       when: never
     - if: $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "merge_request_event"
 
