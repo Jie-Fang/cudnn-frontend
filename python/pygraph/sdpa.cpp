@@ -358,7 +358,9 @@ PyGraph::sdpa_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& rng_dump,
                        bool const use_deterministic_algorithm,
                        cudnn_frontend::DataType_t const& compute_data_type,
-                       std::string const& name) {
+                       std::string const& name,
+                       std::optional<PyCallback> fn,
+                       std::optional<PyCallback> fn_bprop) {
     auto attributes =
         cudnn_frontend::graph::SDPA_backward_attributes()
             .set_bias(bias)
@@ -374,6 +376,16 @@ PyGraph::sdpa_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
             .set_deterministic_algorithm(use_deterministic_algorithm)
             .set_compute_data_type(compute_data_type)
             .set_name(name);
+
+    // Score modification callbacks
+    if (fn.has_value()) {
+        attributes.set_score_mod(wrapper_function);
+        callback_fn = fn;
+    }
+    if (fn_bprop.has_value()) {
+        attributes.set_score_mod_bprop(wrapper_function_bprop);
+        callback_fn_bprop = fn_bprop;
+    }
 
     py::object cudnn_tensor_type = py::module_::import("cudnn").attr("tensor");
 
@@ -898,6 +910,8 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
           py::arg_v("use_deterministic_algorithm", false),
           py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
           py::arg_v("name", ""),
+          py::arg_v("score_mod", std::nullopt),
+          py::arg_v("score_mod_bprop", std::nullopt),
           R"pbdoc(
                 Compute the key, query, value gradients of scaled dot product attention.
 
@@ -922,6 +936,8 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
                     use_deterministic_algorithm (Optional[bool]): Whether to always use deterministic algorithm. Default is False.
                     compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
                     name (Optional[str]): The name of the operation.
+                    score_mod (Optional[callable]): An optional callback function for attention score modification during forward recomputation in the backward pass. Default is None.
+                    score_mod_bprop (Optional[callable]): An optional callback function for the backward pass of the attention score modification. Default is None.
                 Preferred masking Args:
                     diagonal_alignment (Optional[cudnn.diagonal_alignment]): One of {"TOP_LEFT", "BOTTOM_RIGHT"}. E.g., causal masking can be performed by setting diagonal_alignment=TOP_LEFT, and diagonal_band_right_bound=0. Default is TOP_LEFT.
                     diagonal_band_left_bround (Optional[int]): An integer >= 1 specifying the offset to the left of the main diagonal to attend to. Default is None, implying +Inf.

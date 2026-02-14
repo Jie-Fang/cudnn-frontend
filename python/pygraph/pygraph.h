@@ -49,6 +49,7 @@ class PyGraph {
     bool is_handle_owner = false;
 
     std::optional<PyCallback> callback_fn;
+    std::optional<PyCallback> callback_fn_bprop;
 
     PyGraph(Graph_t graph_) : graph(graph_) {};
 
@@ -106,6 +107,16 @@ class PyGraph {
 
         if (callback_fn.has_value()) {
             q_kt = this->callback_fn.value()(*py_graph, q_kt);
+        }
+
+        return q_kt;
+    };
+
+    std::function<Tensor_t(Graph_t, Tensor_t)> wrapper_function_bprop = [this](Graph_t graph, Tensor_t q_kt) {
+        auto py_graph = std::make_shared<PyGraph>(graph);
+
+        if (callback_fn_bprop.has_value()) {
+            q_kt = this->callback_fn_bprop.value()(*py_graph, q_kt);
         }
 
         return q_kt;
@@ -416,7 +427,9 @@ class PyGraph {
                   std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& rng_dump,
                   bool const use_deterministic_algorithm,
                   cudnn_frontend::DataType_t const& compute_data_type,
-                  std::string const& name);
+                  std::string const& name,
+                  std::optional<PyCallback> fn,
+                  std::optional<PyCallback> fn_bprop);
 
     // return [o, stats, amax_s, amax_o]
     std::array<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, 4>
