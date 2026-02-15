@@ -34,20 +34,6 @@ BLOCKED_TESTS = {
     # | test90  |   1 |  213 |  12 |   3 |   64 |  64 | e4m3    | fp16   | s_q=1 + GQA                   |
     # | test96  |   1 |  132 |  13 |   1 |   64 |  64 | e4m3    | fp16   | s_q=1 + GQA                   |
     # | test128 |   1 |  707 |  10 |   1 |   64 |  64 | e4m3    | e5m2   | s_q=1 + GQA + mixed fp8 out   |
-    "test_sdpa_fp8_fwd_L0[test14]": {},
-    "test_sdpa_fp8_fwd_L0[test17]": {},
-    "test_sdpa_fp8_fwd_L0[test18]": {},
-    "test_sdpa_fp8_fwd_L0[test21]": {},
-    "test_sdpa_fp8_fwd_L0[test40]": {},
-    "test_sdpa_fp8_fwd_L0[test41]": {},
-    "test_sdpa_fp8_fwd_L0[test42]": {},
-    "test_sdpa_fp8_fwd_L0[test57]": {},
-    "test_sdpa_fp8_fwd_L0[test64]": {},
-    "test_sdpa_fp8_fwd_L0[test73]": {},
-    "test_sdpa_fp8_fwd_L0[test86]": {},
-    "test_sdpa_fp8_fwd_L0[test90]": {},
-    "test_sdpa_fp8_fwd_L0[test96]": {},
-    "test_sdpa_fp8_fwd_L0[test128]": {},
 
     # Ragged backward tests failing on Ampere (SM_80) - disallowed mismatches
     "test_sdpa_random_bwd_ragged_L0[test2]": {"sms": ["SM_80", "SM_120"]},
