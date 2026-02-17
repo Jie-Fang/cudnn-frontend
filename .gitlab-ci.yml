@@ -27,7 +27,7 @@ before_script:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_13.1.0
 
 .cudnn_ga_image:template:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.18.1.3_13.1.0
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.19.0.56_13.1.0
 
 .device_matrix:template:
     parallel:
@@ -57,7 +57,7 @@ before_script:
     before_script:
         - mkdir -p downloads
         - ls -1 downloads
-        - python3 ci/fetch_cudnn.py --base-url https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.19 --cuda-version 13.1
+        - python3 ci/fetch_cudnn.py --base-url https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.20 --cuda-version 13.2
         - find /debug_cudnn
         - export CUDNN_PATH=/debug_cudnn # This is required for source building FE
         - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/debug_cudnn/lib64 # This is required for dlopening BE
@@ -190,12 +190,13 @@ stages:
     - analysis
     - build
     - cpp_samples
-    - cpp_tests
     - oss_tests
+    - cpp_tests
     - python_samples
     - python_tests
     - mha_v1_tests
     - mha_v2_tests
+    - cudnn_backend_dev_latest
     - pycudnnTest
     - L4_graph_runner
     - deploy
@@ -208,24 +209,6 @@ build:cudnn_dev_latest:
         - .cudnn_dev_image:template
         - .fetch_cudnn_dev:template
         - .build:template
-
-cpp_samples:cudnn_dev_latest:
-    extends:
-        - .default_job_template
-        - .device_matrix:template
-        - .cudnn_dev_image:template
-        - .fetch_cudnn_dev:template
-        - .cpp_samples:template
-    needs: ["build:cudnn_dev_latest"]
-
-mha_v2_tests:cudnn_dev_latest:
-    extends:
-        - .default_job_template
-        - .device_matrix:template
-        - .cudnn_dev_image:template
-        - .fetch_cudnn_dev:template
-        - .mha_v2_tests:template
-    needs: ["build:cudnn_dev_latest"]
 
 mha_v1_tests:cudnn_dev_latest:
     extends:
@@ -399,6 +382,23 @@ python_samples:cudnn_ga_latest:
     - .python_samples:template
     - .cudnn_ga_image:template
   needs: []
+
+
+cudnn_backend_dev_latest:
+    trigger:
+        project:  cudnn/cudnn
+        branch:   dev
+        strategy: depend
+    inherit:
+        variables: false
+    variables:
+        CI_CUDNN_FRONTEND_MERGE_REQUEST_SOURCE_BRANCH_NAME: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME
+        CI_CUDNN_FRONTEND_REF_NAME: $CI_COMMIT_REF_NAME
+        CI_CUDNN_FRONTEND_COMMIT_SHA: $CI_COMMIT_SHA
+    rules:
+        - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    stage: cudnn_backend_dev_latest
+    needs: []
 
 # ==============================================================================
 # Slack Notification Job
