@@ -257,6 +257,15 @@ class SDPANodeBase : public NodeCRTP<DerivedT> {
                                            error_code_t::GRAPH_NOT_SUPPORTED,
                                            "MXFP8 SDPA requires cuDNN 9.21.0 or later");
 
+            // Get device SM version from context
+            CHECK_CUDNN_FRONTEND_ERROR(this->context.populate_sm_version_from_device());
+            int32_t const sm_version = this->context.get_sm_version();
+            int32_t const prop_major = sm_version / 10;
+
+            RETURN_CUDNN_FRONTEND_ERROR_IF(10 != prop_major,
+                                           error_code_t::GRAPH_NOT_SUPPORTED,
+                                           "MXFP8 SDPA is only supported on Blackwell Data Center architectures.");
+
             auto const& q_dim  = attributes.inputs.at(input_names::Q)->get_dim();
             auto const& k_dim  = attributes.inputs.at(input_names::K)->get_dim();
             auto const& v_dim  = attributes.inputs.at(input_names::V)->get_dim();

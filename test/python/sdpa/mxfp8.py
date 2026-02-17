@@ -264,11 +264,6 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
         pytest.skip("dry run mode")
 
     cudnn_version = LooseVersion(cudnn.backend_version_string())
-    if cudnn_version < "9.21.0":
-        pytest.skip("MXFP8 SDPA requires cuDNN 9.21.0 or higher")
-
-    if torch.cuda.get_device_capability()[0] < 10:
-        pytest.skip("MXFP8 SDPA requires Blackwell or higher")
 
     if not HAS_CUTLASS:
         pytest.skip("CUTLASS is not installed; skipping MXFP8 tests.")
