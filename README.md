@@ -95,6 +95,11 @@ export CUDNN_FRONTEND_LOG_INFO=1
 export CUDNN_FRONTEND_LOG_FILE=execution_log.txt
 ```
 
+**Logging Levels:**
+- `CUDNN_FRONTEND_LOG_INFO=0`: No logging
+- `CUDNN_FRONTEND_LOG_INFO=1`: Full logging with tensor dumps
+- `CUDNN_FRONTEND_LOG_INFO=10`: Basic logging (safe for CUDA graph capture)
+
 Alternatively, you can control logging programmatically via `cudnn_frontend::isLoggingEnabled()`.
 
 ## License

@@ -861,12 +861,13 @@ class Graph : public ICudnn, public INode {
         // this is where cudnn backend can start using workspace for its execution plans
         void *cudnn_workspace = static_cast<char *>(workspace) + fe_workspace_size;
 
-        if (isLoggingEnabled()) {
-            cudaStream_t stream;
-            _CUDNN_CHECK_CUDNN_ERROR(detail::get_stream(handle, &stream));
+        if (isLoggingTensorDumpEnabled()) {
             for (auto const &[uid, ptr] : tensor_uid_to_pointer_map) {
                 CHECK_CUDNN_FRONTEND_ERROR(detail::log_variant_pack_memory_type(uid, ptr));
             }
+
+            cudaStream_t stream;
+            _CUDNN_CHECK_CUDNN_ERROR(detail::get_stream(handle, &stream));
             for (auto const &[tensor, fmt] : tensors_to_dump) {
                 auto it = tensor_uid_to_pointer_map.find(tensor->get_uid());
                 if (it != tensor_uid_to_pointer_map.end()) {
@@ -916,12 +917,13 @@ class Graph : public ICudnn, public INode {
         // this is where cudnn backend can start using workspace for its execution plans
         void *cudnn_workspace = static_cast<char *>(workspace) + fe_workspace_size;
 
-        if (isLoggingEnabled()) {
-            cudaStream_t stream;
-            _CUDNN_CHECK_CUDNN_ERROR(detail::get_stream(handle, &stream));
+        if (isLoggingTensorDumpEnabled()) {
             for (auto const &[uid, ptr] : tensor_uid_to_pointer_map) {
                 CHECK_CUDNN_FRONTEND_ERROR(detail::log_variant_pack_memory_type(uid, ptr));
             }
+
+            cudaStream_t stream;
+            _CUDNN_CHECK_CUDNN_ERROR(detail::get_stream(handle, &stream));
             for (auto const &[tensor, fmt] : tensors_to_dump) {
                 auto it = tensor_uid_to_pointer_map.find(tensor->get_uid());
                 if (it != tensor_uid_to_pointer_map.end()) {
