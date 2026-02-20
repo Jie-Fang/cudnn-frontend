@@ -82,6 +82,10 @@ class ExecConfig:
     is_dropout: bool = None
     is_determin: bool = None
 
+    with_score_max: bool = False
+    with_score_sum_exp: bool = False
+    with_sink_token: bool = False
+
     diag_align: cudnn.diagonal_alignment = None
     left_bound: int = None
     right_bound: int = None

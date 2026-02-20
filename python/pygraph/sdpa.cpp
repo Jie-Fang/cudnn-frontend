@@ -38,6 +38,7 @@ PyGraph::sdpa_internal(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
                        py::object const& generate_stats,
                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> score_max,
                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> score_sum_exp,
+                       std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> sink_token,
                        cudnn_frontend::DataType_t const& mma_core_mode,
                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> descale_q,
                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> descale_k,
@@ -62,6 +63,10 @@ PyGraph::sdpa_internal(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
 
     if (block_mask) {
         attributes.set_block_mask(block_mask);
+    }
+
+    if (sink_token) {
+        attributes.set_sink_token(sink_token);
     }
 
     // Set generate_stats
@@ -237,7 +242,8 @@ PyGraph::sdpa(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
               py::object const& generate_stats,
               cudnn_frontend::AttentionImplementation_t const& implementation,
               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> score_max,
-              std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> score_sum_exp) {
+              std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> score_sum_exp,
+              std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> sink_token) {
     cudnn_frontend::DataType_t mma_core_mode                            = cudnn_frontend::DataType_t::HALF;
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> descale_q = nullptr;
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> descale_k = nullptr;
@@ -319,6 +325,7 @@ PyGraph::sdpa(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
                                          actual_generate_stats,
                                          score_max,
                                          score_sum_exp,
+                                         sink_token,
                                          mma_core_mode,
                                          descale_q,
                                          descale_k,
@@ -360,7 +367,9 @@ PyGraph::sdpa_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
                        cudnn_frontend::DataType_t const& compute_data_type,
                        std::string const& name,
                        std::optional<PyCallback> fn,
-                       std::optional<PyCallback> fn_bprop) {
+                       std::optional<PyCallback> fn_bprop,
+                       std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> sink_token,
+                       std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> dSink_token) {
     auto attributes =
         cudnn_frontend::graph::SDPA_backward_attributes()
             .set_bias(bias)
@@ -385,6 +394,13 @@ PyGraph::sdpa_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     if (fn_bprop.has_value()) {
         attributes.set_score_mod_bprop(wrapper_function_bprop);
         callback_fn_bprop = fn_bprop;
+    }
+
+    if (sink_token) {
+        attributes.set_sink_token(sink_token);
+    }
+    if (dSink_token) {
+        attributes.set_dsink_token(dSink_token);
     }
 
     py::object cudnn_tensor_type = py::module_::import("cudnn").attr("tensor");
@@ -588,6 +604,7 @@ PyGraph::sdpa_fp8(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
                                          actual_generate_stats,
                                          score_max,
                                          score_sum_exp,
+                                         /*sink_token=*/nullptr,
                                          mma_core_mode,
                                          descale_q,
                                          descale_k,
@@ -841,6 +858,7 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
           py::arg_v("implementation", cudnn_frontend::AttentionImplementation_t::AUTO),
           py::arg_v("score_max", nullptr),
           py::arg_v("score_sum_exp", nullptr),
+          py::arg_v("sink_token", nullptr),
           R"pbdoc(
                 Perform scaled dot product attention.
 
@@ -861,10 +879,11 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
                     paged_attention_max_seq_len_kv (Optional[integer]): The maximum sequence length for k/v caches when paged attention is active.
                     compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
                     name (Optional[str]): The name of the operation.
-                    generate_stats (Optional[bool]): If true, compute and output softmax stats (useful at training time). Default is None, but one of {generate_stats, is_inference} must be set.   
-                    implementation (Optional[cudnn.attention_implementation]): Which underlying implementation to use in the cuDNN backend. Default is AUTO (recommended).              
+                    generate_stats (Optional[bool]): If true, compute and output softmax stats (useful at training time). Default is None, but one of {generate_stats, is_inference} must be set.
+                    implementation (Optional[cudnn.attention_implementation]): Which underlying implementation to use in the cuDNN backend. Default is AUTO (recommended).
                     score_max (Optional[cudnn_tensor]): The max of attention score.
                     score_sum_exp (Optional[cudnn_tensor]): The numerically stable sum of exponents using normalized values wrt max score.
+                    sink_token (Optional[cudnn_tensor]): The sink attention token tensor. Shape is (1, h_q, 1, 1), type is float32.
                 Preferred masking Args:
                     diagonal_alignment (Optional[cudnn.diagonal_alignment]): One of {"TOP_LEFT", "BOTTOM_RIGHT"}. E.g., causal masking can be performed by setting diagonal_alignment=TOP_LEFT, and diagonal_band_right_bound=0. Default is TOP_LEFT.
                     diagonal_band_left_bound (Optional[int]): An integer >= 1 specifying the offset to the left of the main diagonal to attend to. Default is None, implying +Inf.
@@ -912,6 +931,8 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
           py::arg_v("name", ""),
           py::arg_v("score_mod", std::nullopt),
           py::arg_v("score_mod_bprop", std::nullopt),
+          py::arg_v("sink_token", nullptr),
+          py::arg_v("dSink_token", nullptr),
           R"pbdoc(
                 Compute the key, query, value gradients of scaled dot product attention.
 
@@ -938,6 +959,8 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
                     name (Optional[str]): The name of the operation.
                     score_mod (Optional[callable]): An optional callback function for attention score modification during forward recomputation in the backward pass. Default is None.
                     score_mod_bprop (Optional[callable]): An optional callback function for the backward pass of the attention score modification. Default is None.
+                    sink_token (Optional[cudnn_tensor]): The sink attention token tensor for backward. Shape is (1, h_q, 1, 1), type is float32.
+                    dSink_token (Optional[cudnn_tensor]): The sink attention token gradient tensor. Shape is (1, h_q, 1, 1), type is float32.
                 Preferred masking Args:
                     diagonal_alignment (Optional[cudnn.diagonal_alignment]): One of {"TOP_LEFT", "BOTTOM_RIGHT"}. E.g., causal masking can be performed by setting diagonal_alignment=TOP_LEFT, and diagonal_band_right_bound=0. Default is TOP_LEFT.
                     diagonal_band_left_bround (Optional[int]): An integer >= 1 specifying the offset to the left of the main diagonal to attend to. Default is None, implying +Inf.

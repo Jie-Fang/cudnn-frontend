@@ -126,6 +126,7 @@ create_sdpa_forward_graph_with_max_and_sum_exp(int64_t const b,
 
     if (generate_max) {
         auto Max = graph->tensor(fe::graph::Tensor_attributes()
+                                     .set_output(true)
                                      .set_name("Max")
                                      .set_uid(MAX_UID)
                                      .set_dim({b, h_q, s_q, 1})
@@ -136,6 +137,7 @@ create_sdpa_forward_graph_with_max_and_sum_exp(int64_t const b,
 
     if (generate_sum_exp) {
         auto Sum_exp = graph->tensor(fe::graph::Tensor_attributes()
+                                         .set_output(true)
                                          .set_name("Sum_exp")
                                          .set_uid(SUM_EXP_UID)
                                          .set_dim({b, h_q, s_q, 1})
@@ -146,7 +148,11 @@ create_sdpa_forward_graph_with_max_and_sum_exp(int64_t const b,
 
     auto [O, Stats] = graph->sdpa(Q, K, V, std::move(sdpa_options));
 
-    O->set_output(true).set_dim({b, h_q, s_q, d_v}).set_stride({h_q * d_v, d_v, b * h_q * d_v, 1}).set_uid(O_UID);
+    O->set_output(true)
+        .set_name("O")
+        .set_dim({b, h_q, s_q, d_v})
+        .set_stride({h_q * d_v, d_v, b * h_q * d_v, 1})
+        .set_uid(O_UID);
 
     if (generate_stats) {
         Stats->set_output(true).set_data_type(fe::DataType_t::FLOAT).set_uid(STATS_UID);

@@ -268,6 +268,10 @@ SDPA_attributes::validate_sdpa_support_surface(const detail::Context& context,
             "decode only mode, i.e. s_q == 1, not supported with masking (right_bound is set) for backend version 9.9 "
             "or below");
 
+        RETURN_CUDNN_FRONTEND_ERROR_IF(is_decode_only && has_sink_token(),
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "decode only mode, i.e. s_q == 1, not supported with sink_token");
+
         // validate options for paged attention
         RETURN_CUDNN_FRONTEND_ERROR_IF(
             is_paged && (d_qk > 128 || d_v > 128) && detail::get_backend_version() <= 90900,

@@ -398,7 +398,8 @@ class PyGraph {
          py::object const& generate_stats,
          cudnn_frontend::AttentionImplementation_t const& implementation,
          std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> score_max,
-         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> score_sum_exp);
+         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> score_sum_exp,
+         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> sink_token);
 
     // return [dQ, dK, dV]
     std::array<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, 3>
@@ -429,7 +430,9 @@ class PyGraph {
                   cudnn_frontend::DataType_t const& compute_data_type,
                   std::string const& name,
                   std::optional<PyCallback> fn,
-                  std::optional<PyCallback> fn_bprop);
+                  std::optional<PyCallback> fn_bprop,
+                  std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> sink_token,
+                  std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> dSink_token);
 
     // return [o, stats, amax_s, amax_o]
     std::array<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, 4>
@@ -689,6 +692,7 @@ class PyGraph {
                   py::object const& generate_stats,
                   std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> score_max,
                   std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> score_sum_exp,
+                  std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> sink_token,
                   cudnn_frontend::DataType_t const& mma_core_mode = cudnn_frontend::DataType_t::HALF,
                   std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> descale_q = nullptr,
                   std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> descale_k = nullptr,

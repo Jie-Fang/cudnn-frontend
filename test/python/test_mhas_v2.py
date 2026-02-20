@@ -116,6 +116,9 @@ def test_sdpa_random_fwd_L0(env_info, test_no, request, cudnn_handle):
         diag_align=RandomChoice({cudnn.diagonal_alignment.TOP_LEFT : 1, cudnn.diagonal_alignment.BOTTOM_RIGHT : 1}),
         is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 0, "padded" : 1, "full" : 1}),
         stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "disabled" : 1}),
+        with_score_max=RandomChoice({True : 1, False : 3}),
+        with_score_sum_exp=RandomChoice({True : 1, False : 3}),
+        with_sink_token=RandomChoice({True : 1, False : 3}),
     ) as randomization_ctx:
         test.cfg = randomization_ctx(rng, data_seed, geom_seed)
 
@@ -146,6 +149,7 @@ def test_sdpa_random_fwd_unified_L0(env_info, test_no, request, cudnn_handle):
         diag_align=RandomChoice({cudnn.diagonal_alignment.TOP_LEFT : 1, cudnn.diagonal_alignment.BOTTOM_RIGHT : 0}),  # Modified from non-unified test
         is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 0, "padded" : 1, "full" : 1}),
         stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "disabled" : 1}),
+        # TODO: Test with_score_max, with_score_sum_exp and with_sink_token once unified engine supports these features
     ) as randomization_ctx:
         test.cfg = randomization_ctx(rng, data_seed, geom_seed)
     test.cfg.implementation = getattr(cudnn.attention_implementation, request.config.getoption("--implementation") or "", cudnn.attention_implementation.UNIFIED)
@@ -182,6 +186,7 @@ def test_sdpa_random_bwd_L0(env_info, test_no, request, cudnn_handle):
         is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 0, "padded" : 4, "full" : 1}),
         stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "disabled" : 1}),
         is_deterministic=RandomChoice({True : 3, False : 1}),
+        with_sink_token=RandomChoice({True : 1, False : 3}),
     ) as randomization_ctx:
         test.cfg = randomization_ctx(rng, data_seed, geom_seed)
 
@@ -217,6 +222,9 @@ def test_sdpa_random_sq1_L0(env_info, test_no, request, cudnn_handle):
         diag_align=RandomChoice({cudnn.diagonal_alignment.TOP_LEFT : 1, cudnn.diagonal_alignment.BOTTOM_RIGHT : 1}),
         is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 0, "padded" : 0, "full" : 1}),
         stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "disabled" : 1}),
+        with_score_max=RandomChoice({True : 1, False : 3}),
+        with_score_sum_exp=RandomChoice({True : 1, False : 3}),
+        # sink_token not supported with s_q==1
     ) as randomization_ctx:
         test.cfg = randomization_ctx(rng, data_seed, geom_seed)
 
@@ -247,6 +255,7 @@ def test_sdpa_random_sq1_unified_L0(env_info, test_no, request, cudnn_handle):
         diag_align=RandomChoice({cudnn.diagonal_alignment.TOP_LEFT : 1, cudnn.diagonal_alignment.BOTTOM_RIGHT : 0}),  # Modified from non-unified test
         is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 0, "padded" : 0, "full" : 1}),
         stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "disabled" : 1}),
+        # TODO: Test with_score_max, with_score_sum_exp (but not sink_token since s_q==1) once unified engine supports these features
     ) as randomization_ctx:
         test.cfg = randomization_ctx(rng, data_seed, geom_seed)
     test.cfg.implementation = getattr(cudnn.attention_implementation, request.config.getoption("--implementation") or "", cudnn.attention_implementation.UNIFIED)
@@ -282,6 +291,9 @@ def test_sdpa_random_lean_attn_L0(env_info, test_no, request, cudnn_handle):
         diag_align=RandomChoice({cudnn.diagonal_alignment.TOP_LEFT : 1, cudnn.diagonal_alignment.BOTTOM_RIGHT : 1}),
         is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 0, "padded" : 1, "full" : 1}),
         stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "disabled" : 1}),
+        with_score_max=RandomChoice({True : 1, False : 3}),
+        with_score_sum_exp=RandomChoice({True : 1, False : 3}),
+        # sink_token not supported with s_q==1
     ) as randomization_ctx:
         test.cfg = randomization_ctx(rng, data_seed, geom_seed)
 
@@ -312,6 +324,7 @@ def test_sdpa_random_lean_attn_unified_L0(env_info, test_no, request, cudnn_hand
         diag_align=RandomChoice({cudnn.diagonal_alignment.TOP_LEFT : 1, cudnn.diagonal_alignment.BOTTOM_RIGHT : 0}),  # Modified from non-unified test
         is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 0, "padded" : 1, "full" : 1}),
         stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "disabled" : 1}),
+        # TODO: Test with_score_max, with_score_sum_exp (but not sink_token since s_q==1) once unified engine supports these features
     ) as randomization_ctx:
         test.cfg = randomization_ctx(rng, data_seed, geom_seed)
     test.cfg.implementation = getattr(cudnn.attention_implementation, request.config.getoption("--implementation") or "", cudnn.attention_implementation.UNIFIED)
@@ -346,6 +359,9 @@ def test_sdpa_random_fwd_ragged_L0(env_info, test_no, request, cudnn_handle):
         diag_align=RandomChoice({cudnn.diagonal_alignment.TOP_LEFT : 1, cudnn.diagonal_alignment.BOTTOM_RIGHT : 1}),
         is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 1, "padded" : 0, "full" : 0}),
         stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "disabled" : 1}),
+        with_score_max=RandomChoice({True : 0, False : 3}),
+        with_score_sum_exp=RandomChoice({True : 0, False : 3}),
+        with_sink_token=RandomChoice({True : 1, False : 3}),
     ) as randomization_ctx:
         test.cfg = randomization_ctx(rng, data_seed, geom_seed)
 
@@ -446,10 +462,12 @@ def test_sdpa_fwd_paged_L0(env_info, test_no, request, cudnn_handle):
         is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 0, "padded" : 1, "full" : 0}),
         stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "disabled" : 1}),
         block_size=RandomBlockSize(min=1, max=1024, with_high_probability=[1,32,128]),
+        with_score_max=RandomChoice({True : 1, False : 3}),
+        with_score_sum_exp=RandomChoice({True : 1, False : 3}),
+        with_sink_token=RandomChoice({True : 1, False : 3}),
     ) as randomization_ctx:
         test.cfg = randomization_ctx(rng, data_seed, geom_seed)
         test.cfg.is_paged = True
-        test.cfg.implementation=cudnn.attention_implementation.COMPOSITE  # FIXNOW
 
     test.showConfig(test_no, request)
 

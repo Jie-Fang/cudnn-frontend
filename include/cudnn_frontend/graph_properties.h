@@ -1647,6 +1647,11 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
         return right_bound.has_value() && diagonal_alignment == DiagonalAlignment_t::BOTTOM_RIGHT;
     }
 
+    bool
+    has_sink_token() const {
+        return inputs.find(input_names::SINK_TOKEN) != inputs.end() && inputs.at(input_names::SINK_TOKEN) != nullptr;
+    }
+
    public:
     enum class input_names {
         Q,
