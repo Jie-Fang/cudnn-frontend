@@ -26,6 +26,7 @@ Each operation exposes two APIs:
 
 - Single pythonic function call
 - Allocates and returns output tensors
+- Returns outputs as a `TupleDict` (supports both dictionary-style key access and tuple unpacking)
 - No explicit compilation step – internally caches compiled kernels via a simple dictionary lookup
 - When to use:
   - Fast prototyping and common cases
@@ -34,13 +35,19 @@ Each operation exposes two APIs:
 
 ```python
 from cudnn import {your_operation}_wrapper
-outputs = {your_operation}_wrapper(
+result = {your_operation}_wrapper(
     inputs,
     ...,
     config_options,
     ...,
     stream=None,
 )
+
+# Dictionary-style access (recommended)
+primary_output = result["output_tensor_name"]
+
+# Tuple unpacking (order follows documented wrapper output keys)
+out0, out1 = result
 ```
 
 ### 2. Class API
@@ -63,32 +70,25 @@ op = {your_operation}(
     config_options,
     ...
 )
-op.compile(
-    current_stream=None,
-)
+op.compile()
 op.execute(
     inputs,
     ...
     outputs,
     ...
     current_stream=None,
-    skip_compile=False,
 )
 ```
 Methods:
 - `check_support()` — validates target problem configuration (i.e. tensor shapes, tensor strides, dtypes, tiling/cluster/kernel configurations, environment, etc.)
-- `compile(current_stream)` — compiles the kernel with the provided sample tensors and parameters.
-- `execute(inputs, ..., outputs, ..., current_stream, skip_compile)` — runs the kernel with the provided inputs and outputs.
+- `compile()` — compiles the kernel with the provided sample tensors and parameters.
+- `execute(inputs, ..., outputs, ..., current_stream)` — runs the kernel with the provided inputs and outputs.
   
 ## Common Parameters and Conventions
 
 - CUDA stream (`current_stream` in class API, `stream` in wrapper)
   - The cuda stream to use for operation kernel execution.
   - Default: None (uses default stream)
-- `skip_compile: bool` (used by class API `execute` method)
-  - If `False`, the class API must explicitly call `compile` to compile the kernel before calling `execute`. `execute` calls use the precompiled kernel
-  - If `True`, runs a JIT path to (re)compile the kernel on each call.
-  - Default: `False`
 
 
 ## File structure and examples

@@ -33,4 +33,6 @@ cutedsl = [
     "nvidia-cutlass-dsl==4.3.5",
     "cuda-python",
     "torch",
+    "apache-tvm-ffi",
+    "torch-c-dlpack-ext",
 ]

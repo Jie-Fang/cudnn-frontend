@@ -69,7 +69,7 @@ Notes:
 ### High-level wrapper (Standard Mode)
 
 ```python
-ab12, c = gemm_swiglu_wrapper_sm100(
+result = gemm_swiglu_wrapper_sm100(
     a_tensor,
     b_tensor,
     alpha=1.0,
@@ -81,14 +81,17 @@ ab12, c = gemm_swiglu_wrapper_sm100(
     cluster_shape_mn=(1, 1),
     stream=None,
 )
+ab12, c, sfc, amax = result
+# Note: sfc and amax are always None in standard mode
+# Key access: result["ab12_tensor"], result["c_tensor"]
 ```
 
 ### High-level wrapper (Quantized Mode)
 
-When scale factor tensors are provided, the wrapper uses the block-scaled quantized kernel and returns 4 tensors:
+When scale factor tensors are provided, the wrapper uses the block-scaled quantized kernel.
 
 ```python
-ab12, c, sfc, amax = gemm_swiglu_wrapper_sm100(
+result = gemm_swiglu_wrapper_sm100(
     a_tensor,
     b_tensor,
     alpha=1.0,
@@ -107,6 +110,8 @@ ab12, c, sfc, amax = gemm_swiglu_wrapper_sm100(
     ab12_stages=4,
     stream=None,
 )
+ab12, c, sfc, amax = result
+# Key access: result["ab12_tensor"], result["c_tensor"], result["sfc_tensor"], result["amax_tensor"]
 ```
 
 ### Class API (Standard Mode)
@@ -123,7 +128,7 @@ gemm = GemmSwigluSm100(
     cluster_shape_mn=None,
 )
 assert gemm.check_support()
-gemm.compile(current_stream=None)
+gemm.compile()
 gemm.execute(
     a_tensor,
     b_tensor,
@@ -131,7 +136,6 @@ gemm.execute(
     c_tensor,
     alpha=1.0,
     current_stream=None,
-    skip_compile=False,
 )
 ```
 
@@ -158,7 +162,7 @@ gemm = GemmSwigluSm100(
     ab12_stages=4,
 )
 assert gemm.check_support()
-gemm.compile(current_stream=None)
+gemm.compile()
 gemm.execute(
     a_tensor,
     b_tensor,
@@ -171,7 +175,6 @@ gemm.execute(
     norm_const_tensor=norm_const_tensor,
     alpha=1.0,
     current_stream=None,
-    skip_compile=False,
 )
 ```
 
@@ -193,14 +196,14 @@ gemm.execute(
   - Shape: `(N, K, L)`
   - Stride: `(1, N, N·K)` for `n`-major or `(K, 1, N·K)` for `k`-major
   - Dtype (`ab_dtype`): Must match `A`
-- Output tensor **AB12**: return value (wrapper) or `sample_ab12`, `ab12_tensor` (class)
+- Output tensor **AB12**: `result["ab12_tensor"]` (wrapper) or `sample_ab12`, `ab12_tensor` (class)
   - Shape: `(M, N, L)`
   - Stride: `(1, M, M·N)` for `m`-major or `(N, 1, M·N)` for `n`-major. Provided as `c_major` argument for wrapper
     - Quantized mode: Must be `n`-major for FP4 outputs
   - Dtype (`ab12_dtype`, provided as `ab12_dtype` argument for wrapper):
     - Standard mode: `{float32, float16, bfloat16}` if `acc_dtype == float32`, `{float16, bfloat16}` if `acc_dtype == float16`
     - Quantized mode: `{float32, float16, bfloat16, float8_e4m3fn, float8_e5m2}`
-- Output tensor **C**: return value (wrapper) or `sample_c`, `c_tensor` (class)
+- Output tensor **C**: `result["c_tensor"]` (wrapper) or `sample_c`, `c_tensor` (class)
   - Shape: `(M, N/2, L)`
   - Stride: `(1, M, M·N/2)` for `m`-major or `(N/2, 1, M·N/2)` for `n`-major. Must match with `AB12`
   - Dtype (`c_dtype`, provided as `c_dtype` argument for wrapper):
@@ -213,11 +216,11 @@ gemm.execute(
   - Input tensor **SFB** (B scale factor): `sfb_tensor` (wrapper) or `sample_sfb`, `sfb_tensor` (class)
     - Shape: `(32, 4, ceil(N/128), 4, ceil(ceil(K/sf_vec_size)/4), L)`
     - Dtype: Must match `SFA`
-  - Output tensor **SFC** (C scale factor, **Optional**): `sfc_tensor` (wrapper) or `sample_sfc`, `sfc_tensor` (class)
+  - Output tensor **SFC** (C scale factor, **Optional**): `result["sfc_tensor"]` (wrapper) or `sample_sfc`, `sfc_tensor` (class)
     - Shape: `(32, 4, ceil(M/128), 4, ceil(ceil((N/2)/sf_vec_size)/4), L)`
     - Dtype: Must match `SFA`
     - **Required when**: `c_dtype ∈ {float8_e4m3fn, float8_e5m2}`
-  - Input tensor **AMAX** (**Optional**): `amax_tensor` (wrapper) or `sample_amax`, `amax_tensor` (class)
+  - Output tensor **AMAX** (**Optional**): `result["amax_tensor"]` (wrapper) or `sample_amax`, `amax_tensor` (class)
     - Shape: `(1,)`
     - Dtype: `float32`
     - **Required when**: `ab_dtype` is FP4 and `c_dtype == bfloat16`
@@ -265,15 +268,23 @@ gemm.execute(
 - `c_major: str`: see Input/Output tensors. Default: `"n"`
 - `ab12_dtype: torch.dtype`: see Input/Output tensors. Default: `torch.float32`
 - `c_dtype: torch.dtype`: see Input/Output tensors. Default: `torch.float16`
-- `sfa_tensor`, `sfb_tensor`, `sfc_tensor`, `amax_tensor`, `norm_const_tensor`: see Quantization-specific tensors
+- `sfa_tensor`, `sfb_tensor`, `norm_const_tensor`: see Quantization-specific tensors
 - `sf_vec_size`, `vector_f32`, `ab12_stages`: see Quantization-specific parameters
 
 ### Wrapper return values
 
-- **Standard mode**: Returns `(ab12, c)` - 2 tensors
-- **Quantized mode**: Returns `(ab12, c, sfc, amax)` - 4 tensors
-  - `sfc`: Scale factors for output `C` (or `None` if not applicable)
-  - `amax`: Maximum absolute value of `C` (or `None` if not applicable)
+Returns a `TupleDict` with fixed keys:
+
+- `ab12_tensor`: Intermediate GEMM output
+- `c_tensor`: SwiGLU output
+- `sfc_tensor`: Output scale factors (or `None` when not applicable)
+- `amax_tensor`: Max-abs output (or `None` when not applicable)
+
+Tuple unpacking order is always:
+`(ab12_tensor, c_tensor, sfc_tensor, amax_tensor)`.
+
+- **Standard mode**: `sfc_tensor is None` and `amax_tensor is None`
+- **Quantized mode**: `sfc_tensor` and/or `amax_tensor` are populated based on dtype/configuration
 
 ### Class-specific parameters
 
@@ -286,7 +297,6 @@ gemm.execute(
 
 - `a_tensor`, `b_tensor`, `ab12_tensor`, `c_tensor` — see Input/Output tensors. Must have same layout as sample tensors provided in constructor.
 - `sfa_tensor`, `sfb_tensor`, `sfc_tensor`, `amax_tensor`, `norm_const_tensor` — see Scale factor tensors (quantized mode)
-- `skip_compile: bool` — Default: `False`
 
 ---
 

@@ -35,7 +35,6 @@ with SwiGLU activation for MoE (Mixture of Experts) workloads.
 
 from .grouped_gemm_swiglu_quant import (
     BlockScaledContiguousGroupedGemmKernel,
-    BlockScaledContiguousGroupedGemmKernelNoDlpack,
 )
 from cuda.bindings import driver as cuda
 import torch
@@ -43,8 +42,7 @@ from typing import Tuple, Optional
 
 import cutlass
 import cutlass.cute as cute
-from cutlass.cute.runtime import from_dlpack, make_ptr
-from packaging import version
+from cutlass.cute.runtime import make_fake_stream
 
 from cudnn.datatypes import _convert_to_cutlass_data_type
 from cudnn.api_base import APIBase, TupleDict, ceil_div, is_power_of_2
@@ -127,26 +125,26 @@ class GroupedGemmSwigluSm100(APIBase):
         self._logger.warning("GroupedGemmSwigluSm100 is an experimental API")
         self._logger.debug("Entering __init__")
 
-        # Store sample tensors
-        self.sample_a = sample_a
-        self.sample_b = sample_b
-        self.sample_c = sample_c
-        self.sample_d = sample_d
-        self.sample_sfa = sample_sfa
-        self.sample_sfb = sample_sfb
-        self.sample_padded_offsets = sample_padded_offsets
-        self.sample_alpha = sample_alpha
+        # Store sample tensor descriptors
+        self.a_desc = self._make_tensor_desc(sample_a, name="sample_a")
+        self.b_desc = self._make_tensor_desc(sample_b, name="sample_b")
+        self.c_desc = self._make_tensor_desc(sample_c, name="sample_c")
+        self.d_desc = self._make_tensor_desc(sample_d, name="sample_d")
+        self.sfa_desc = self._make_tensor_desc(sample_sfa, name="sample_sfa")
+        self.sfb_desc = self._make_tensor_desc(sample_sfb, name="sample_sfb")
+        self.padded_offsets_desc = self._make_tensor_desc(sample_padded_offsets, name="sample_padded_offsets")
+        self.alpha_desc = self._make_tensor_desc(sample_alpha, name="sample_alpha")
 
         # Optional quantization outputs
-        self.sample_d_col = sample_d_col
-        self.sample_sfd_row = sample_sfd_row
-        self.sample_sfd_col = sample_sfd_col
-        self.sample_amax = sample_amax
-        self.sample_norm_const = self._unpad_tensor_to_ndim(sample_norm_const, 1, "norm_const")
-        self.sample_prob = sample_prob
+        self.d_col_desc = self._make_tensor_desc(sample_d_col, name="sample_d_col")
+        self.sfd_row_desc = self._make_tensor_desc(sample_sfd_row, name="sample_sfd_row")
+        self.sfd_col_desc = self._make_tensor_desc(sample_sfd_col, name="sample_sfd_col")
+        self.amax_desc = self._make_tensor_desc(sample_amax, name="sample_amax")
+        self.norm_const_desc = self._unpad_tensor_to_ndim(self._make_tensor_desc(sample_norm_const, name="sample_norm_const"), 1, "norm_const")
+        self.prob_desc = self._make_tensor_desc(sample_prob, name="sample_prob")
 
         # expert_cnt derived from padded_offsets shape
-        self.expert_cnt = sample_padded_offsets.shape[0]
+        self.expert_cnt = self.padded_offsets_desc.shape[0]
 
         # Configuration
         self.acc_dtype = acc_dtype
@@ -162,28 +160,7 @@ class GroupedGemmSwigluSm100(APIBase):
         self.discrete_col_sfd = discrete_col_sfd
 
         self._interpret_uint8_as_fp4x2 = True
-        # Determine kernel variant based on sample tensor dtypes
-        # NoDlpack kernels are required for:
-        # - FP4 dtypes (any of ab_dtype, c_dtype, d_dtype)
-        # - FP8 dtypes on PyTorch < 2.10.0
-        ab_dtype = self.sample_a.dtype
-        c_dtype = self.sample_c.dtype
-        d_dtype = self.sample_d.dtype
-        torch_version = version.parse(torch.__version__)
-        is_ab_fp4 = self._is_fp4x2(ab_dtype)
-        is_c_fp4 = self._is_fp4x2(c_dtype)
-        is_d_fp4 = self._is_fp4x2(d_dtype)
-        is_ab_fp8 = self._is_fp8(ab_dtype)
-        is_c_fp8 = self._is_fp8(c_dtype)
-        is_d_fp8 = self._is_fp8(d_dtype)
-        _fp8_dlpack_supported = version.parse(torch_version.base_version) >= version.parse("2.10.0")
-        use_no_dlpack_kernel = is_ab_fp4 or is_c_fp4 or is_d_fp4 or ((is_ab_fp8 or is_c_fp8 or is_d_fp8) and not _fp8_dlpack_supported)
-
-        if use_no_dlpack_kernel:
-            self._logger.debug("Using NoDlpack kernel due to FP4 dtype or FP8 dtype on incompatible torch version")
-            self._kernel = BlockScaledContiguousGroupedGemmKernelNoDlpack
-        else:
-            self._kernel = BlockScaledContiguousGroupedGemmKernel
+        self._kernel = BlockScaledContiguousGroupedGemmKernel
 
         self._logger.debug(f"__init__ completed")
 
@@ -194,11 +171,11 @@ class GroupedGemmSwigluSm100(APIBase):
         """
         self._logger.debug("Entering check_support")
 
-        all_none = all(x is None for x in [self.sample_sfd_row, self.sample_sfd_col, self.sample_norm_const])
-        none_none = all(x is not None for x in [self.sample_sfd_row, self.sample_sfd_col, self.sample_norm_const])
+        all_none = all(x is None for x in [self.sfd_row_desc, self.sfd_col_desc, self.norm_const_desc])
+        none_none = all(x is not None for x in [self.sfd_row_desc, self.sfd_col_desc, self.norm_const_desc])
         self._value_error_if(
             not (all_none or none_none),
-            "sample_sfd_row, sample_sfd_col, and norm_const must be all None or all not None",
+            "sfd_row_desc, sfd_col_desc, and norm_const_desc must be all None or all not None",
         )
         self.generate_sfd = none_none
         if self.discrete_col_sfd and not self.generate_sfd:
@@ -206,44 +183,41 @@ class GroupedGemmSwigluSm100(APIBase):
             self.discrete_col_sfd = False
 
         self._logger.debug("Checking tensor shapes and strides")
-        tensor_m, k, _one = self._tensor_shape(self.sample_a, name="sample_a")
-        n, _, l = self._tensor_shape(self.sample_b, name="sample_b")
-        _, _, _one = self._tensor_shape(self.sample_c, name="sample_c")
-        _, n_2, _one = self._tensor_shape(self.sample_d, name="sample_d")
+        tensor_m, k, _one = self._tensor_shape(self.a_desc, name="sample_a")
+        n, _, l = self._tensor_shape(self.b_desc, name="sample_b")
+        _, _, _one = self._tensor_shape(self.c_desc, name="sample_c")
+        _, n_2, _one = self._tensor_shape(self.d_desc, name="sample_d")
 
-        self._check_tensor_shape(self.sample_a, (tensor_m, k, 1), "A")
-        self._check_tensor_shape(self.sample_b, (n, k, l), "B")
-        self._check_tensor_shape(self.sample_c, (tensor_m, n, 1), "C")
-        self._check_tensor_shape(self.sample_d, (tensor_m, n // 2, 1), "D")
+        self._check_tensor_shape(self.a_desc, (tensor_m, k, 1), "A")
+        self._check_tensor_shape(self.b_desc, (n, k, l), "B")
+        self._check_tensor_shape(self.c_desc, (tensor_m, n, 1), "C")
+        self._check_tensor_shape(self.d_desc, (tensor_m, n // 2, 1), "D")
 
-        self._check_tensor_shape(self.sample_d_col, (tensor_m, n // 2, 1), "D_col")
+        self._check_tensor_shape(self.d_col_desc, (tensor_m, n // 2, 1), "D_col")
 
         rest_k = ceil_div(ceil_div(k, self.sf_vec_size), 4)
-        self._check_tensor_shape(self.sample_sfa, (32, 4, ceil_div(tensor_m, 128), 4, rest_k, 1), "SFA")
-        self._check_tensor_shape(self.sample_sfb, (32, 4, ceil_div(n, 128), 4, rest_k, l), "SFB")
+        self._check_tensor_shape(self.sfa_desc, (32, 4, ceil_div(tensor_m, 128), 4, rest_k, 1), "SFA")
+        self._check_tensor_shape(self.sfb_desc, (32, 4, ceil_div(n, 128), 4, rest_k, l), "SFB")
         rest_n2 = ceil_div(ceil_div(n // 2, self.sf_vec_size), 4)
-        self._check_tensor_shape(self.sample_sfd_row, (32, 4, ceil_div(tensor_m, 128), 4, rest_n2, 1), "SFD_row")
+        self._check_tensor_shape(self.sfd_row_desc, (32, 4, ceil_div(tensor_m, 128), 4, rest_n2, 1), "SFD_row")
         rest_m = ceil_div(ceil_div(tensor_m, self.sf_vec_size), 4)
-        self._check_tensor_shape(self.sample_sfd_col, (32, 4, ceil_div(n // 2, 128), 4, rest_m, 1), "SFD_col")
+        self._check_tensor_shape(self.sfd_col_desc, (32, 4, ceil_div(n // 2, 128), 4, rest_m, 1), "SFD_col")
 
-        self._check_tensor_shape(self.sample_alpha, (l,), "alpha")
-        self._check_tensor_shape(self.sample_prob, (tensor_m, 1, 1), "prob")
-        self._check_tensor_shape(self.sample_amax, (l, 1), "amax")
-        self._check_tensor_shape(self.sample_norm_const, (1,), "norm_const")
-        self._check_tensor_shape(self.sample_padded_offsets, (l,), "padded_offsets")
+        self._check_tensor_shape(self.alpha_desc, (l,), "alpha")
+        self._check_tensor_shape(self.prob_desc, (tensor_m, 1, 1), "prob")
+        self._check_tensor_shape(self.amax_desc, (l, 1), "amax")
+        self._check_tensor_shape(self.norm_const_desc, (1,), "norm_const")
+        self._check_tensor_shape(self.padded_offsets_desc, (l,), "padded_offsets")
 
-        _, self.a_stride_order = self._check_tensor_stride(self.sample_a, stride=[(k, 1, tensor_m * k)], extra_error_msg="A must have k-major layout")
-        _, self.b_stride_order = self._check_tensor_stride(self.sample_b, stride=[(k, 1, n * k)], extra_error_msg="B must have k-major layout")
-        _, self.c_stride_order = self._check_tensor_stride(self.sample_c, stride=[(n, 1, tensor_m * n)], extra_error_msg="C must have n-major layout")
-        _, self.d_stride_order = self._check_tensor_stride(self.sample_d, stride=[(n_2, 1, tensor_m * n_2)], extra_error_msg="D must have n-major layout")
-        _, self.d_col_stride_order = self._check_tensor_stride(
-            self.sample_d_col, stride=[(n_2, 1, tensor_m * n_2)], extra_error_msg="D_col must have n-major layout"
-        )
-        self.cd_stride_order = self.c_stride_order
+        _ = self._check_tensor_stride(self.a_desc, stride=[(k, 1, tensor_m * k)], extra_error_msg="A must have k-major layout")
+        _ = self._check_tensor_stride(self.b_desc, stride=[(k, 1, n * k)], extra_error_msg="B must have k-major layout")
+        _ = self._check_tensor_stride(self.c_desc, stride=[(n, 1, tensor_m * n)], extra_error_msg="C must have n-major layout")
+        _ = self._check_tensor_stride(self.d_desc, stride=[(n_2, 1, tensor_m * n_2)], extra_error_msg="D must have n-major layout")
+        _ = self._check_tensor_stride(self.d_col_desc, stride=[(n_2, 1, tensor_m * n_2)], extra_error_msg="D_col must have n-major layout")
 
         self._logger.debug("Checking data types")
         self.ab_dtype = self._check_dtype(
-            self.sample_a,
+            self.a_desc,
             dtype=[
                 torch.float4_e2m1fn_x2,
                 torch.uint8,
@@ -252,16 +226,16 @@ class GroupedGemmSwigluSm100(APIBase):
             ],
             name="A/B",
         )
-        self._check_dtype(self.sample_b, dtype=self.ab_dtype, name="B", extra_error_msg="B must have the same dtype as A")
+        self._check_dtype(self.b_desc, dtype=self.ab_dtype, name="B", extra_error_msg="B must have the same dtype as A")
 
         self.sf_dtype = self._check_dtype(
-            self.sample_sfa,
+            self.sfa_desc,
             dtype=[torch.float8_e8m0fnu, torch.float8_e4m3fn],
             name="SFA/SFB/SFD_row/SFD_col",
         )
-        self._check_dtype(self.sample_sfb, dtype=self.sf_dtype, name="SFB", extra_error_msg="SFB must have the same dtype as SFA")
-        self._check_dtype(self.sample_sfd_row, dtype=self.sf_dtype, name="SFD_row", extra_error_msg="SFD_row must have the same dtype as SFA")
-        self._check_dtype(self.sample_sfd_col, dtype=self.sf_dtype, name="SFD_col", extra_error_msg="SFD_col must have the same dtype as SFA")
+        self._check_dtype(self.sfb_desc, dtype=self.sf_dtype, name="SFB", extra_error_msg="SFB must have the same dtype as SFA")
+        self._check_dtype(self.sfd_row_desc, dtype=self.sf_dtype, name="SFD_row", extra_error_msg="SFD_row must have the same dtype as SFA")
+        self._check_dtype(self.sfd_col_desc, dtype=self.sf_dtype, name="SFD_col", extra_error_msg="SFD_col must have the same dtype as SFA")
 
         self._value_error_if(self.sf_vec_size not in [16, 32], f"sf_vec_size must be 16 or 32, got {self.sf_vec_size}")
         self._value_error_if(
@@ -274,21 +248,21 @@ class GroupedGemmSwigluSm100(APIBase):
 
         self._check_dtype(self.acc_dtype, dtype=torch.float32, name="Accumulator", extra_error_msg="Accumulator must be float32")
         self.c_dtype = self._check_dtype(
-            self.sample_c,
+            self.c_desc,
             dtype=[torch.float32, torch.float16, torch.bfloat16, torch.float8_e4m3fn, torch.float8_e5m2, torch.float4_e2m1fn_x2],
             name="C",
         )
 
         if self._is_fp4x2(self.ab_dtype):
             self.d_dtype = self._check_dtype(
-                self.sample_d,
+                self.d_desc,
                 dtype=[torch.float16, torch.bfloat16, torch.float32],
                 name="D",
                 extra_error_msg="D must be fp16, bf16, or float32 when ab_dtype is fp4",
             )
         else:
             self.d_dtype = self._check_dtype(
-                self.sample_d,
+                self.d_desc,
                 dtype=[
                     torch.float16,
                     torch.bfloat16,
@@ -298,7 +272,7 @@ class GroupedGemmSwigluSm100(APIBase):
                 ],  # torch.float32 fails non-deterministicly
                 name="D",
             )
-        self._check_dtype(self.sample_d_col, dtype=self.d_dtype, name="D_col", extra_error_msg="D_col must have the same dtype as D")
+        self._check_dtype(self.d_col_desc, dtype=self.d_dtype, name="D_col", extra_error_msg="D_col must have the same dtype as D")
 
         self._not_implemented_error_if(
             self._is_fp4x2(self.ab_dtype) and self.sf_vec_size == 16 and self.d_dtype == torch.float32,  # Fails to compile
@@ -361,9 +335,9 @@ class GroupedGemmSwigluSm100(APIBase):
 
         self._value_error_if(
             not (
-                check_contigous_16B_alignment(self.ab_dtype, self.a_stride_order, (tensor_m, k, l))
-                and check_contigous_16B_alignment(self.ab_dtype, self.b_stride_order, (n, k, l))
-                and check_contigous_16B_alignment(self.d_dtype, self.cd_stride_order, (tensor_m, n, l))
+                check_contigous_16B_alignment(self.ab_dtype, self.a_desc.stride_order, (tensor_m, k, l))
+                and check_contigous_16B_alignment(self.ab_dtype, self.b_desc.stride_order, (n, k, l))
+                and check_contigous_16B_alignment(self.d_dtype, self.d_desc.stride_order, (tensor_m, n, l))  # c, d_row, and d_col have the same stride order
             ),
             "Invalid tensor alignment: tensors must be 16B aligned",
         )
@@ -396,14 +370,13 @@ class GroupedGemmSwigluSm100(APIBase):
         self._logger.debug("check_support completed successfully")
         return True
 
-    def compile(self, current_stream: Optional[cuda.CUstream] = None) -> None:
-        """Compile the kernel.
-
-        :param current_stream: CUDA stream to use
-        """
+    def compile(self) -> None:
+        """Compile the kernel."""
         self._logger.debug("Entering compile")
-        current_stream = self._get_default_stream(current_stream)
         self._ensure_support_checked()
+        if self._compiled_kernel is not None:
+            self._logger.debug("Kernel already compiled; skipping recompilation")
+            return
 
         gemm_swiglu = self._kernel(
             sf_vec_size=self.sf_vec_size,
@@ -420,97 +393,67 @@ class GroupedGemmSwigluSm100(APIBase):
 
         hardware_info = cutlass.utils.HardwareInfo()
         max_active_clusters = hardware_info.get_max_active_clusters(self.cluster_shape_mn[0] * self.cluster_shape_mn[1])
+        fake_stream = make_fake_stream(use_tvm_ffi_env_stream=False)
 
-        if self._kernel is BlockScaledContiguousGroupedGemmKernel:
-            self._logger.debug("Compiling grouped_gemm_swiglu kernel (dlpack)")
-            self._compiled_kernel = cute.compile(
-                gemm_swiglu,
-                a=from_dlpack(self.sample_a, assumed_align=16),
-                b=from_dlpack(self.sample_b, assumed_align=16),
-                c=from_dlpack(self.sample_c, assumed_align=16),
-                d=from_dlpack(self.sample_d, assumed_align=16),
-                d_col=from_dlpack(self.sample_d_col, assumed_align=16) if self.sample_d_col is not None else None,
-                sfa=from_dlpack(self.sample_sfa, assumed_align=16),
-                sfb=from_dlpack(self.sample_sfb, assumed_align=16),
-                sfd_row_tensor=from_dlpack(self.sample_sfd_row, assumed_align=16) if self.sample_sfd_row is not None else None,
-                sfd_col_tensor=from_dlpack(self.sample_sfd_col, assumed_align=16) if self.sample_sfd_col is not None else None,
-                amax_tensor=from_dlpack(self.sample_amax, assumed_align=16) if self.sample_amax is not None else None,
-                norm_const_tensor=from_dlpack(self.sample_norm_const) if self.sample_norm_const is not None else None,
-                padded_offsets=from_dlpack(self.sample_padded_offsets, assumed_align=16),
-                alpha=from_dlpack(self.sample_alpha, assumed_align=16),
-                prob=from_dlpack(self.sample_prob, assumed_align=16) if self.sample_prob is not None else None,
-                max_active_clusters=max_active_clusters,
-                stream=current_stream,
-            )
-        elif self._kernel is BlockScaledContiguousGroupedGemmKernelNoDlpack:
-            self._logger.debug("Compiling grouped_gemm_swiglu kernel (no_dlpack)")
-            # Create cute pointers/tensors manually to avoid DLPack requirements
-            a_ptr, a_shape, a_order = self._make_cute_tensor_descriptor(self.sample_a, name="A")
-            b_ptr, b_shape, b_order = self._make_cute_tensor_descriptor(self.sample_b, name="B")
-            c_ptr, c_shape, c_order = self._make_cute_tensor_descriptor(self.sample_c, name="C")
-            d_ptr, d_shape, d_order = self._make_cute_tensor_descriptor(self.sample_d, name="D")
-            d_col_ptr, d_col_shape, d_col_order = self._make_cute_tensor_descriptor(self.sample_d_col, name="D_col")
-            sfa_ptr, sfa_shape, sfa_order = self._make_cute_tensor_descriptor(self.sample_sfa, name="SFA")
-            sfb_ptr, sfb_shape, sfb_order = self._make_cute_tensor_descriptor(self.sample_sfb, name="SFB")
-            sfd_row_ptr, sfd_row_shape, sfd_row_order = self._make_cute_tensor_descriptor(self.sample_sfd_row, name="SFD_row")
-            sfd_col_ptr, sfd_col_shape, sfd_col_order = self._make_cute_tensor_descriptor(self.sample_sfd_col, name="SFD_col")
-            amax_ptr, amax_shape, amax_order = self._make_cute_tensor_descriptor(self.sample_amax, name="amax")
-            norm_const_ptr, norm_const_shape, norm_const_order = self._make_cute_tensor_descriptor(self.sample_norm_const, name="norm_const")
-            padded_offsets_ptr, padded_offsets_shape, padded_offsets_order = self._make_cute_tensor_descriptor(
-                self.sample_padded_offsets, name="padded_offsets"
-            )
-            alpha_ptr, alpha_shape, alpha_order = self._make_cute_tensor_descriptor(self.sample_alpha, name="alpha")
-            prob_ptr, prob_shape, prob_order = self._make_cute_tensor_descriptor(self.sample_prob, name="prob")
+        self._logger.debug("Compiling grouped_gemm_swiglu kernel")
+        _compiled_kernel = cute.compile(
+            gemm_swiglu,
+            a=self._make_fake_cute_tensor_from_desc(self.a_desc, assumed_align=16),
+            b=self._make_fake_cute_tensor_from_desc(self.b_desc, assumed_align=16),
+            c=self._make_fake_cute_tensor_from_desc(self.c_desc, assumed_align=16),
+            d=self._make_fake_cute_tensor_from_desc(self.d_desc, assumed_align=16),
+            d_col=self._make_fake_cute_tensor_from_desc(self.d_col_desc, assumed_align=16),
+            sfa=self._make_fake_cute_tensor_from_desc(self.sfa_desc, assumed_align=16),
+            sfb=self._make_fake_cute_tensor_from_desc(self.sfb_desc, assumed_align=16),
+            sfd_row_tensor=self._make_fake_cute_tensor_from_desc(self.sfd_row_desc, assumed_align=16),
+            sfd_col_tensor=self._make_fake_cute_tensor_from_desc(self.sfd_col_desc, assumed_align=16),
+            amax_tensor=self._make_fake_cute_tensor_from_desc(self.amax_desc, assumed_align=16),
+            norm_const_tensor=self._make_fake_cute_tensor_from_desc(self.norm_const_desc, assumed_align=16),
+            padded_offsets=self._make_fake_cute_tensor_from_desc(self.padded_offsets_desc, assumed_align=16),
+            alpha=self._make_fake_cute_tensor_from_desc(self.alpha_desc, assumed_align=16),
+            prob=self._make_fake_cute_tensor_from_desc(self.prob_desc, assumed_align=16),
+            max_active_clusters=max_active_clusters,
+            stream=fake_stream,
+            options="--enable-tvm-ffi",
+        )
 
-            self._compiled_kernel = cute.compile(
-                gemm_swiglu,
-                a_ptr=a_ptr,
-                a_shape=a_shape,
-                a_order=a_order,
-                b_ptr=b_ptr,
-                b_shape=b_shape,
-                b_order=b_order,
-                c_ptr=c_ptr,
-                c_shape=c_shape,
-                c_order=c_order,
-                d_ptr=d_ptr,
-                d_shape=d_shape,
-                d_order=d_order,
-                d_col_ptr=d_col_ptr,
-                d_col_shape=d_col_shape,
-                d_col_order=d_col_order,
-                sfa_ptr=sfa_ptr,
-                sfa_shape=sfa_shape,
-                sfa_order=sfa_order,
-                sfb_ptr=sfb_ptr,
-                sfb_shape=sfb_shape,
-                sfb_order=sfb_order,
-                sfd_row_ptr=sfd_row_ptr,
-                sfd_row_shape=sfd_row_shape,
-                sfd_row_order=sfd_row_order,
-                sfd_col_ptr=sfd_col_ptr,
-                sfd_col_shape=sfd_col_shape,
-                sfd_col_order=sfd_col_order,
-                amax_ptr=amax_ptr,
-                amax_shape=amax_shape,
-                amax_order=amax_order,
-                norm_const_ptr=norm_const_ptr,
-                norm_const_shape=norm_const_shape,
-                norm_const_order=norm_const_order,
-                padded_offsets_ptr=padded_offsets_ptr,
-                padded_offsets_shape=padded_offsets_shape,
-                padded_offsets_order=padded_offsets_order,
-                alpha_ptr=alpha_ptr,
-                alpha_shape=alpha_shape,
-                alpha_order=alpha_order,
-                prob_ptr=prob_ptr,
-                prob_shape=prob_shape,
-                prob_order=prob_order,
-                max_active_clusters=max_active_clusters,
-                stream=current_stream,
+        def tensor_api(
+            a_tensor: torch.Tensor,
+            b_tensor: torch.Tensor,
+            c_tensor: torch.Tensor,
+            d_tensor: torch.Tensor,
+            d_col_tensor: Optional[torch.Tensor],
+            sfa_tensor: torch.Tensor,
+            sfb_tensor: torch.Tensor,
+            sfd_row_tensor: Optional[torch.Tensor],
+            sfd_col_tensor: Optional[torch.Tensor],
+            amax_tensor: Optional[torch.Tensor],
+            norm_const_tensor: Optional[torch.Tensor],
+            padded_offsets: torch.Tensor,
+            alpha_tensor: torch.Tensor,
+            prob_tensor: Optional[torch.Tensor],
+            stream: cuda.CUstream,
+        ) -> None:
+            norm_const_tensor = self._unpad_tensor_to_ndim(norm_const_tensor, 1, "norm_const")
+            _compiled_kernel(
+                a_tensor,
+                b_tensor,
+                c_tensor,
+                d_tensor,
+                d_col_tensor,
+                sfa_tensor,
+                sfb_tensor,
+                sfd_row_tensor,
+                sfd_col_tensor,
+                amax_tensor,
+                norm_const_tensor,
+                padded_offsets,
+                alpha_tensor,
+                prob_tensor,
+                stream,
             )
-        else:
-            raise NotImplementedError(f"Unreachable: invalid kernel type {self._kernel}")
+
+        self._compiled_kernel = tensor_api
 
         self._logger.debug("Kernel compiled successfully")
 
@@ -531,7 +474,6 @@ class GroupedGemmSwigluSm100(APIBase):
         norm_const_tensor: Optional[torch.Tensor] = None,
         prob_tensor: Optional[torch.Tensor] = None,
         current_stream: Optional[cuda.CUstream] = None,
-        skip_compile: bool = False,
     ) -> None:
         """Execute the compiled kernel.
 
@@ -550,182 +492,32 @@ class GroupedGemmSwigluSm100(APIBase):
         :param norm_const_tensor: Optional normalization constant
         :param prob_tensor: Optional probability tensor
         :param current_stream: CUDA stream
-        :param skip_compile: If True, use JIT execution without prior compilation
         """
         self._logger.debug("Entering execute")
         current_stream = self._get_default_stream(current_stream)
 
-        norm_const_tensor = self._unpad_tensor_to_ndim(norm_const_tensor, 1, "norm_const")
-
-        if not skip_compile:
-            self._runtime_error_if(
-                self._compiled_kernel is None,
-                "Kernel not compiled; call compile() first or use skip_compile=True",
-            )
-
-            if self._kernel is BlockScaledContiguousGroupedGemmKernel:
-                self._logger.debug("Executing grouped_gemm_swiglu kernel (dlpack)")
-                self._compiled_kernel(
-                    a=from_dlpack(a_tensor, assumed_align=16),
-                    b=from_dlpack(b_tensor, assumed_align=16),
-                    c=from_dlpack(c_tensor, assumed_align=16),
-                    d=from_dlpack(d_tensor, assumed_align=16),
-                    d_col=from_dlpack(d_col_tensor, assumed_align=16) if d_col_tensor is not None else None,
-                    sfa=from_dlpack(sfa_tensor, assumed_align=16),
-                    sfb=from_dlpack(sfb_tensor, assumed_align=16),
-                    sfd_row_tensor=from_dlpack(sfd_row_tensor, assumed_align=16) if sfd_row_tensor is not None else None,
-                    sfd_col_tensor=from_dlpack(sfd_col_tensor, assumed_align=16) if sfd_col_tensor is not None else None,
-                    amax_tensor=from_dlpack(amax_tensor, assumed_align=16) if amax_tensor is not None else None,
-                    norm_const_tensor=from_dlpack(norm_const_tensor, assumed_align=16) if norm_const_tensor is not None else None,
-                    padded_offsets=from_dlpack(padded_offsets, assumed_align=16),
-                    alpha=from_dlpack(alpha_tensor, assumed_align=16),
-                    prob=from_dlpack(prob_tensor, assumed_align=16) if prob_tensor is not None else None,
-                    stream=current_stream,
-                )
-            elif self._kernel is BlockScaledContiguousGroupedGemmKernelNoDlpack:
-                self._logger.debug("Executing grouped_gemm_swiglu kernel (no_dlpack)")
-                # Create cute pointers manually to avoid DLPack requirements
-                a_ptr = self._make_cute_pointer(a_tensor, assumed_align=16)
-                b_ptr = self._make_cute_pointer(b_tensor, assumed_align=16)
-                c_ptr = self._make_cute_pointer(c_tensor, assumed_align=16)
-                d_ptr = self._make_cute_pointer(d_tensor, assumed_align=16)
-                d_col_ptr = self._make_cute_pointer(d_col_tensor, assumed_align=16)
-                sfa_ptr = self._make_cute_pointer(sfa_tensor, assumed_align=16)
-                sfb_ptr = self._make_cute_pointer(sfb_tensor, assumed_align=16)
-                sfd_row_ptr = self._make_cute_pointer(sfd_row_tensor, assumed_align=16)
-                sfd_col_ptr = self._make_cute_pointer(sfd_col_tensor, assumed_align=16)
-                amax_ptr = self._make_cute_pointer(amax_tensor, assumed_align=16)
-                norm_const_ptr = self._make_cute_pointer(norm_const_tensor, assumed_align=16)
-                padded_offsets_ptr = self._make_cute_pointer(padded_offsets, assumed_align=16)
-                alpha_ptr = self._make_cute_pointer(alpha_tensor, assumed_align=16)
-                prob_ptr = self._make_cute_pointer(prob_tensor, assumed_align=16)
-
-                self._compiled_kernel(
-                    a_ptr=a_ptr,
-                    b_ptr=b_ptr,
-                    c_ptr=c_ptr,
-                    d_ptr=d_ptr,
-                    d_col_ptr=d_col_ptr,
-                    sfa_ptr=sfa_ptr,
-                    sfb_ptr=sfb_ptr,
-                    sfd_row_ptr=sfd_row_ptr,
-                    sfd_col_ptr=sfd_col_ptr,
-                    amax_ptr=amax_ptr,
-                    norm_const_ptr=norm_const_ptr,
-                    padded_offsets_ptr=padded_offsets_ptr,
-                    alpha_ptr=alpha_ptr,
-                    prob_ptr=prob_ptr,
-                    stream=current_stream,
-                )
-            else:
-                raise NotImplementedError(f"Unreachable: invalid kernel type {self._kernel}")
-        else:
-            self._logger.debug("Executing without compiled kernel (JIT)")
-            generate_sfd = sfd_row_tensor is not None and sfd_col_tensor is not None and norm_const_tensor is not None
-            discrete_col_sfd = self.discrete_col_sfd and generate_sfd
-
-            gemm_swiglu = self._kernel(
-                sf_vec_size=self.sf_vec_size,
-                acc_dtype=_convert_to_cutlass_data_type(self.acc_dtype),
-                use_2cta_instrs=self.use_2cta_instrs,
-                mma_tiler_mn=self.mma_tiler_mn,
-                cluster_shape_mn=self.cluster_shape_mn,
-                vector_f32=self.vector_f32,
-                generate_sfd=generate_sfd,
-                discrete_col_sfd=discrete_col_sfd,
-                expert_cnt=self.expert_cnt,
-                use_mono_increase_expert_idx=True,
-            )
-
-            hardware_info = cutlass.utils.HardwareInfo()
-            max_active_clusters = hardware_info.get_max_active_clusters(self.cluster_shape_mn[0] * self.cluster_shape_mn[1])
-
-            if self._kernel is BlockScaledContiguousGroupedGemmKernel:
-                self._logger.debug("JIT executing grouped_gemm_swiglu kernel (dlpack)")
-                gemm_swiglu(
-                    a=from_dlpack(a_tensor, assumed_align=16),
-                    b=from_dlpack(b_tensor, assumed_align=16),
-                    c=from_dlpack(c_tensor, assumed_align=16),
-                    d=from_dlpack(d_tensor, assumed_align=16),
-                    d_col=from_dlpack(d_col_tensor, assumed_align=16) if d_col_tensor is not None else None,
-                    sfa=from_dlpack(sfa_tensor, assumed_align=16),
-                    sfb=from_dlpack(sfb_tensor, assumed_align=16),
-                    sfd_row_tensor=from_dlpack(sfd_row_tensor, assumed_align=16) if sfd_row_tensor is not None else None,
-                    sfd_col_tensor=from_dlpack(sfd_col_tensor, assumed_align=16) if sfd_col_tensor is not None else None,
-                    amax_tensor=from_dlpack(amax_tensor, assumed_align=16) if amax_tensor is not None else None,
-                    norm_const_tensor=from_dlpack(norm_const_tensor) if norm_const_tensor is not None else None,
-                    padded_offsets=from_dlpack(padded_offsets, assumed_align=16),
-                    alpha=from_dlpack(alpha_tensor, assumed_align=16),
-                    prob=from_dlpack(prob_tensor, assumed_align=16) if prob_tensor is not None else None,
-                    max_active_clusters=max_active_clusters,
-                    stream=current_stream,
-                )
-            elif self._kernel is BlockScaledContiguousGroupedGemmKernelNoDlpack:
-                self._logger.debug("JIT executing grouped_gemm_swiglu kernel (no_dlpack)")
-                # Create cute tensor descriptors manually to avoid DLPack requirements
-                a_ptr, a_shape, a_order = self._make_cute_tensor_descriptor(a_tensor, name="A")
-                b_ptr, b_shape, b_order = self._make_cute_tensor_descriptor(b_tensor, name="B")
-                c_ptr, c_shape, c_order = self._make_cute_tensor_descriptor(c_tensor, name="C")
-                d_ptr, d_shape, d_order = self._make_cute_tensor_descriptor(d_tensor, name="D")
-                d_col_ptr, d_col_shape, d_col_order = self._make_cute_tensor_descriptor(d_col_tensor, name="D_col")
-                sfa_ptr, sfa_shape, sfa_order = self._make_cute_tensor_descriptor(sfa_tensor, name="SFA")
-                sfb_ptr, sfb_shape, sfb_order = self._make_cute_tensor_descriptor(sfb_tensor, name="SFB")
-                sfd_row_ptr, sfd_row_shape, sfd_row_order = self._make_cute_tensor_descriptor(sfd_row_tensor, name="SFD_row")
-                sfd_col_ptr, sfd_col_shape, sfd_col_order = self._make_cute_tensor_descriptor(sfd_col_tensor, name="SFD_col")
-                amax_ptr, amax_shape, amax_order = self._make_cute_tensor_descriptor(amax_tensor, name="amax")
-                norm_const_ptr, norm_const_shape, norm_const_order = self._make_cute_tensor_descriptor(norm_const_tensor, name="norm_const")
-                padded_offsets_ptr, padded_offsets_shape, padded_offsets_order = self._make_cute_tensor_descriptor(padded_offsets, name="padded_offsets")
-                alpha_ptr, alpha_shape, alpha_order = self._make_cute_tensor_descriptor(alpha_tensor, name="alpha")
-                prob_ptr, prob_shape, prob_order = self._make_cute_tensor_descriptor(prob_tensor, name="prob")
-
-                gemm_swiglu(
-                    a_ptr=a_ptr,
-                    a_shape=a_shape,
-                    a_order=a_order,
-                    b_ptr=b_ptr,
-                    b_shape=b_shape,
-                    b_order=b_order,
-                    c_ptr=c_ptr,
-                    c_shape=c_shape,
-                    c_order=c_order,
-                    d_ptr=d_ptr,
-                    d_shape=d_shape,
-                    d_order=d_order,
-                    d_col_ptr=d_col_ptr,
-                    d_col_shape=d_col_shape,
-                    d_col_order=d_col_order,
-                    sfa_ptr=sfa_ptr,
-                    sfa_shape=sfa_shape,
-                    sfa_order=sfa_order,
-                    sfb_ptr=sfb_ptr,
-                    sfb_shape=sfb_shape,
-                    sfb_order=sfb_order,
-                    sfd_row_ptr=sfd_row_ptr,
-                    sfd_row_shape=sfd_row_shape,
-                    sfd_row_order=sfd_row_order,
-                    sfd_col_ptr=sfd_col_ptr,
-                    sfd_col_shape=sfd_col_shape,
-                    sfd_col_order=sfd_col_order,
-                    amax_ptr=amax_ptr,
-                    amax_shape=amax_shape,
-                    amax_order=amax_order,
-                    norm_const_ptr=norm_const_ptr,
-                    norm_const_shape=norm_const_shape,
-                    norm_const_order=norm_const_order,
-                    padded_offsets_ptr=padded_offsets_ptr,
-                    padded_offsets_shape=padded_offsets_shape,
-                    padded_offsets_order=padded_offsets_order,
-                    alpha_ptr=alpha_ptr,
-                    alpha_shape=alpha_shape,
-                    alpha_order=alpha_order,
-                    prob_ptr=prob_ptr,
-                    prob_shape=prob_shape,
-                    prob_order=prob_order,
-                    max_active_clusters=max_active_clusters,
-                    stream=current_stream,
-                )
-            else:
-                raise NotImplementedError(f"Unreachable: invalid kernel type {self._kernel}")
+        self._runtime_error_if(
+            self._compiled_kernel is None,
+            "Kernel not compiled; call compile() first",
+        )
+        self._logger.debug("Executing grouped_gemm_swiglu kernel")
+        self._compiled_kernel(
+            a_tensor=a_tensor,
+            b_tensor=b_tensor,
+            c_tensor=c_tensor,
+            d_tensor=d_tensor,
+            d_col_tensor=d_col_tensor,
+            sfa_tensor=sfa_tensor,
+            sfb_tensor=sfb_tensor,
+            sfd_row_tensor=sfd_row_tensor,
+            sfd_col_tensor=sfd_col_tensor,
+            amax_tensor=amax_tensor,
+            norm_const_tensor=norm_const_tensor,
+            padded_offsets=padded_offsets,
+            alpha_tensor=alpha_tensor,
+            prob_tensor=prob_tensor,
+            stream=current_stream,
+        )
 
         self._logger.debug("Execute completed")
 
@@ -938,7 +730,7 @@ def grouped_gemm_swiglu_wrapper_sm100(
         )
 
         assert grouped_gemm_swiglu.check_support(), "Unsupported configuration"
-        grouped_gemm_swiglu.compile(current_stream=current_stream)
+        grouped_gemm_swiglu.compile()
         grouped_gemm_swiglu.execute(
             a_tensor=a_tensor,
             b_tensor=b_tensor,

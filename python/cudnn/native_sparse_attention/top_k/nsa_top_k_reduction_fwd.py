@@ -26,22 +26,15 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import argparse
 from typing import Tuple, Type, Optional
-import math
 
 import cuda.bindings.driver as cuda
-import torch
-from torch.profiler import profile, ProfilerActivity
-import time
 import cutlass.utils as utils
 import cutlass.pipeline as pipeline
 from cutlass.cute.nvgpu import cpasync, tcgen05
 import cutlass.utils.blackwell_helpers as sm100_utils
 import cutlass
 import cutlass.cute as cute
-import cutlass.torch as cutlass_torch
-from cutlass.cute.runtime import from_dlpack
 from cutlass.cute.typing import Int32, Float32, Int64
 
 from cutlass._mlir.dialects import cute_nvgpu

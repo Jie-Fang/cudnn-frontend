@@ -38,7 +38,6 @@ import cutlass.pipeline as pipeline
 from cutlass.pipeline import pipeline_init_arrive, pipeline_init_wait
 import cutlass.utils.blackwell_helpers as sm100_utils
 import cutlass.utils.blockscaled_layout as blockscaled_utils
-from cutlass.cute.runtime import from_dlpack
 
 import cutlass.cute.math as math
 from cutlass.cute.typing import Float32
@@ -2101,104 +2100,7 @@ class Sm100BlockScaledPersistentDenseGemmKernel:
         return 4 * cute.size_in_bytes(cutlass.Float32, cute.make_layout((1,)))
 
 
-class Sm100BlockScaledPersistentDenseGemmKernelNoDlpack:
-    """Wrapper around Sm100BlockScaledPersistentDenseGemmKernel that avoids DLPack.
-
-    This wrapper constructs cute.Tensors directly from cute.Pointer, shapes, and
-    explicit layout orders for operands A, B, SFA, SFB, C, AB12, and optionally
-    amax, sfc, and norm_const.
-    """
-
-    def __init__(
-        self,
-        sf_vec_size: int,
-        mma_tiler_mn: Tuple[int, int],
-        cluster_shape_mn: Tuple[int, int],
-        vector_f32: bool,
-        ab12_stages: int,
-    ):
-        self.kernel = Sm100BlockScaledPersistentDenseGemmKernel(
-            sf_vec_size=sf_vec_size,
-            mma_tiler_mn=mma_tiler_mn,
-            cluster_shape_mn=cluster_shape_mn,
-            vector_f32=vector_f32,
-            ab12_stages=ab12_stages,
-        )
-
-    @cute.jit
-    def __call__(
-        self,
-        a_ptr: cute.Pointer,
-        a_shape: cutlass.Constexpr[Tuple[int, int, int]],
-        a_order: cutlass.Constexpr[Tuple[int, int, int]],
-        b_ptr: cute.Pointer,
-        b_shape: cutlass.Constexpr[Tuple[int, int, int]],
-        b_order: cutlass.Constexpr[Tuple[int, int, int]],
-        sfa_ptr: cute.Pointer,
-        sfa_shape: cutlass.Constexpr[Tuple[int, int, int, int, int, int]],
-        sfa_order: cutlass.Constexpr[Tuple[int, int, int, int, int, int]],
-        sfb_ptr: cute.Pointer,
-        sfb_shape: cutlass.Constexpr[Tuple[int, int, int, int, int, int]],
-        sfb_order: cutlass.Constexpr[Tuple[int, int, int, int, int, int]],
-        c_ptr: cute.Pointer,
-        c_shape: cutlass.Constexpr[Tuple[int, int, int]],
-        c_order: cutlass.Constexpr[Tuple[int, int, int]],
-        ab12_ptr: cute.Pointer,
-        ab12_shape: cutlass.Constexpr[Tuple[int, int, int]],
-        ab12_order: cutlass.Constexpr[Tuple[int, int, int]],
-        amax_ptr: Optional[cute.Pointer],
-        amax_shape: cutlass.Constexpr[Tuple[int]],
-        amax_order: cutlass.Constexpr[Tuple[int]],
-        sfc_ptr: Optional[cute.Pointer],
-        sfc_shape: cutlass.Constexpr[Tuple[int, int, int, int, int, int]],
-        sfc_order: cutlass.Constexpr[Tuple[int, int, int, int, int, int]],
-        norm_const_ptr: Optional[cute.Pointer],
-        norm_const_shape: cutlass.Constexpr[Tuple[int]],
-        norm_const_order: cutlass.Constexpr[Tuple[int]],
-        alpha: cutlass.Float32,
-        max_active_clusters: cutlass.Constexpr,
-        stream: cuda.CUstream,
-        epilogue_op: cutlass.Constexpr = lambda x: x,
-    ):
-        a_cute = cute.make_tensor(a_ptr, layout=cute.make_ordered_layout(a_shape, order=a_order))
-        b_cute = cute.make_tensor(b_ptr, layout=cute.make_ordered_layout(b_shape, order=b_order))
-        sfa_cute = cute.make_tensor(sfa_ptr, layout=cute.make_ordered_layout(sfa_shape, order=sfa_order))
-        sfb_cute = cute.make_tensor(sfb_ptr, layout=cute.make_ordered_layout(sfb_shape, order=sfb_order))
-        c_cute = cute.make_tensor(c_ptr, layout=cute.make_ordered_layout(c_shape, order=c_order))
-        ab12_cute = cute.make_tensor(ab12_ptr, layout=cute.make_ordered_layout(ab12_shape, order=ab12_order))
-
-        amax_cute = None
-        if cutlass.const_expr(amax_ptr is not None):
-            amax_cute = cute.make_tensor(amax_ptr, layout=cute.make_ordered_layout(amax_shape, order=amax_order))
-
-        sfc_cute = None
-        if cutlass.const_expr(sfc_ptr is not None):
-            sfc_cute = cute.make_tensor(sfc_ptr, layout=cute.make_ordered_layout(sfc_shape, order=sfc_order))
-
-        norm_const_cute = None
-        if cutlass.const_expr(norm_const_ptr is not None):
-            norm_const_cute = cute.make_tensor(
-                norm_const_ptr,
-                layout=cute.make_ordered_layout(norm_const_shape, order=norm_const_order),
-            )
-
-        self.kernel(
-            a_cute,
-            b_cute,
-            sfa_cute,
-            sfb_cute,
-            c_cute,
-            ab12_cute,
-            amax_cute,
-            sfc_cute,
-            norm_const_cute,
-            alpha,
-            max_active_clusters,
-            stream,
-            epilogue_op,
-        )
-
-
+# TODO @mingyangw
 def fmin(
     a: Union[float, cutlass.Float32],
     b: Union[float, cutlass.Float32],

@@ -111,7 +111,7 @@ $$
 ```python
 from cudnn import NSA
 
-o, l, m = NSA.selection_attention_wrapper(
+result = NSA.selection_attention_wrapper(
     q_tensor=q,
     k_tensor=k,
     v_tensor=v,
@@ -127,6 +127,8 @@ o, l, m = NSA.selection_attention_wrapper(
     max_s_k=1024,
     stream=None,
 )
+o, l, m = result
+# Key access: result["o_tensor"], result["l_tensor"], result["m_tensor"]
 ```
 
 #### Class API
@@ -153,7 +155,7 @@ selection_attention = NSA.SelectionAttention(
     scale_softmax=None,
 )
 assert selection_attention.check_support()
-selection_attention.compile(current_stream=stream)
+selection_attention.compile()
 selection_attention.execute(
     q_tensor=q,
     k_tensor=k,
@@ -223,7 +225,7 @@ where $\alpha_q$, $\alpha_k$, $\alpha_v$, $\alpha_o$ are optional scaling factor
 ```python
 from cudnn import NSA
 
-o, lse = NSA.compression_attention_wrapper(
+result = NSA.compression_attention_wrapper(
     q_tensor=q,
     k_tensor=k,
     v_tensor=v,
@@ -242,6 +244,8 @@ o, lse = NSA.compression_attention_wrapper(
     scale_softmax=None,  # Defaults to 1/sqrt(head_dim)
     stream=None,
 )
+o, lse = result
+# Key access: result["o_tensor"], result["lse_tensor"]
 ```
 
 #### Class API
@@ -268,7 +272,7 @@ comp_attn = NSA.CompressionAttention(
     scale_softmax=None,
 )
 assert comp_attn.check_support()
-comp_attn.compile(current_stream=stream)
+comp_attn.compile()
 comp_attn.execute(
     q_tensor=q,
     k_tensor=k,
@@ -340,7 +344,7 @@ where $L$ is `left_bound` and $R$ is `right_bound`.
 ```python
 from cudnn import NSA
 
-o, stats = NSA.sliding_window_attention_wrapper(
+result = NSA.sliding_window_attention_wrapper(
     q_tensor=q,
     k_tensor=k,
     v_tensor=v,
@@ -356,6 +360,8 @@ o, stats = NSA.sliding_window_attention_wrapper(
     cudnn_handle=handle,  # Recommended to reuse handle
     stream=None,
 )
+o, stats = result
+# Key access: result["o_tensor"], result["stats_tensor"]
 ```
 
 #### Class API
@@ -384,7 +390,7 @@ swa = NSA.SlidingWindowAttention(
     cudnn_handle=handle,
 )
 assert swa.check_support()
-swa.compile(current_stream=stream)
+swa.compile()
 swa.execute(
     q_tensor=q,
     k_tensor=k,
@@ -453,14 +459,14 @@ $$
 ```python
 from cudnn import NSA
 
-topk_scores, topk_indices = NSA.topk_reduction_wrapper(
+result = NSA.topk_reduction_wrapper(
     q_tensor=q,
     k_tensor=k,
     lse_tensor=lse,
     cum_seqlen_q_tensor=cum_seqlen_q,  # For T,H,D layout
     cum_seqlen_k_tensor=cum_seqlen_k,  # For T,H,D layout
-    max_s_q=1024,
-    max_s_k=1024,
+    max_s_q=1024,  # Optional for T,H,D (inferred from cum_seqlen_q if omitted)
+    max_s_k=1024,  # Optional for T,H,D (inferred from cum_seqlen_k if omitted)
     acc_dtype=torch.float32,
     k_value=16,  # Number of blocks to select
     selection_block_size=64,
@@ -470,6 +476,8 @@ topk_scores, topk_indices = NSA.topk_reduction_wrapper(
     scale_softmax=None,
     current_stream=stream,
 )
+topk_scores, topk_indices = result
+# Key access: result["topk_scores_tensor"], result["topk_indices_tensor"]
 ```
 
 #### Class API
@@ -496,7 +504,7 @@ topk = NSA.TopKReduction(
     scale_softmax=None,
 )
 assert topk.check_support()
-topk.compile(current_stream=stream)
+topk.compile()
 topk.execute(
     q_tensor=q,
     k_tensor=k,
@@ -520,8 +528,8 @@ topk.execute(
 | `mma_tiler_mn` | `Tuple[int, int]` | Kernel tile size | `(128, 128)` |
 | `scale_softmax` | `float \| None` | Softmax scaling factor | `1/sqrt(head_dim)` |
 | `acc_dtype` | `torch.dtype` | Accumulator dtype | `torch.float32` |
-| `max_s_q` | `int` | Maximum query sequence length | Required |
-| `max_s_k` | `int` | Maximum key sequence length | Required |
+| `max_s_q` | `int \| None` | Maximum query sequence length (optional for `T,H,D`, inferred from `cum_seqlen_q`) | `None` |
+| `max_s_k` | `int \| None` | Maximum key sequence length (optional for `T,H,D`, inferred from `cum_seqlen_k`) | `None` |
 
 #### Constraints
 
@@ -689,4 +697,3 @@ final_output = o_cmp + o_sel + o_swa  # Placeholder combination
 - [Native Sparse Attention: Hardware-Aligned and Natively Trainable Sparse Attention (arXiv:2502.11089)](https://arxiv.org/pdf/2502.11089)
 - [CUTLASS](https://github.com/NVIDIA/cutlass)
 - [cuDNN](https://developer.nvidia.com/cudnn)
-

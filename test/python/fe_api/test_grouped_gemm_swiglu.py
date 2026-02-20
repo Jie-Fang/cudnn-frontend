@@ -247,7 +247,7 @@ def _test_grouped_gemm_swiglu_compile_execute(
     except (ValueError, NotImplementedError) as e:
         pytest.skip(f"Unsupported testcase: {e}")
 
-    api.compile(current_stream=stream)
+    api.compile()
     api.execute(
         a_tensor=inputs["a_tensor"],
         b_tensor=inputs["b_tensor"],

@@ -170,7 +170,7 @@ api = GroupedGemmSwigluSm100(
     discrete_col_sfd=False,
 )
 assert api.check_support()
-api.compile(current_stream=stream)
+api.compile()
 api.execute(
     a_tensor=a,
     b_tensor=b,
@@ -323,7 +323,6 @@ Returns a `TupleDict` - a dictionary-like object that also supports tuple unpack
 #### `GroupedGemmSwigluSm100.execute`
 
 - `a_tensor`, `b_tensor`, `c_tensor`, `d_tensor`, `sfa_tensor`, `sfb_tensor`, `padded_offsets`, `alpha_tensor`, `d_col_tensor`, `sfd_row_tensor`, `sfd_col_tensor`, `amax_tensor`, `norm_const_tensor`, `prob_tensor` – see Input/Output tensors. Must have same layout as sample tensors provided in constructor.
-- `skip_compile: bool` – Default: `False`
 
 ---
 

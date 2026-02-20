@@ -65,7 +65,7 @@ A (MxKxL), SFA                   B (NxKxL), SFB
 
 ### High-level wrapper
 ```python
-c, amax = gemm_amax_wrapper_sm100(
+result = gemm_amax_wrapper_sm100(
     a_tensor,
     b_tensor,
     sfa_tensor,
@@ -78,6 +78,8 @@ c, amax = gemm_amax_wrapper_sm100(
     sf_vec_size=32,
     stream=None,
 )
+c, amax = result
+# Key access: result["c_tensor"], result["amax_tensor"]
 ```
 
 ### Class API
@@ -97,7 +99,7 @@ op = GemmAmaxSm100(
     sf_vec_size=32,
 )
 assert op.check_support()
-op.compile(current_stream=None)
+op.compile()
 op.execute(a, b, sfa, sfb, c, amax, current_stream=None)
 ```
 
@@ -120,11 +122,11 @@ op.execute(a, b, sfa, sfb, c, amax, current_stream=None)
 - Input tensor **SFB**: `sfb_tensor` (wrapper) or `sample_sfb`/`sfb_tensor` (class)
   - Shape: `(ATOM_M0, ATOM_M1, ceil_div(N, ATOM_M0·ATOM_M1), ATOM_K, ceil_div(K, ATOM_K·sf_vec_size), L)`
   - Dtype: `{float8_e8m0fnu, float8_e4m3fn, int8}` (`int8` is interpreted as `float8_e8m0fnu`)
-- Output tensor **C**: return value (wrapper) or `sample_c`/`c_tensor` (class)
+- Output tensor **C**: `result["c_tensor"]` (wrapper) or `sample_c`/`c_tensor` (class)
   - Shape: `(M, N, L)`
-  - Stride: (1, M, M·N)` for `m`-major or `(N, 1, M·N)` for `n`-major. Provided as `c_major` argument for wrapper
+  - Stride: `(1, M, M·N)` for `m`-major or `(N, 1, M·N)` for `n`-major. Provided as `c_major` argument for wrapper
   - Dtype: `{float32, float16, bfloat16, float8_e5m2, float8_e4m3fn, float4_e2m1fn_x2, uint8}`. Provided as `c_dtype` argument for wrapper
-- Output tensor **Amax**: return value (wrapper) or `sample_amax`/`amax_tensor` (class)
+- Output tensor **Amax**: `result["amax_tensor"]` (wrapper) or `sample_amax`/`amax_tensor` (class)
   - Shape: `(1, 1, 1)`
   - Dtype: `float32`
 
@@ -147,6 +149,15 @@ op.execute(a, b, sfa, sfb, c, amax, current_stream=None)
 - `c_major: str`:  see Input/Output tensors. Default: `"n"`
 - `c_dtype: torch.dtype`:  see Input/Output tensors. Default: `torch.float32`
 
+### Wrapper return values
+
+Returns a `TupleDict` with keys:
+
+- `c_tensor`: GEMM output tensor `C`
+- `amax_tensor`: Max-abs reduction output
+
+Tuple unpacking order is: `(c_tensor, amax_tensor)`.
+
 ### Class-specific parameters: `GemmAmaxSm100`
 
 #### `GemmAmaxSm100` (constructor)
@@ -154,7 +165,6 @@ op.execute(a, b, sfa, sfb, c, amax, current_stream=None)
 
 #### `GemmAmaxSm100.execute`
 - `a_tensor`, `b_tensor`, `sfa_tensor`, `sfb_tensor`, `c_tensor`, `amax_tensor`: see Input/Output tensors
-- `skip_compile: bool` — Default: `False`
 
 ---
 
