@@ -265,7 +265,8 @@ init_properties(py::module_& m) {
     py::enum_<cudnn_frontend::HeurMode_t>(m, "heur_mode")
         .value("A", cudnn_frontend::HeurMode_t::A)
         .value("B", cudnn_frontend::HeurMode_t::B)
-        .value("FALLBACK", cudnn_frontend::HeurMode_t::FALLBACK);
+        .value("FALLBACK", cudnn_frontend::HeurMode_t::FALLBACK)
+        .value("OPENSOURCE", cudnn_frontend::HeurMode_t::OPENSOURCE);
 
     py::enum_<cudnn_frontend::ConvolutionMode_t>(m, "convolution_mode")
         .value("CONVOLUTION", cudnn_frontend::ConvolutionMode_t::CONVOLUTION)

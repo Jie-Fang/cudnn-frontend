@@ -104,6 +104,7 @@ class Context {
         _CUDNN_CHECK_CUDA_ERROR(cuda_get_device(&device));
         _CUDNN_CHECK_CUDA_ERROR(cuda_get_device_properties(&prop, device));
         target_sm_version = prop.major * 10 + prop.minor;
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: Populated SM version from device: " << device << " " << target_sm_version);
         return {error_code_t::OK, ""};
     }
 

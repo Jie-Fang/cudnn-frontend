@@ -7,6 +7,9 @@ venv/
 __pycache__/
 CMakePresets.json
 _compiled_module.cpython*.so
+kernel_dump/*
+qkv*/*
+1.1*.*.md
 
 .vscode/
 .cursor/
