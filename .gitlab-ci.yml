@@ -196,7 +196,7 @@ stages:
     - python_tests
     - mha_v1_tests
     - mha_v2_tests
-    - cudnn_backend_dev_latest
+    - backend_triggers
     - pycudnnTest
     - L4_graph_runner
     - deploy
@@ -265,24 +265,6 @@ build:cudnn_rel_latest:
         - .cudnn_rel_image:template
         - .fetch_cudnn_rel:template
         - .build:template
-
-cpp_samples:cudnn_rel_latest:
-    extends:
-        - .default_job_template
-        - .device_matrix:template
-        - .cudnn_rel_image:template
-        - .fetch_cudnn_rel:template
-        - .cpp_samples:template
-    needs: ["build:cudnn_rel_latest"]
-
-mha_v2_tests:cudnn_rel_latest:
-    extends:
-        - .default_job_template
-        - .device_matrix:template
-        - .cudnn_rel_image:template
-        - .fetch_cudnn_rel:template
-        - .mha_v2_tests:template
-    needs: ["build:cudnn_rel_latest"]
 
 mha_v1_tests:cudnn_rel_latest:
     extends:
@@ -384,6 +366,22 @@ python_samples:cudnn_ga_latest:
   needs: []
 
 
+cudnn_backend_rel_latest:
+    trigger:
+        project:  cudnn/cudnn
+        branch:   release/9.20.0
+        strategy: depend
+    inherit:
+        variables: false
+    variables:
+        CI_CUDNN_FRONTEND_MERGE_REQUEST_SOURCE_BRANCH_NAME: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME
+        CI_CUDNN_FRONTEND_REF_NAME: $CI_COMMIT_REF_NAME
+        CI_CUDNN_FRONTEND_COMMIT_SHA: $CI_COMMIT_SHA
+    rules:
+        - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    stage: backend_triggers
+    needs: []
+
 cudnn_backend_dev_latest:
     trigger:
         project:  cudnn/cudnn
@@ -397,7 +395,7 @@ cudnn_backend_dev_latest:
         CI_CUDNN_FRONTEND_COMMIT_SHA: $CI_COMMIT_SHA
     rules:
         - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    stage: cudnn_backend_dev_latest
+    stage: backend_triggers
     needs: []
 
 # ==============================================================================
