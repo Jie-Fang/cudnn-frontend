@@ -26,6 +26,47 @@ from typing import Optional, Dict, Any
 
 from torch.profiler import profile, record_function, ProfilerActivity
 
+try:
+    import cutlass.cute as cute
+    import cutlass
+    from cutlass.cute.runtime import from_dlpack
+
+    @cute.jit
+    def cvt_sf_MKL_to_M32x4xrm_K4xrk_L(sf_ref_tensor, sf_mma_tensor):
+        sf_mma_tensor = cute.group_modes(sf_mma_tensor, 0, 3)
+        sf_mma_tensor = cute.group_modes(sf_mma_tensor, 1, 3)
+        for i in cutlass.range(cute.size(sf_ref_tensor)):
+            mkl_coord = sf_ref_tensor.layout.get_hier_coord(i)
+            sf_mma_tensor[mkl_coord] = sf_ref_tensor[mkl_coord]
+
+    HAS_CUTLASS = True
+except Exception:
+    HAS_CUTLASS = False
+
+
+def ceil_div(a: int, b: int) -> int:
+    return (a + b - 1) // b
+
+
+def create_scale_factor_tensor_mxfp8(l, mn, k, sf_vec_size):
+    """Create MXFP8 scale factor tensor in F8_128x4 layout for cuDNN.
+    Returns cute tensor (F8_128x4 layout) on GPU.
+    l: batch dimension (b * h), mn: non-contracting dim, k: contracting dim.
+    """
+    sf_k = ceil_div(k, sf_vec_size)
+    atom_m = (32, 4)
+    atom_k = 4
+    mma_shape = (l, ceil_div(mn, atom_m[0] * atom_m[1]), ceil_div(sf_k, atom_k), atom_m[0], atom_m[1], atom_k)
+    mma_permute_order = (3, 4, 1, 5, 2, 0)
+    cute_f32_cpu = torch.zeros(mma_shape, dtype=torch.float32).permute(mma_permute_order)
+
+    ref_shape = (l, mn, sf_k)
+    ref_permute = (1, 2, 0)
+    ref_f32_cpu = torch.empty(ref_shape).uniform_(0.5, 2.0).permute(ref_permute).to(torch.int8).to(torch.float32)
+
+    cvt_sf_MKL_to_M32x4xrm_K4xrk_L(from_dlpack(ref_f32_cpu), from_dlpack(cute_f32_cpu))
+    return cute_f32_cpu.to(torch.float8_e8m0fnu).cuda()
+
 
 def parse_args():
     """Parse command line arguments."""
@@ -61,8 +102,8 @@ def parse_args():
     parser.add_argument(
         "--data_type",
         default="bfloat16",
-        type=str,
-        help="Data type to input to the layer. Can be bfloat16, float16, or fp8",
+        choices=["bfloat16", "float16", "float", "fp8", "mxfp8"],
+        help="Data type. Can be bfloat16, float16, fp8, or mxfp8",
     )
     parser.add_argument(
         "--num_iterations",
@@ -318,6 +359,9 @@ else:
         target_dtype = torch.float
     elif args.data_type == "fp8":
         target_dtype = torch.float8_e4m3fn
+    elif args.data_type == "mxfp8":
+        target_dtype = torch.float8_e4m3fn  # Q/K/V input type
+        output_dtype = torch.bfloat16  # O output type
     else:
         raise ValueError(f"Invalid data type: {args.data_type}")
 
@@ -352,6 +396,13 @@ else:
         run_fwd = True
         run_bwd = False
     enable_gqa = num_q_heads != num_kv_heads
+    if args.data_type == "mxfp8":
+        if run_bwd:
+            raise ValueError("mxfp8 backward pass not yet supported in this benchmark")
+        if args.sdpa_backend != "cudnn":
+            raise ValueError("mxfp8 is only supported with the 'cudnn' backend")
+        if not HAS_CUTLASS:
+            raise RuntimeError("CUTLASS is required for mxfp8 but is not installed")
     # if args.sdpa_backend in ["flash_attention", "flash_attention_3", "pyt_flash_attention"]:
     #     assert args.attn_mask != "top_left", "Flash Attention does not support top left causal mask"
 
@@ -397,12 +448,15 @@ else:
                 raise ValueError("Unsupported tensor data type.")
 
         ## Will define tensors to set up cuDNN graph once.
-        # FP8 needs randn in bfloat16 then convert (randn doesn't support fp8 well)
-        randn_dtype = torch.bfloat16 if args.data_type == "fp8" else target_dtype
+        # FP8/MXFP8 needs randn in bfloat16 then convert (randn doesn't support fp8 well)
+        randn_dtype = torch.bfloat16 if args.data_type in ("fp8", "mxfp8") else target_dtype
         query = torch.randn(batch_size, q_seqlen, num_q_heads, head_dim_qk, dtype=randn_dtype, device=device).to(target_dtype).transpose(1, 2)
         key = torch.randn(batch_size, kv_seqlen, num_kv_heads, head_dim_qk, dtype=randn_dtype, device=device).to(target_dtype).transpose(1, 2)
         value = torch.randn(batch_size, kv_seqlen, num_kv_heads, head_dim_vo, dtype=randn_dtype, device=device).to(target_dtype).transpose(1, 2)
-        output = torch.empty(batch_size, q_seqlen, num_q_heads, head_dim_vo, dtype=target_dtype, device=device).transpose(1, 2)
+        if args.data_type == "mxfp8":
+            output = torch.empty(batch_size, q_seqlen, num_q_heads, head_dim_vo, dtype=output_dtype, device=device).transpose(1, 2)
+        else:
+            output = torch.empty(batch_size, q_seqlen, num_q_heads, head_dim_vo, dtype=target_dtype, device=device).transpose(1, 2)
 
         # FP8-specific descale/scale/amax tensors
         if args.data_type == "fp8":
@@ -425,6 +479,18 @@ else:
             amax_dK_gpu = torch.zeros(1, 1, 1, 1, dtype=torch.float, device=device)
             amax_dV_gpu = torch.zeros(1, 1, 1, 1, dtype=torch.float, device=device)
             amax_dP_gpu = torch.zeros(1, 1, 1, 1, dtype=torch.float, device=device)
+
+        if args.data_type == "mxfp8":
+            block_size = 32
+            s_q_padded = ceil_div(q_seqlen, 128) * 128
+            s_kv_padded = ceil_div(kv_seqlen, 128) * 128
+            d_qk_scale_padded = ceil_div(ceil_div(head_dim_qk, block_size), 4) * 4
+            d_vo_padded = ceil_div(head_dim_vo, 128) * 128
+            s_kv_scale_padded = ceil_div(ceil_div(kv_seqlen, block_size), 4) * 4
+            amax_o_gpu = torch.zeros(1, 1, 1, 1, dtype=torch.float, device=device)
+            sf_q_gpu = create_scale_factor_tensor_mxfp8(batch_size * num_q_heads, s_q_padded, head_dim_qk, block_size)
+            sf_k_gpu = create_scale_factor_tensor_mxfp8(batch_size * num_kv_heads, s_kv_padded, head_dim_qk, block_size)
+            sf_v_gpu = create_scale_factor_tensor_mxfp8(batch_size * num_kv_heads, d_vo_padded, kv_seqlen, block_size)
 
         dQuery = torch.empty_like(query)
         dKey = torch.empty_like(key)
@@ -481,6 +547,41 @@ else:
                 right_bound=right_bound,
                 # dropout=dropout_tuple if is_dropout else None,
             )
+        elif args.data_type == "mxfp8":
+            q_fwd = graph_fwd.tensor_like(query)
+            k_fwd = graph_fwd.tensor_like(key)
+            v_fwd = graph_fwd.tensor_like(value)
+
+            sf_q_fwd = graph_fwd.tensor(
+                dim=(batch_size, num_q_heads, s_q_padded, d_qk_scale_padded),
+                stride=(num_q_heads * s_q_padded * d_qk_scale_padded, s_q_padded * d_qk_scale_padded, d_qk_scale_padded, 1),
+                data_type=cudnn.data_type.FP8_E8M0,
+                reordering_type=cudnn.tensor_reordering.F8_128x4,
+            )
+            sf_k_fwd = graph_fwd.tensor(
+                dim=(batch_size, num_kv_heads, s_kv_padded, d_qk_scale_padded),
+                stride=(num_kv_heads * s_kv_padded * d_qk_scale_padded, s_kv_padded * d_qk_scale_padded, d_qk_scale_padded, 1),
+                data_type=cudnn.data_type.FP8_E8M0,
+                reordering_type=cudnn.tensor_reordering.F8_128x4,
+            )
+            sf_v_fwd = graph_fwd.tensor(
+                dim=(batch_size, num_kv_heads, s_kv_scale_padded, d_vo_padded),
+                stride=(num_kv_heads * s_kv_scale_padded * d_vo_padded, s_kv_scale_padded * d_vo_padded, 1, s_kv_scale_padded),
+                data_type=cudnn.data_type.FP8_E8M0,
+                reordering_type=cudnn.tensor_reordering.F8_128x4,
+            )
+
+            o_fwd, stats_fwd, amax_o_fwd = graph_fwd.sdpa_mxfp8(
+                q=q_fwd,
+                k=k_fwd,
+                v=v_fwd,
+                descale_q=sf_q_fwd,
+                descale_k=sf_k_fwd,
+                descale_v=sf_v_fwd,
+                attn_scale=attn_scale,
+                use_causal_mask=(args.attn_mask == "top_left"),
+                generate_stats=True,
+            )
         else:
             q_fwd = graph_fwd.tensor_like(query)
             k_fwd = graph_fwd.tensor_like(key)
@@ -508,11 +609,16 @@ else:
         else:
             if args.data_type == "fp8":
                 o_fwd.set_output(True).set_dim(output.size()).set_stride(output.stride()).set_data_type(cudnn.data_type.FP8_E4M3)
+            elif args.data_type == "mxfp8":
+                o_fwd.set_output(True).set_dim(output.size()).set_stride(output.stride()).set_data_type(convert_to_cudnn_type(output_dtype))
+                stats_fwd.set_output(True).set_dim(stats.size()).set_stride(stats.stride()).set_data_type(cudnn.data_type.FLOAT)
             else:
                 o_fwd.set_output(True).set_dim(output.size()).set_stride(output.stride())
 
         if args.data_type == "fp8":
             amax_s_fwd.set_output(True).set_dim(amax_s_gpu.size()).set_stride(amax_s_gpu.stride()).set_data_type(cudnn.data_type.FLOAT)
+            amax_o_fwd.set_output(True).set_dim(amax_o_gpu.size()).set_stride(amax_o_gpu.stride()).set_data_type(cudnn.data_type.FLOAT)
+        elif args.data_type == "mxfp8":
             amax_o_fwd.set_output(True).set_dim(amax_o_gpu.size()).set_stride(amax_o_gpu.stride()).set_data_type(cudnn.data_type.FLOAT)
         graph_fwd.validate()
         graph_fwd.build_operation_graph()
@@ -717,6 +823,19 @@ else:
                     scale_s_fwd: scale_s_gpu,
                     scale_o_fwd: scale_o_gpu,
                     amax_s_fwd: amax_s_gpu,
+                    amax_o_fwd: amax_o_gpu,
+                }
+                workspace = torch.empty(graph_fwd.get_workspace_size(), device="cuda", dtype=torch.uint8)
+            elif args.data_type == "mxfp8":
+                variant_pack_fwd = {
+                    q_fwd: query,
+                    k_fwd: key,
+                    v_fwd: value,
+                    o_fwd: output,
+                    stats_fwd: stats,
+                    sf_q_fwd: sf_q_gpu,
+                    sf_k_fwd: sf_k_gpu,
+                    sf_v_fwd: sf_v_gpu,
                     amax_o_fwd: amax_o_gpu,
                 }
                 workspace = torch.empty(graph_fwd.get_workspace_size(), device="cuda", dtype=torch.uint8)
@@ -929,8 +1048,8 @@ else:
     first_error = True  # For suppressing error message beyond first error
     sdpa_function = get_sdpa_function(args.sdpa_backend)
     for i in range(total_iters):
-        # FP8 needs randn in bfloat16 then convert (randn doesn't support fp8 well)
-        randn_dtype = torch.bfloat16 if args.data_type == "fp8" else target_dtype
+        # FP8/MXFP8 needs randn in bfloat16 then convert (randn doesn't support fp8 well)
+        randn_dtype = torch.bfloat16 if args.data_type in ("fp8", "mxfp8") else target_dtype
         query = (
             torch.randn(batch_size, q_seqlen, num_q_heads, head_dim_qk, dtype=randn_dtype, device=device, requires_grad=True).to(target_dtype).transpose(1, 2)
         )
@@ -967,7 +1086,10 @@ else:
         dOutput = torch.randn(query.shape, dtype=randn_dtype, device=device).to(target_dtype)
 
         if args.sdpa_backend == "cudnn":
-            output = torch.empty(batch_size, q_seqlen, num_q_heads, head_dim_vo, dtype=target_dtype, device=device).transpose(1, 2)
+            if args.data_type == "mxfp8":
+                output = torch.empty(batch_size, q_seqlen, num_q_heads, head_dim_vo, dtype=output_dtype, device=device).transpose(1, 2)
+            else:
+                output = torch.empty(batch_size, q_seqlen, num_q_heads, head_dim_vo, dtype=target_dtype, device=device).transpose(1, 2)
             dQuery = torch.empty_like(query)
             dKey = torch.empty_like(key)
             dValue = torch.empty_like(value)
@@ -1060,6 +1182,18 @@ else:
                         scale_s_fwd: scale_s_gpu,
                         scale_o_fwd: scale_o_gpu,
                         amax_s_fwd: amax_s_gpu,
+                        amax_o_fwd: amax_o_gpu,
+                    }
+                elif args.data_type == "mxfp8":
+                    variant_pack_fwd = {
+                        q_fwd: query,
+                        k_fwd: key,
+                        v_fwd: value,
+                        o_fwd: output,
+                        stats_fwd: stats,
+                        sf_q_fwd: sf_q_gpu,
+                        sf_k_fwd: sf_k_gpu,
+                        sf_v_fwd: sf_v_gpu,
                         amax_o_fwd: amax_o_gpu,
                     }
                 else:
@@ -1170,7 +1304,7 @@ else:
             value,
             output,
         ) = postprocess_qkvo(query, key, value, output, args.sdpa_backend)
-        if args.data_type != "fp8" and not args.skip_ref and run_fwd:
+        if args.data_type not in ("fp8", "mxfp8") and not args.skip_ref and run_fwd:
             try:
                 output_ref = flash_attention_4_sdpa(query, key, value)
                 if run_bwd:
