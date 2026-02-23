@@ -142,49 +142,19 @@ include:
 #     rules:
 #       - if: $CI_PIPELINE_SOURCE == "schedule"
 
-#   - local: ci/job-template.yml
-#     inputs:
-#         cuda_version: "12.4.0"
-#         cudnn_version: "9.1.0.70"
-#     rules:
-#       - if: $CI_PIPELINE_SOURCE == "schedule"
-
-#   - local: ci/job-template.yml
-#     inputs:
-#         cuda_version: "12.5.0"
-#         cudnn_version: "9.2.1.18"
-
-#   - local: ci/job-template.yml
-#     inputs:
-#         cuda_version: "12.5.1"
-#         cudnn_version: "9.3.0.75"
-
-#   - local: ci/job-template.yml
-#     inputs:
-#         cuda_version: "12.6.0"
-#         cudnn_version: "9.4.0.58"
-
-#   - local: ci/job-template.yml
-#     inputs:
-#         cuda_version: "12.6.3"
-#         cudnn_version: "9.6.0.74"
-#     rules:
-#         - if: $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "merge_request_event"
-
-#   - local: ci/job-template.yml
-#     inputs:
-#         cuda_version: "12.9.1"
-#         cudnn_version: "9.11.0.98"
-#     rules:
-#         - if: $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "merge_request_event"
+#  - local: ci/job-template.yml
+#    inputs:
+#        cuda_version: "13.1.0"
+#        cudnn_version: "9.18.1.3"
+#    rules:
+#        - if: $CI_PIPELINE_SOURCE == "schedule"
 
   - local: ci/job-template.yml
     inputs:
         cuda_version: "13.1.0"
-        cudnn_version: "9.18.1.3"
+        cudnn_version: "9.19.0.56"
     rules:
         - if: $CI_PIPELINE_SOURCE == "schedule"
-
 
 stages:
     - analysis
@@ -378,7 +348,7 @@ cudnn_backend_rel_latest:
         CI_CUDNN_FRONTEND_REF_NAME: $CI_COMMIT_REF_NAME
         CI_CUDNN_FRONTEND_COMMIT_SHA: $CI_COMMIT_SHA
     rules:
-        - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+        - if: $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "merge_request_event"
     stage: backend_triggers
     needs: []
 
@@ -394,7 +364,7 @@ cudnn_backend_dev_latest:
         CI_CUDNN_FRONTEND_REF_NAME: $CI_COMMIT_REF_NAME
         CI_CUDNN_FRONTEND_COMMIT_SHA: $CI_COMMIT_SHA
     rules:
-        - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+        - if: $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "merge_request_event"
     stage: backend_triggers
     needs: []
 
