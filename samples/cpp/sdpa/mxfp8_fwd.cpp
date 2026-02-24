@@ -71,7 +71,7 @@ TEST_CASE("sdpa_mxfp8_fprop", "[graph][sdpa][mxfp8][forward]") {
     int64_t s_padded       = ((s + 127) / 128) * 128;
     int64_t d_scale_padded = ((d_scale + 3) / 4) * 4;
     int64_t s_scale_padded = ((s_scale + 3) / 4) * 4;
-    int64_t d_padded       = ((d + 3) / 4) * 4;  // d dimension for SF_V (not scaled, but may need padding)
+    int64_t d_padded       = ((d + 127) / 128) * 128;  // d dimension for SF_V (not scaled, but may need padding)
 
     bool generate_stats = true;
     float attn_scale    = 0.123f;

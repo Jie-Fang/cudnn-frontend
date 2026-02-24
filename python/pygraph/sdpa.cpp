@@ -825,6 +825,119 @@ PyGraph::sdpa_fp8_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attribu
     return {dQ, dK, dV, amax_dQ, amax_dK, amax_dV, amax_dP};
 }
 
+// MXFP8 SDPA backward - uses block-wise scale factors (E8M0 with F8_128x4 reordering)
+std::array<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, 6>
+PyGraph::sdpa_mxfp8_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
+                             std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q_T,
+                             std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& k,
+                             std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& k_T,
+                             std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& v,
+                             std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& o_f16,
+                             std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& dO_f16,
+                             std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& dO,
+                             std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& dO_T,
+                             std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& stats,
+                             std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& descale_q,
+                             std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& descale_q_T,
+                             std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& descale_k,
+                             std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& descale_k_T,
+                             std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& descale_v,
+                             std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& descale_dO,
+                             std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& descale_dO_T,
+                             py::object const& attn_scale,
+                             bool const use_padding_mask,
+                             std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_q,
+                             std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_kv,
+                             bool const use_causal_mask,
+                             bool const use_causal_mask_bottom_right,
+                             bool const use_deterministic_algorithm,
+                             py::object const& dropout,
+                             cudnn_frontend::DataType_t const& compute_data_type,
+                             std::string const& name) {
+    auto attributes = cudnn_frontend::graph::SDPA_fp8_backward_attributes()
+                          .set_padding_mask(use_padding_mask)
+                          .set_seq_len_q(seq_len_q)
+                          .set_seq_len_kv(seq_len_kv)
+                          .set_causal_mask(use_causal_mask)
+                          .set_causal_mask_bottom_right(use_causal_mask_bottom_right)
+                          .set_deterministic_algorithm(use_deterministic_algorithm)
+                          .set_compute_data_type(compute_data_type)
+                          .set_name(name);
+
+    // Set attn_scale
+    if (!attn_scale.is_none()) {
+        if (py::isinstance<py::float_>(attn_scale)) {
+            auto const attn_scale_value = attn_scale.cast<float>();
+            attributes.set_attn_scale(attn_scale_value);
+        } else {
+            auto const attn_scale_tensor = attn_scale.cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
+            if (!attn_scale_tensor) {
+                throw std::runtime_error("attn_scale must be a cudnn_tensor or float.");
+            }
+            attributes.set_attn_scale(attn_scale_tensor);
+        }
+    }
+
+    py::object cudnn_tensor_type = py::module_::import("cudnn").attr("tensor");
+
+    if (!dropout.is_none()) {
+        if (!py::isinstance<py::tuple>(dropout)) {
+            throw std::runtime_error(
+                "dropout must be a tuple of (float probability, a seed tensor"
+                ", and an offset tensor) or (mask tensor, scale tensor)");
+        }
+        py::tuple dropout_tuple = dropout.cast<py::tuple>();
+        if (dropout_tuple.size() != 3) {
+            throw std::runtime_error(
+                "dropout must be a tuple of (float probability, a seed tensor"
+                ", and an offset tensor) or (mask tensor, scale tensor)");
+        }
+
+        if (py::isinstance<py::float_>(dropout_tuple[0]) && py::isinstance(dropout_tuple[1], cudnn_tensor_type) &&
+            py::isinstance(dropout_tuple[2], cudnn_tensor_type)) {
+            auto const probability = dropout_tuple[0].cast<float>();
+            auto const seed        = dropout_tuple[1].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
+            auto const offset      = dropout_tuple[2].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
+            attributes.set_dropout(probability, seed, offset);
+        } else if (py::isinstance(dropout_tuple[0], cudnn_tensor_type) &&
+                   py::isinstance(dropout_tuple[1], cudnn_tensor_type) &&
+                   py::isinstance(dropout_tuple[2], cudnn_tensor_type)) {
+            auto const mask      = dropout_tuple[0].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
+            auto const scale     = dropout_tuple[1].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
+            auto const scale_inv = dropout_tuple[2].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
+            attributes.set_dropout(mask, scale, scale_inv);
+        } else {
+            throw std::runtime_error(
+                "dropout must be a tuple of (float probability, a seed tensor"
+                ", and an offset tensor) or (mask tensor, scale tensor)");
+        }
+    }
+
+    // Call the MXFP8 backward
+    // This uses block scale factors (E8M0 + F8_128x4) instead of regular scalar descales
+    auto result_array = graph->sdpa_fp8_backward(q,
+                                                 q_T,
+                                                 k,
+                                                 k_T,
+                                                 v,
+                                                 o_f16,
+                                                 dO_f16,
+                                                 dO,
+                                                 dO_T,
+                                                 stats,
+                                                 descale_q,
+                                                 descale_q_T,
+                                                 descale_k,
+                                                 descale_k_T,
+                                                 descale_v,
+                                                 descale_dO,
+                                                 descale_dO_T,
+                                                 attributes);
+
+    // Return [dQ, dK, dV, amax_dQ, amax_dK, amax_dV]
+    return {result_array[0], result_array[1], result_array[2], result_array[3], result_array[4], result_array[5]};
+}
+
 void
 init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
     m.def("sdpa",
@@ -1189,6 +1302,75 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
                     amax_dV (cudnn_tensor): The absolute maximum of value gradient tensor.
                     amax_dP (cudnn_tensor): The absolute maximum of dP tensor.
             )pbdoc");
+    m.def("sdpa_mxfp8_backward",
+          &PyGraph::sdpa_mxfp8_backward,
+          py::arg("q"),
+          py::arg("q_T"),
+          py::arg("k"),
+          py::arg("k_T"),
+          py::arg("v"),
+          py::arg("o_f16"),
+          py::arg("dO_f16"),
+          py::arg("dO"),
+          py::arg("dO_T"),
+          py::arg("stats"),
+          py::arg("descale_q"),
+          py::arg("descale_q_T"),
+          py::arg("descale_k"),
+          py::arg("descale_k_T"),
+          py::arg("descale_v"),
+          py::arg("descale_dO"),
+          py::arg("descale_dO_T"),
+          py::arg_v("attn_scale", py::none()),
+          py::arg_v("use_padding_mask", false),
+          py::arg_v("seq_len_q", nullptr),
+          py::arg_v("seq_len_kv", nullptr),
+          py::arg_v("use_causal_mask", false),
+          py::arg_v("use_causal_mask_bottom_right", false),
+          py::arg_v("use_deterministic_algorithm", false),
+          py::arg_v("dropout", py::none()),
+          py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
+          py::arg_v("name", ""),
+          R"pbdoc(
+                      Compute the key, query, value gradients of scaled dot product attention with mxfp8 (Microscaling FP8) datatype inputs and outputs.
+      
+                      Args:
+                          q (cudnn_tensor): The query data.
+                          q_T (cudnn_tensor): The transposed query data.
+                          k (cudnn_tensor): The key data.
+                          k_T (cudnn_tensor): The transposed key data.
+                          v (cudnn_tensor): The value data.
+                          o_f16 (cudnn_tensor): The output data (FP16).
+                          dO_f16 (cudnn_tensor): The output gradient data (FP16).
+                          dO (cudnn_tensor): The output gradient data.
+                          dO_T (cudnn_tensor): The transposed output gradient data.
+                          stats (cudnn_tensor): The softmax statistics in case the operation is in a training step.
+                          descale_q (cudnn_tensor): Descale factor for query.
+                          descale_q_T (cudnn_tensor): Descale factor for transposed query.
+                          descale_k (cudnn_tensor): Descale factor for key.
+                          descale_k_T (cudnn_tensor): Descale factor for transposed key.
+                          descale_v (cudnn_tensor): Descale factor for value.
+                          descale_dO (cudnn_tensor): Descale factor for output gradient.
+                          descale_dO_T (cudnn_tensor): Descale factor for transposed output gradient.
+                          attn_scale (Optional[Union[float, cudnn_tensor]]): The scale factor for attention. Default is None.
+                          use_padding_mask (bool): Whether it is an inference step or training step.
+                          seq_len_q (Optional[cudnn_tensor]): The sequence length of the query.
+                          seq_len_kv (Optional[cudnn_tensor]): The sequence length of the key.
+                          use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
+                          use_causal_mask_bottom_right (Optional[bool]): Whether to use bottom right aligned causal mask. Default is False.
+                          use_deterministic_algorithm (Optional[bool]): Whether to always use deterministic algorithm. Default is False.
+                          dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)], Tuple[mask: cudnn_tensor, scale: cudnn_tensor]]]): Whether to do dropout. Default is None.
+                          compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
+                          name (Optional[str]): The name of the operation.
+      
+                      Returns:
+                          dQ (cudnn_tensor): The query gradient data.
+                          dK (cudnn_tensor): The key gradient data.
+                          dV (cudnn_tensor): The value gradient data.
+                          amax_dQ (cudnn_tensor): The absolute maximum of query gradient tensor.
+                          amax_dK (cudnn_tensor): The absolute maximum of key gradient tensor.
+                          amax_dV (cudnn_tensor): The absolute maximum of value gradient tensor.
+                  )pbdoc");
     m.attr("scaled_dot_product_flash_attention")          = m.attr("sdpa");
     m.attr("scaled_dot_product_flash_attention_backward") = m.attr("sdpa_backward");
 }

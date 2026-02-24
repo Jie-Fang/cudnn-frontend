@@ -810,3 +810,41 @@ def test_sdpa_mxfp8_fwd_L0(env_info, test_no, request, cudnn_handle):
     if request.node.name in test.blocked_tests:
         pytest.skip(f"blocked test: {request.node.name}")
     exec_sdpa_mxfp8(test.cfg, request, cudnn_handle)
+
+# # ==================================
+# # L0 MXFP8 bprop tests
+# # ==================================
+
+@pytest.mark.parametrize("test_no", generate_test_seeds(num_tests=128, rng_seed=1002), ids=lambda p: f"test{p[0]}")
+@pytest.mark.L1
+def test_sdpa_mxfp8_bwd_L0(env_info, test_no, request, cudnn_handle):
+
+    test = SDPATestConfig(**env_info, implementation=cudnn.attention_implementation.AUTO)
+
+    geom_seed = abs(hash(test_no))
+    data_seed = test_no[2]
+
+    rng = random.Random(geom_seed)
+
+    with RandomizationContext(
+        batches=RandomBatchSize(min=1, max=1),
+        s_q_s_kv=RandomSequenceLength(s_q_min=256, s_q_max=256, s_kv_min=256, s_kv_max=256, s_q_distribution={"s_q=1": 0, "s_q=s_kv": 1, "s_q=random": 0}),
+        d_qk_d_v=RandomHiddenDimSize(d_qk_min=128, d_qk_max=128, d_v_min=128, d_v_max=128, head_dim_distribution={"d_qk=d_v": 1, "d_qk=random": 0}, with_high_probability=[(128, 128)]),
+        head_count=RandomHeadGenerator(min=1, max=1, head_group_options=(1, 0, 0)),  # MHA only, small head count
+        data_type=RandomChoice({torch.float8_e4m3fn: 2, torch.float8_e5m2: 0}),
+        output_type=RandomChoice({torch.float16: 2, torch.bfloat16: 1}),  # FP16 more often for tighter tolerance testing
+        with_sliding_mask=SlidingWindowMaskGenerator(causal=0, no_mask=1),  # No-mask only for testing
+        diag_align=RandomChoice({cudnn.diagonal_alignment.TOP_LEFT: 1}),
+        is_q_ragged_or_padded_or_full=RandomChoice({"ragged": 0, "padded": 0, "full": 1}),
+        stats_layout=RandomChoice({"disabled": 1}),
+        is_deterministic=RandomChoice({True: 1, False: 0}),
+    ) as randomization_ctx:
+        test.cfg = randomization_ctx(rng, data_seed, geom_seed)
+        test.cfg.use_causal_mask = test.cfg.left_bound is None and test.cfg.right_bound == 0
+
+    test.cfg.is_infer = False
+    test.showConfig(test_no, request)
+
+    if request.node.name in test.blocked_tests:
+        pytest.skip(f"blocked test: {request.node.name}")
+    exec_sdpa_mxfp8(test.cfg, request, cudnn_handle)

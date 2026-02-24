@@ -1507,6 +1507,26 @@ class Graph : public ICudnn, public INode {
                                                                                std::shared_ptr<Tensor_attributes>,
                                                                                SDPA_fp8_backward_attributes);
 
+    // MXFP8 version
+    std::array<std::shared_ptr<Tensor_attributes>, 6> sdpa_fp8_backward(std::shared_ptr<Tensor_attributes>,
+                                                                        std::shared_ptr<Tensor_attributes>,
+                                                                        std::shared_ptr<Tensor_attributes>,
+                                                                        std::shared_ptr<Tensor_attributes>,
+                                                                        std::shared_ptr<Tensor_attributes>,
+                                                                        std::shared_ptr<Tensor_attributes>,
+                                                                        std::shared_ptr<Tensor_attributes>,
+                                                                        std::shared_ptr<Tensor_attributes>,
+                                                                        std::shared_ptr<Tensor_attributes>,
+                                                                        std::shared_ptr<Tensor_attributes>,
+                                                                        std::shared_ptr<Tensor_attributes>,
+                                                                        std::shared_ptr<Tensor_attributes>,
+                                                                        std::shared_ptr<Tensor_attributes>,
+                                                                        std::shared_ptr<Tensor_attributes>,
+                                                                        std::shared_ptr<Tensor_attributes>,
+                                                                        std::shared_ptr<Tensor_attributes>,
+                                                                        std::shared_ptr<Tensor_attributes>,
+                                                                        SDPA_fp8_backward_attributes);
+
     std::array<std::shared_ptr<Tensor_attributes>, 3> sdpa_backward(std::shared_ptr<Tensor_attributes>,
                                                                     std::shared_ptr<Tensor_attributes>,
                                                                     std::shared_ptr<Tensor_attributes>,
@@ -2864,6 +2884,64 @@ Graph::sdpa_fp8_backward(std::shared_ptr<Tensor_attributes> q,
     sub_nodes.emplace_back(std::make_unique<SDPAFP8BackwardNode>(std::move(attributes), context));
 
     return {dQ, dK, dV, Amax_dQ, Amax_dK, Amax_dV, Amax_dP};
+}
+
+inline std::array<std::shared_ptr<Tensor_attributes>, 6>
+Graph::sdpa_fp8_backward(std::shared_ptr<Tensor_attributes> q,
+                         std::shared_ptr<Tensor_attributes> q_T,
+                         std::shared_ptr<Tensor_attributes> k,
+                         std::shared_ptr<Tensor_attributes> k_T,
+                         std::shared_ptr<Tensor_attributes> v,
+                         std::shared_ptr<Tensor_attributes> o_f16,
+                         std::shared_ptr<Tensor_attributes> dO_f16,
+                         std::shared_ptr<Tensor_attributes> dO,
+                         std::shared_ptr<Tensor_attributes> dO_T,
+                         std::shared_ptr<Tensor_attributes> Stats,
+                         std::shared_ptr<Tensor_attributes> descale_q,
+                         std::shared_ptr<Tensor_attributes> descale_q_T,
+                         std::shared_ptr<Tensor_attributes> descale_k,
+                         std::shared_ptr<Tensor_attributes> descale_k_T,
+                         std::shared_ptr<Tensor_attributes> descale_v,
+                         std::shared_ptr<Tensor_attributes> descale_dO,
+                         std::shared_ptr<Tensor_attributes> descale_dO_T,
+                         SDPA_fp8_backward_attributes attributes) {
+    // Make required output tensors
+    auto dQ = attributes.outputs[SDPA_fp8_backward_attributes::output_names::dQ] =
+        output_tensor(attributes.name + "::dQ");
+    auto dK = attributes.outputs[SDPA_fp8_backward_attributes::output_names::dK] =
+        output_tensor(attributes.name + "::dK");
+    auto dV = attributes.outputs[SDPA_fp8_backward_attributes::output_names::dV] =
+        output_tensor(attributes.name + "::dV");
+    auto Amax_dQ = attributes.outputs[SDPA_fp8_backward_attributes::output_names::Amax_dQ] =
+        output_tensor(attributes.name + "::Amax_dQ");
+    auto Amax_dK = attributes.outputs[SDPA_fp8_backward_attributes::output_names::Amax_dK] =
+        output_tensor(attributes.name + "::Amax_dK");
+    auto Amax_dV = attributes.outputs[SDPA_fp8_backward_attributes::output_names::Amax_dV] =
+        output_tensor(attributes.name + "::Amax_dV");
+
+    // Set inputs
+    attributes.inputs[SDPA_fp8_backward_attributes::input_names::Q]      = q;
+    attributes.inputs[SDPA_fp8_backward_attributes::input_names::K]      = k;
+    attributes.inputs[SDPA_fp8_backward_attributes::input_names::V]      = v;
+    attributes.inputs[SDPA_fp8_backward_attributes::input_names::Q_T]    = q_T;
+    attributes.inputs[SDPA_fp8_backward_attributes::input_names::K_T]    = k_T;
+    attributes.inputs[SDPA_fp8_backward_attributes::input_names::O]      = o_f16;
+    attributes.inputs[SDPA_fp8_backward_attributes::input_names::dO_f16] = dO_f16;
+    attributes.inputs[SDPA_fp8_backward_attributes::input_names::dO_T]   = dO_T;
+    attributes.inputs[SDPA_fp8_backward_attributes::input_names::Stats]  = Stats;
+    attributes.inputs[SDPA_fp8_backward_attributes::input_names::dO]     = dO;
+
+    attributes.inputs[SDPA_fp8_backward_attributes::input_names::Descale_Q]    = descale_q;
+    attributes.inputs[SDPA_fp8_backward_attributes::input_names::Descale_Q_T]  = descale_q_T;
+    attributes.inputs[SDPA_fp8_backward_attributes::input_names::Descale_K]    = descale_k;
+    attributes.inputs[SDPA_fp8_backward_attributes::input_names::Descale_K_T]  = descale_k_T;
+    attributes.inputs[SDPA_fp8_backward_attributes::input_names::Descale_V]    = descale_v;
+    attributes.inputs[SDPA_fp8_backward_attributes::input_names::Descale_dO]   = descale_dO;
+    attributes.inputs[SDPA_fp8_backward_attributes::input_names::Descale_dO_T] = descale_dO_T;
+
+    sub_nodes.emplace_back(std::make_unique<SDPAFP8BackwardNode>(std::move(attributes), context));
+
+    return {dQ, dK, dV, Amax_dQ, Amax_dK, Amax_dV};
 }
 
 inline std::array<std::shared_ptr<Tensor_attributes>, 3>
