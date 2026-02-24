@@ -647,7 +647,7 @@ class BlockScaledContiguousGroupedGemmKernel:
             self.mma_inst_shape_mn,
         )
 
-        # For 2CTA blockscaled kernels, SFB needs to be replicated across peer CTAs. # {$nv-internal-release}
+        # For 2CTA blockscaled kernels, SFB needs to be replicated across peer CTAs.
         tiled_mma_sfb = sm100_utils.make_blockscaled_trivial_tiled_mma(
             self.a_dtype,
             self.a_major_mode,
@@ -709,10 +709,8 @@ class BlockScaledContiguousGroupedGemmKernel:
             internal_type=cutlass.Int16,
         )
 
-        # {$nv-internal-release begin}
         # This modifies the layout to handle overlapping 256x(# of scale factors for a single column of B (nNSF))
         # logical blocks for SFB when cta_tile_shape_n=192.
-        # {$nv-internal-release end}
         if cutlass.const_expr(self.cta_tile_shape_mnk[1] == 192):
             x = tma_tensor_sfb.stride[0][1]
             y = cute.ceil_div(tma_tensor_sfb.shape[0][1], 4)
@@ -1764,7 +1762,7 @@ class BlockScaledContiguousGroupedGemmKernel:
                 # ((atom_v, rest_v), RestK)
                 tAgSFA_slice = tAgSFA[(None, mma_tile_coord_mnl[0], None, 0)]
 
-                # Apply SFB slicing hack when cta_tile_shape_n=64 # {$nv-internal-release}
+                # Apply SFB slicing when cta_tile_shape_n=64
                 slice_n = mma_tile_coord_mnl[1]
                 if cutlass.const_expr(self.cta_tile_shape_mnk[1] == 64):
                     slice_n = mma_tile_coord_mnl[1] // 2
@@ -1958,8 +1956,7 @@ class BlockScaledContiguousGroupedGemmKernel:
 
                 tCtAcc = tCtAcc_base[(None, None, None, acc_stage_index)]
 
-                # Apply TMEM pointer offset hack when cta_tile_shape_n=192 or cta_tile_shape_n=64 # {$nv-internal-release}
-
+                # Apply TMEM pointer offset shift when cta_tile_shape_n=192 or cta_tile_shape_n=64
                 tCtSFB_mma = tCtSFB
                 if cutlass.const_expr(self.cta_tile_shape_mnk[1] == 192):
                     # If this is an ODD tile, shift the TMEM start address for cta_tile_shape_n=192 case by two words (ignores first 64 columns of SFB)
@@ -2349,7 +2346,7 @@ class BlockScaledContiguousGroupedGemmKernel:
                     real_subtile_idx = subtile_idx // 2
                     if cutlass.const_expr(self.overlapping_accum):
                         if reverse_subtile:
-                            # Subtile always iterates on N dimension as we only have 4x1DP tmem load pattern for cta_tile_m = 128 cases. # {$nv-internal-release}
+                            # Subtile always iterates on N dimension as we only have 4x1DP tmem load pattern for cta_tile_m = 128 cases.
                             real_subtile_idx = self.cta_tile_shape_mnk[1] // self.epi_tile_n_required - 1 - subtile_idx // 2
 
                     #

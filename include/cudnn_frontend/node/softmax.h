@@ -192,7 +192,7 @@ class CompositeSoftmaxNode : public SoftmaxNodeBase<CompositeSoftmaxNode> {
             reduction(exp_output, sum_attributes, sum_output);
         }
 
-        // WAR when:
+        // Set to virtual when:
         // - softmax stats in not requested
         // - max and sum_exp are not requested
         if (!has_stats() && !has_max() && !has_sum_exp()) {

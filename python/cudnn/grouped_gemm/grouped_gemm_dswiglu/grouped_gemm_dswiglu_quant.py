@@ -651,7 +651,7 @@ class BlockScaledContiguousGroupedGemmKernel:
             self.mma_inst_shape_mn,
         )
 
-        # For 2CTA blockscaled kernels, SFB needs to be replicated across peer CTAs. # {$nv-internal-release}
+        # For 2CTA blockscaled kernels, SFB needs to be replicated across peer CTAs.
         tiled_mma_sfb = sm100_utils.make_blockscaled_trivial_tiled_mma(
             self.a_dtype,
             self.a_major_mode,
@@ -713,10 +713,8 @@ class BlockScaledContiguousGroupedGemmKernel:
             internal_type=cutlass.Int16,
         )
 
-        # {$nv-internal-release begin}
         # This modifies the layout to handle overlapping 256x(# of scale factors for a single column of B (nNSF))
         # logical blocks for SFB when cta_tile_shape_n=192.
-        # {$nv-internal-release end}
         if cutlass.const_expr(self.cta_tile_shape_mnk[1] == 192):
             x = tma_tensor_sfb.stride[0][1]
             y = cute.ceil_div(tma_tensor_sfb.shape[0][1], 4)
@@ -2034,7 +2032,7 @@ class BlockScaledContiguousGroupedGemmKernel:
                 # ((atom_v, rest_v), RestK)
                 tAgSFA_slice = tAgSFA[(None, mma_tile_coord_mnl[0], None, 0)]
 
-                # Apply SFB slicing hack when cta_tile_shape_n=64 # {$nv-internal-release}
+                # Apply SFB slicing when cta_tile_shape_n=64
                 slice_n = mma_tile_coord_mnl[1]
                 if cutlass.const_expr(self.cta_tile_shape_mnk[1] == 64):
                     slice_n = mma_tile_coord_mnl[1] // 2
@@ -2228,8 +2226,7 @@ class BlockScaledContiguousGroupedGemmKernel:
 
                 tCtAcc = tCtAcc_base[(None, None, None, acc_stage_index)]
 
-                # Apply TMEM pointer offset hack when cta_tile_shape_n=192 or cta_tile_shape_n=64 # {$nv-internal-release}
-
+                # Apply TMEM pointer offset shift when cta_tile_shape_n=192 or cta_tile_shape_n=64
                 tCtSFB_mma = tCtSFB
                 if cutlass.const_expr(self.cta_tile_shape_mnk[1] == 192):
                     # If this is an ODD tile, shift the TMEM start address for cta_tile_shape_n=192 case by two words (ignores first 64 columns of SFB)
@@ -2622,7 +2619,7 @@ class BlockScaledContiguousGroupedGemmKernel:
                     real_subtile_idx_next = subtile_idx + 1
                     if cutlass.const_expr(self.overlapping_accum):
                         if reverse_subtile:
-                            # Subtile always iterates on N dimension as we only have 4x1DP tmem load pattern for cta_tile_m = 128 cases. # {$nv-internal-release}
+                            # Subtile always iterates on N dimension as we only have 4x1DP tmem load pattern for cta_tile_m = 128 cases.
                             real_subtile_idx = self.cta_tile_shape_mnk[1] // self.epi_tile_n_required - 1 - subtile_idx
                             real_subtile_idx_next = self.cta_tile_shape_mnk[1] // self.epi_tile_n_required - 1 - subtile_idx - 1
                     #
@@ -3154,7 +3151,7 @@ class BlockScaledContiguousGroupedGemmKernel:
                     real_subtile_idx = subtile_idx
                     if cutlass.const_expr(self.overlapping_accum):
                         if reverse_subtile:
-                            # Subtile always iterates on N dimension as we only have 4x1DP tmem load pattern for cta_tile_m = 128 cases. # {$nv-internal-release}
+                            # Subtile always iterates on N dimension as we only have 4x1DP tmem load pattern for cta_tile_m = 128 cases.
                             real_subtile_idx = subtile_cnt - 1 - subtile_idx
                     # Load C from global memory to shared memory using TMALDG
                     c_pipeline.producer_acquire(c_pipeline_producer_state)
@@ -3643,313 +3640,6 @@ class BlockScaledContiguousGroupedGemmKernel:
         if dtype == cutlass.Float8E5M2:
             return 1 / 128.0
         return 1.0
-
-    @staticmethod
-    def is_valid_dtypes_and_scale_factor_vec_size(
-        ab_dtype: Type[cutlass.Numeric],
-        sf_dtype: Type[cutlass.Numeric],
-        sf_vec_size: int,
-        acc_dtype: Type[cutlass.Numeric],
-        d_dtype: Type[cutlass.Numeric],
-    ) -> bool:
-        """
-        Check if the dtypes are valid
-
-        :param ab_dtype: The data type of the A and B operands
-        :type ab_dtype: Type[cutlass.Numeric]
-        :param sf_dtype: The data type of the scale factor
-        :type sf_dtype: Type[cutlass.Numeric]
-        :param sf_vec_size: The vector size of the scale factor
-        :type sf_vec_size: int
-        :param acc_dtype: The data type of the accumulator
-        :type acc_dtype: Type[cutlass.Numeric]
-        :param d_dtype: The data type of the output tensor
-        :type d_dtype: Type[cutlass.Numeric]
-
-        :return: True if the dtypes are valid, False otherwise
-        :rtype: bool
-        """
-        is_valid = True
-        if ab_dtype not in {
-            cutlass.Float4E2M1FN,
-            cutlass.Float8E5M2,
-            cutlass.Float8E4M3FN,
-        }:
-            is_valid = False
-
-        # Check valid sf_vec_size
-        if sf_vec_size not in {16, 32}:
-            is_valid = False
-
-        # Check valid sf_dtype
-        if sf_dtype not in {cutlass.Float8E8M0FNU, cutlass.Float8E4M3FN}:
-            is_valid = False
-
-        # Check valid sf_dtype and sf_vec_size combinations
-        if sf_dtype == cutlass.Float8E4M3FN and sf_vec_size == 32:
-            is_valid = False
-        if ab_dtype in {cutlass.Float8E5M2, cutlass.Float8E4M3FN} and sf_vec_size == 16:
-            is_valid = False
-
-        if acc_dtype not in {cutlass.Float32}:
-            is_valid = False
-
-        # Check valid d_dtype
-        if d_dtype not in {
-            cutlass.Float32,
-            cutlass.Float16,
-            cutlass.BFloat16,
-            cutlass.Float8E5M2,
-            cutlass.Float8E4M3FN,
-            cutlass.Float4E2M1FN,
-        }:
-            is_valid = False
-
-        return is_valid
-
-    @staticmethod
-    def is_valid_layouts(
-        ab_dtype: Type[cutlass.Numeric],
-        d_dtype: Type[cutlass.Numeric],
-        a_major: str,
-        b_major: str,
-        cd_major: str,
-    ) -> bool:
-        """
-        Check if layouts and dtypes are valid combinations
-
-        :param ab_dtype: The data type of the A and B operands
-        :type ab_dtype: Type[cutlass.Numeric]
-        :param d_dtype: The data type of the output tensor
-        :type d_dtype: Type[cutlass.Numeric]
-        :param a_major: The major dimension of the A tensor
-        :type a_major: str
-        :param b_major: The major dimension of the B tensor
-        :type b_major: str
-        :param cd_major: The major dimension of the D tensor
-        :type cd_major: str
-
-        :return: True if the layouts are valid, False otherwise
-        :rtype: bool
-        """
-        is_valid = True
-
-        if ab_dtype is cutlass.Float4E2M1FN and not (a_major == "k"):
-            is_valid = False
-        # {$nv-internal-release begin}
-        # TODO: Currently we don't support m major output for Float4E2M1FN,
-        # Need to support it in the future.
-        if d_dtype is cutlass.Float4E2M1FN and cd_major == "m":
-            is_valid = False
-        # {$nv-internal-release end}
-        return is_valid
-
-    @staticmethod
-    def is_valid_mma_tiler_and_cluster_shape(
-        use_2cta_instrs: bool,
-        mma_tiler_mn: Tuple[int, int],
-        cluster_shape_mn: Tuple[int, int],
-        m_aligned: int,
-    ) -> bool:
-        """
-        Check if the mma tiler and cluster shape are valid
-
-        :param use_2cta_instrs: Whether to use 2 CTA groups
-        :type use_2cta_instrs: bool
-        :param mma_tiler_mn: The (M, N) shape of the MMA instruction tiler
-        :type mma_tiler_mn: Tuple[int, int]
-        :param cluster_shape_mn: The (ClusterM, ClusterN) shape of the CTA cluster
-        :type cluster_shape_mn: Tuple[int, int]
-        :param m_aligned: The alignment requirement for group M dimension. MUST equal FIX_PAD_SIZE (256).
-        :type m_aligned: int
-
-        :return: True if the mma tiler and cluster shape are valid, False otherwise
-        :rtype: bool
-        """
-        is_valid = True
-
-        # Skip invalid mma tile shape
-        if not ((not use_2cta_instrs and mma_tiler_mn[0] in [64, 128]) or (use_2cta_instrs and mma_tiler_mn[0] in [128, 256])):
-            is_valid = False
-        # Skip invalid mma tile n
-        # Needs to have even iterations with Epi Tile N 64 for swiGeLU fusion
-        if mma_tiler_mn[1] not in (128, 256):
-            is_valid = False
-        # Skip illegal cluster shape
-        if cluster_shape_mn[0] % (2 if use_2cta_instrs else 1) != 0:
-            is_valid = False
-        # Skip invalid cluster shape
-        is_power_of_2 = lambda x: x > 0 and (x & (x - 1)) == 0
-        if (
-            cluster_shape_mn[0] * cluster_shape_mn[1] > 16
-            or cluster_shape_mn[0] <= 0
-            or cluster_shape_mn[1] <= 0
-            # Special cluster shape check for scale factor multicasts.
-            # Due to limited size of scale factors, we can't multicast among more than 4 CTAs.
-            or cluster_shape_mn[0] > 4
-            or cluster_shape_mn[1] > 4
-            or not is_power_of_2(cluster_shape_mn[0])
-            or not is_power_of_2(cluster_shape_mn[1])
-        ):
-            is_valid = False
-        cluster_tiler_m = (cluster_shape_mn[0] // (2 if use_2cta_instrs else 1)) * mma_tiler_mn[0]
-
-        # Skip invalid cluster tiler shape since contiguous layout can't handle oob access
-        # The contiguous layout means the aligned data is stored in a contiguous manner.
-        # It can't handle runtime oob when alignment is not align with the tile_M,
-        # since the problem shape of TMA store can't be changed at runtime.
-        if cluster_tiler_m not in [128, 256]:
-            is_valid = False
-
-        # Check if m_aligned is a multiple of mma_tiler_mn[0]
-        # This ensures that each group's M dimension (which is a multiple of m_aligned)
-        # won't be split across tiles, preventing a single tile from loading data
-        # from multiple groups (which would access wrong B matrix data)
-        if m_aligned % mma_tiler_mn[0] != 0:
-            is_valid = False
-
-        # NEW REQUIREMENT: m_aligned must equal FIX_PAD_SIZE
-        # This is required for the new padded_offsets interface
-        if m_aligned != BlockScaledContiguousGroupedGemmKernel.FIX_PAD_SIZE:
-            is_valid = False
-
-        return is_valid
-
-    @staticmethod
-    def is_valid_tensor_alignment(
-        m: int,
-        n: int,
-        k: int,
-        l: int,
-        ab_dtype: Type[cutlass.Numeric],
-        d_dtype: Type[cutlass.Numeric],
-        a_major: str,
-        b_major: str,
-        cd_major: str,
-    ) -> bool:
-        """
-        Check if the tensor alignment is valid
-
-        :param m: The number of rows in the A tensor
-        :type m: int
-        :param n: The number of columns in the B tensor
-        :type n: int
-        :param k: The number of columns in the A tensor
-        :type k: int
-        :param l: The number of columns in the D tensor
-        :type l: int
-        :param ab_dtype: The data type of the A and B operands
-        :type ab_dtype: Type[cutlass.Numeric]
-        :param d_dtype: The data type of the output tensor
-        :type d_dtype: Type[cutlass.Numeric]
-        :param a_major: The major axis of the A tensor
-        :type a_major: str
-        :param b_major: The major axis of the B tensor
-        :type b_major: str
-        :param cd_major: The major axis of the D tensor
-        :type cd_major: str
-
-        :return: True if the problem shape is valid, False otherwise
-        :rtype: bool
-        """
-        is_valid = True
-
-        def check_contigous_16B_alignment(dtype, is_mode0_major, tensor_shape):
-            major_mode_idx = 0 if is_mode0_major else 1
-            num_major_elements = tensor_shape[major_mode_idx]
-            num_contiguous_elements = 16 * 8 // dtype.width
-            return num_major_elements % num_contiguous_elements == 0
-
-        if (
-            not check_contigous_16B_alignment(ab_dtype, a_major == "m", (m, k, l))
-            or not check_contigous_16B_alignment(ab_dtype, b_major == "n", (n, k, l))
-            or not check_contigous_16B_alignment(d_dtype, cd_major == "m", (m, n, l))
-        ):
-            is_valid = False
-        return is_valid
-
-    @staticmethod
-    def can_implement(
-        ab_dtype: Type[cutlass.Numeric],
-        sf_dtype: Type[cutlass.Numeric],
-        sf_vec_size: int,
-        acc_dtype: Type[cutlass.Numeric],
-        d_dtype: Type[cutlass.Numeric],
-        use_2cta_instrs: bool,
-        mma_tiler_mn: Tuple[int, int],
-        cluster_shape_mn: Tuple[int, int],
-        m: int,
-        n: int,
-        k: int,
-        l: int,
-        a_major: str,
-        b_major: str,
-        cd_major: str,
-        m_aligned: int,
-    ) -> bool:
-        """
-        Check if the gemm can be implemented
-
-        :param ab_dtype: The data type of the A and B operands
-        :type ab_dtype: Type[cutlass.Numeric]
-        :param sf_dtype: The data type of the scale factor
-        :type sf_dtype: Type[cutlass.Numeric]
-        :param sf_vec_size: The vector size of the scale factor
-        :type sf_vec_size: int
-        :param acc_dtype: The data type of the accumulator
-        :type acc_dtype: Type[cutlass.Numeric]
-        :param d_dtype: The data type of the output tensor
-        :type d_dtype: Type[cutlass.Numeric]
-        :param use_2cta_instrs: Whether to use 2 CTA groups
-        :type use_2cta_instrs: bool
-        :param mma_tiler_mn: The (M, N) shape of the MMA instruction tiler
-        :type mma_tiler_mn: Tuple[int, int]
-        :param cluster_shape_mn: The (ClusterM, ClusterN) shape of the CTA cluster
-        :type cluster_shape_mn: Tuple[int, int]
-        :param m: The number of rows in the A tensor
-        :type m: int
-        :param n: The number of columns in the B tensor
-        :type n: int
-        :param k: The number of columns in the A tensor
-        :type k: int
-        :param l: The number of columns in the D tensor
-        :type l: int
-        :param a_major: The major axis of the A tensor
-        :type a_major: str
-        :param b_major: The major axis of the B tensor
-        :type b_major: str
-        :param cd_major: The major axis of the D tensor
-        :type cd_major: str
-        :param m_aligned: The alignment requirement for group M dimension. MUST equal FIX_PAD_SIZE (256).
-        :type m_aligned: int
-
-        :return: True if the gemm can be implemented, False otherwise
-        :rtype: bool
-        """
-        can_implement = True
-
-        # Validate m_aligned requirement
-        if m_aligned != BlockScaledContiguousGroupedGemmKernel.FIX_PAD_SIZE:
-            can_implement = False
-
-        # Skip unsupported types
-        if not BlockScaledContiguousGroupedGemmKernel.is_valid_dtypes_and_scale_factor_vec_size(ab_dtype, sf_dtype, sf_vec_size, acc_dtype, d_dtype):
-            can_implement = False
-
-        # Skip unsupported layouts
-        if not BlockScaledContiguousGroupedGemmKernel.is_valid_layouts(ab_dtype, d_dtype, a_major, b_major, cd_major):
-            can_implement = False
-
-        # Skip invalid mma tile shape and cluster shape
-        if not BlockScaledContiguousGroupedGemmKernel.is_valid_mma_tiler_and_cluster_shape(use_2cta_instrs, mma_tiler_mn, cluster_shape_mn, m_aligned):
-            can_implement = False
-        # Skip illegal problem shape for load/store alignment
-        if not BlockScaledContiguousGroupedGemmKernel.is_valid_tensor_alignment(m, n, k, l, ab_dtype, d_dtype, a_major, b_major, cd_major):
-            can_implement = False
-        # Skip unsupported A/B layout
-        if not (a_major == "k"):
-            can_implement = False
-        return can_implement
 
     @staticmethod
     def get_amax_smem_size():

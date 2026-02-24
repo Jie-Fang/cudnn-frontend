@@ -704,13 +704,12 @@ class CompositeSDPANode : public SDPANodeBase<CompositeSDPANode> {
                 Pointwise_attributes().set_name("gen_col_index").set_mode(PointwiseMode_t::GEN_INDEX).set_axis(3);
             auto col_index_output = pointwise(last_output, col_index_attributes);
             // scalar seq_kv only needs to be passed in case there in no padding mask and seq_kv is not multiple of 64.
-            // Also future versions of cudnn will not need it, hence tensor is pre-fixed with WAR.
-            auto WAR_scalar_max_seq_kv = std::make_shared<Tensor_attributes>(static_cast<int32_t>(s_kv));
+            // Also future versions of cudnn will not need it, hence tensor is pre-fixed.
+            auto scalar_max_seq_kv = std::make_shared<Tensor_attributes>(static_cast<int32_t>(s_kv));
 
             auto col_less_seq_kv_attributes =
                 Pointwise_attributes().set_name("col_less_seq_kv").set_mode(PointwiseMode_t::CMP_LT);
-            auto col_less_seq_kv_output =
-                pointwise(col_index_output, WAR_scalar_max_seq_kv, col_less_seq_kv_attributes);
+            auto col_less_seq_kv_output = pointwise(col_index_output, scalar_max_seq_kv, col_less_seq_kv_attributes);
 
             // Lower attributes to binary select attributes
             auto negative_inf_padding =
@@ -1566,7 +1565,7 @@ class CompositeSDPABackwardNode : public NodeCRTP<CompositeSDPABackwardNode> {
                                 attributes.inputs[input_names::Stats],
                                 Pointwise_attributes().set_name("sub_s_m").set_mode(PointwiseMode_t::SUB));
 
-        // WAR for bug 4475073 by explicitly putting the padding value again after the stats have been loaded
+        // Explicitly put the padding value again after the stats have been loaded
         if (attributes.padding_mask && detail::get_backend_version() >= 90000 &&
             detail::get_backend_version() < 91000) {
             auto row_idx_output = pointwise(last_output,
@@ -1694,15 +1693,15 @@ class CompositeSDPABackwardNode : public NodeCRTP<CompositeSDPABackwardNode> {
 
             if (attributes.outputs[output_names::dV]->get_ragged_offset() &&
                 attributes.max_total_seq_len_kv.has_value()) {
-                // hack 1 - map dV strides to dV_fullhead strides
+                // map dV strides to dV_fullhead strides
                 std::vector<int64_t> dV_fullhead_stride = attributes.outputs[output_names::dV]->get_stride();
                 dV_fullhead_stride[2]                   = dV_fullhead_stride[2] * (h_q / h_v);  // sequence stride
                 dV_fullhead_stride[0]                   = dV_fullhead_stride[0] * (h_q / h_v);  // batch stride
                 dV_fullhead->set_stride(dV_fullhead_stride);
-                // hack 2 - map dV ragged offset to dV_fullhead ragged offset with implicit multiplier
+                // map dV ragged offset to dV_fullhead ragged offset with implicit multiplier
                 // implicit multiplier = h_q / h_v
                 dV_fullhead->set_ragged_offset(attributes.outputs[output_names::dV]->get_ragged_offset());
-                // hack 3 - non virtual dV full head
+                // non virtual dV full head
                 dV_fullhead->set_is_virtual(false);
                 dV_fullhead_size = attributes.max_total_seq_len_kv.value() * dV_fullhead_stride[2] * sizeof(float);
             } else {
@@ -1806,15 +1805,15 @@ class CompositeSDPABackwardNode : public NodeCRTP<CompositeSDPABackwardNode> {
             if (attributes.outputs[output_names::dK]->get_ragged_offset() &&
                 attributes.max_total_seq_len_kv.has_value()) {
                 // sized THD dK_full_heads
-                // hack 1 - map dK strides to dK_fullhead strides
+                // map dK strides to dK_fullhead strides
                 std::vector<int64_t> dK_fullhead_stride = attributes.outputs[output_names::dK]->get_stride();
                 dK_fullhead_stride[0]                   = dK_fullhead_stride[0] * (h_q / h_k);  // batch stride
                 dK_fullhead_stride[2]                   = dK_fullhead_stride[2] * (h_q / h_k);  // sequence stride
                 dK_fullhead->set_stride(dK_fullhead_stride);
-                // hack 2 - map dK ragged offset to dK_fullhead ragged offset with implicit multiplier
+                // map dK ragged offset to dK_fullhead ragged offset with implicit multiplier
                 // implicit multiplier = h_q / h_k
                 dK_fullhead->set_ragged_offset(attributes.outputs[output_names::dK]->get_ragged_offset());
-                // hack 3 - non virtual dK full head
+                // non virtual dK full head
                 dK_fullhead->set_is_virtual(false);
                 dK_fullhead_size = attributes.max_total_seq_len_kv.value() * dK_fullhead_stride[2] * sizeof(float);
             } else {

@@ -147,7 +147,6 @@ class Sm100BlockScaledPersistentDenseGemmKernel:
 
     :note: Constraints:
         - MMA tiler M must be 128 or 256 (use_2cta_instrs)
-        # TODO: Add 64 and 192 support # {$nv-internal-release}
         - MMA tiler N must be 128/256
         - Cluster shape M must be multiple of 2 if Mma tiler M is 256
         - Cluster shape M/N must be positive and power of 2, total cluster size <= 16
@@ -249,7 +248,6 @@ class Sm100BlockScaledPersistentDenseGemmKernel:
             self.mma_tiler[1],
         )
         # (CTA_Tile_Shape_M, Round_Up(MMA_Tile_Shape_N, 128), MMA_Inst_Shape_K)
-        # TODO: round up to 128, it is prepared for supporting N=64 or 192. # {$nv-internal-release}
         self.mma_inst_shape_mn_sfb = (
             self.mma_inst_shape_mn[0] // (2 if self.use_2cta_instrs else 1),
             cute.round_up(self.mma_inst_shape_mn[1], 128),
@@ -442,7 +440,7 @@ class Sm100BlockScaledPersistentDenseGemmKernel:
             self.mma_inst_shape_mn,
         )
 
-        # For 2CTA blockscaled kernels, SFB needs to be replicated across peer CTAs. # {$nv-internal-release}
+        # For 2CTA blockscaled kernels, SFB needs to be replicated across peer CTAs.
         tiled_mma_sfb = sm100_utils.make_blockscaled_trivial_tiled_mma(
             self.a_dtype,
             self.a_major_mode,
@@ -803,7 +801,7 @@ class Sm100BlockScaledPersistentDenseGemmKernel:
             cute.group_modes(tCgB, 0, 3),
         )
 
-        #  TMALDG_SFA partition_S/D
+        #  TMA load SFA partition_S/D
         sfa_cta_layout = a_cta_layout
         # ((atom_v, rest_v), STAGE)
         # ((atom_v, rest_v), RestM, RestK, RestL)
@@ -817,7 +815,7 @@ class Sm100BlockScaledPersistentDenseGemmKernel:
         tAsSFA = cute.filter_zeros(tAsSFA)
         tAgSFA = cute.filter_zeros(tAgSFA)
 
-        # TMALDG_SFB partition_S/D
+        # TMA load SFB partition_S/D
         sfb_cta_layout = cute.make_layout(cute.slice_(cluster_layout_sfb_vmnk, (0, None, 0, 0)).shape)
         # ((atom_v, rest_v), STAGE)
         # ((atom_v, rest_v), RestN, RestK, RestL)
