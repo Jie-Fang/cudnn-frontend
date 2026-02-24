@@ -166,8 +166,7 @@ def _tensor_like(cudnn_tensor: cudnn.tensor, tensor_type: str = "pyt") -> "torch
     dtype = cudnn.datatypes._cudnn_to_torch_data_type(cudnn_tensor.get_data_type())
     if dtype is None:
         raise TypeError(f"cuDNN uses an unsupported data type in PyTorch: {cudnn_tensor.get_data_type()}")
-    tensor = torch.empty(cudnn_tensor.get_dim(), device="cuda", dtype=dtype)
-    tensor = torch.as_strided(tensor, cudnn_tensor.get_dim(), cudnn_tensor.get_stride())
+    tensor = torch.empty_strided(cudnn_tensor.get_dim(), cudnn_tensor.get_stride(), device="cuda", dtype=dtype)
     return tensor
 
 
