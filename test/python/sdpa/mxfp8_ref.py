@@ -77,11 +77,11 @@ def compute_ref(q_fp8, k_fp8, v_fp8, sf_q_ref, sf_k_ref, sf_v_ref, attn_scale, u
         m_block = s_block.max(dim=-1, keepdim=True).values
         m_new = torch.maximum(m_old, m_block)
 
-        correction = torch.exp(m_old - m_new)
+        correction = torch.exp(m_old - m_new).nan_to_num()
         o = o * correction
         l_old = l_old * correction
 
-        p_block = torch.exp(s_block - m_new)
+        p_block = torch.exp(s_block - m_new).nan_to_num()
         l_new = l_old + p_block.sum(dim=-1, keepdim=True)
 
         # P (FP32) -> P (FP8)
@@ -91,7 +91,7 @@ def compute_ref(q_fp8, k_fp8, v_fp8, sf_q_ref, sf_k_ref, sf_v_ref, attn_scale, u
         m_old = m_new
         l_old = l_new
 
-    o = o / l_old
+    o = o / l_old.clamp(min=1.0)
 
     # O (FP32) -> O (output)
     o_ref = o.reshape(b, h_q, s_q, d_vo).to(output_type).float()

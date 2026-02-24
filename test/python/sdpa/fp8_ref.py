@@ -1,12 +1,13 @@
 import torch
+import cudnn
 
 # fmt: off
 
 
-def compute_amax(q, k, v, attn_scale):
+def compute_amax(q, k, v, attn_scale, bias=None, left_bound=None, right_bound=None, diag_align=None):
     """Compute amax values for o from float inputs."""
-    _, _, h_q, _ = q.shape
-    _, _, h_k, _ = k.shape
+    b, s_q, h_q, d_qk = q.shape
+    _, s_kv, h_k, _ = k.shape
     _, _, h_v, _ = v.shape
 
     if h_q != h_k:
@@ -16,7 +17,27 @@ def compute_amax(q, k, v, attn_scale):
 
     # Q @ K^T -> S
     s = torch.einsum("bqhd,bkhd->bhqk", q.float(), k.float()) * attn_scale
-    p = s.softmax(dim=-1)
+
+    if bias is not None:
+        s = s + bias.float()
+    if right_bound is not None and diag_align is not None:
+        if diag_align == cudnn.diagonal_alignment.TOP_LEFT:
+            causal_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=q.device)
+            causal_mask.triu_(diagonal=1 + right_bound)
+        else:
+            causal_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=q.device)
+            causal_mask.triu_(diagonal=s_kv - s_q + 1 + right_bound)
+        s = s.masked_fill(causal_mask, float('-inf'))
+    if left_bound is not None and diag_align is not None:
+        if diag_align == cudnn.diagonal_alignment.TOP_LEFT:
+            swa_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=q.device)
+            swa_mask.tril_(diagonal=-1 * left_bound)
+        else:
+            swa_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=q.device)
+            swa_mask.tril_(diagonal=-1 * left_bound + (s_kv - s_q))
+        s = s.masked_fill(swa_mask, float('-inf'))
+
+    p = s.softmax(dim=-1).nan_to_num()
 
     # P @ V -> O
     o = torch.einsum("bhqk,bkhd->bqhd", p, v.float())
@@ -25,10 +46,10 @@ def compute_amax(q, k, v, attn_scale):
 
     return o_amax
 
-def compute_backward_amax(q, k, v, o, dO, attn_scale):
+def compute_backward_amax(q, k, v, o, dO, attn_scale, bias=None, left_bound=None, right_bound=None, diag_align=None):
     """Compute amax values for dP, dQ, dK, dV from float inputs."""
-    _, _, h_q, _ = q.shape
-    _, _, h_k, _ = k.shape
+    b, s_q, h_q, d_qk = q.shape
+    _, s_kv, h_k, _ = k.shape
     _, _, h_v, _ = v.shape
 
     k_orig = k
@@ -40,7 +61,27 @@ def compute_backward_amax(q, k, v, o, dO, attn_scale):
 
     # Q @ K^T -> S
     s = torch.einsum("bqhd,bkhd->bhqk", q.float(), k.float()) * attn_scale
-    p = s.softmax(dim=-1)
+
+    if bias is not None:
+        s = s + bias.float()
+    if right_bound is not None and diag_align is not None:
+        if diag_align == cudnn.diagonal_alignment.TOP_LEFT:
+            causal_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=q.device)
+            causal_mask.triu_(diagonal=1 + right_bound)
+        else:
+            causal_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=q.device)
+            causal_mask.triu_(diagonal=s_kv - s_q + 1 + right_bound)
+        s = s.masked_fill(causal_mask, float('-inf'))
+    if left_bound is not None and diag_align is not None:
+        if diag_align == cudnn.diagonal_alignment.TOP_LEFT:
+            swa_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=q.device)
+            swa_mask.tril_(diagonal=-1 * left_bound)
+        else:
+            swa_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=q.device)
+            swa_mask.tril_(diagonal=-1 * left_bound + (s_kv - s_q))
+        s = s.masked_fill(swa_mask, float('-inf'))
+
+    p = s.softmax(dim=-1).nan_to_num()
 
     # P @ dO -> dV
     dV = torch.einsum("bhqk,bqhd->bkhd", p, dO.float())
@@ -74,7 +115,8 @@ def compute_ref(q, k, v, attn_scale,
                 q_descale, k_descale, v_descale,
                 s_scale, s_descale, torch_itype,
                 o_scale, torch_otype,
-                padding=None):
+                padding=None, bias=None,
+                left_bound=None, right_bound=None, diag_align=None):
     """Compute forward pass reference with online softmax tiling."""
     b, s_q, h_q, d_qk = q.shape
     _, s_kv, h_k, _ = k.shape
@@ -91,6 +133,26 @@ def compute_ref(q, k, v, attn_scale,
     k = k.transpose(1, 2)
     v = v.transpose(1, 2)
 
+    # Build combined_bias (shape: b, h_q, s_q, s_kv) before the tiled loop.
+    # Masking is encoded as -inf so it survives the per-block slicing.
+    combined_bias = torch.zeros((b, h_q, s_q, s_kv), dtype=torch.float32, device=q.device)
+    if bias is not None:
+        combined_bias = combined_bias + bias.float()
+    if right_bound is not None and diag_align is not None:
+        causal = torch.full((s_q, s_kv), float('-inf'), dtype=torch.float32, device=q.device)
+        if diag_align == cudnn.diagonal_alignment.TOP_LEFT:
+            causal = torch.triu(causal, diagonal=1 + right_bound)
+        else:
+            causal = torch.triu(causal, diagonal=s_kv - s_q + 1 + right_bound)
+        combined_bias = combined_bias + causal
+    if left_bound is not None and diag_align is not None:
+        swa = torch.full((s_q, s_kv), float('-inf'), dtype=torch.float32, device=q.device)
+        if diag_align == cudnn.diagonal_alignment.TOP_LEFT:
+            swa = torch.tril(swa, diagonal=-1 * left_bound)
+        else:
+            swa = torch.tril(swa, diagonal=-1 * left_bound + (s_kv - s_q))
+        combined_bias = combined_bias + swa
+
     block_size = 128
     num_blocks = (s_kv + block_size - 1) // block_size
 
@@ -106,6 +168,7 @@ def compute_ref(q, k, v, attn_scale,
 
         # Q (FP8) @ K^T (FP8) -> S (FP32)
         s_block = torch.einsum("bhqd,bhkd->bhqk", q.float(), k_block.float()) * q_descale * k_descale * attn_scale
+        s_block = s_block + combined_bias[:, :, :, start_idx:end_idx]
 
         if padding is not None:
             seq_len_q_pad, seq_len_kv_pad = padding
@@ -116,11 +179,11 @@ def compute_ref(q, k, v, attn_scale,
         m_block = s_block.max(dim=-1, keepdim=True).values
         m_new = torch.maximum(m_old, m_block)
 
-        correction = torch.exp(m_old - m_new)
+        correction = torch.exp(m_old - m_new).nan_to_num()
         o = o * correction
         l_old = l_old * correction
 
-        p_block = torch.exp(s_block - m_new)
+        p_block = torch.exp(s_block - m_new).nan_to_num()
         l_new = l_old + p_block.sum(dim=-1, keepdim=True)
 
         # P (FP32) -> P (FP8)
@@ -130,7 +193,7 @@ def compute_ref(q, k, v, attn_scale,
         m_old = m_new
         l_old = l_new
 
-    o = o / l_old
+    o = o / l_old.clamp(min=1.0)
     o = o.transpose(1, 2)
 
     # O (FP32) -> O (FP8)
@@ -144,10 +207,11 @@ def compute_ref_backward(q, k, v, o, dO, attn_scale,
                          o_descale, dO_descale,
                          dP_scale, dP_descale,
                          dQ_scale, dK_scale, dV_scale, torch_otype,
-                         padding=None):
+                         padding=None, bias=None,
+                         left_bound=None, right_bound=None, diag_align=None):
     """Compute backward pass reference."""
-    _, _, h_q, _ = q.shape
-    _, _, h_k, _ = k.shape
+    b, s_q, h_q, d_qk = q.shape
+    _, s_kv, h_k, _ = k.shape
     _, _, h_v, _ = v.shape
 
     k_orig = k
@@ -166,7 +230,26 @@ def compute_ref_backward(q, k, v, o, dO, attn_scale,
         kv_mask = kv_indices.unsqueeze(0) >= seq_len_kv_pad.view(-1, 1)
         s = s.masked_fill(kv_mask.unsqueeze(1).unsqueeze(2), float('-inf'))
 
-    p = s.softmax(dim=-1)
+    if bias is not None:
+        s = s + bias.float()
+    if right_bound is not None and diag_align is not None:
+        if diag_align == cudnn.diagonal_alignment.TOP_LEFT:
+            causal_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=q.device)
+            causal_mask.triu_(diagonal=1 + right_bound)
+        else:
+            causal_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=q.device)
+            causal_mask.triu_(diagonal=s_kv - s_q + 1 + right_bound)
+        s = s.masked_fill(causal_mask, float('-inf'))
+    if left_bound is not None and diag_align is not None:
+        if diag_align == cudnn.diagonal_alignment.TOP_LEFT:
+            swa_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=q.device)
+            swa_mask.tril_(diagonal=-1 * left_bound)
+        else:
+            swa_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=q.device)
+            swa_mask.tril_(diagonal=-1 * left_bound + (s_kv - s_q))
+        s = s.masked_fill(swa_mask, float('-inf'))
+
+    p = s.softmax(dim=-1).nan_to_num()
 
     # P (FP32) -> P (FP8)
     p_quant = (p * s_scale).to(torch_itype)

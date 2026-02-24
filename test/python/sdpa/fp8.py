@@ -221,7 +221,8 @@ def generate_graph_bwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d
         descale_q=q_descale, descale_k=k_descale, descale_v=v_descale,
         descale_o=o_descale, descale_dO=dO_descale, descale_s=s_descale, descale_dP=dP_descale,
         scale_s=s_scale, scale_dQ=dQ_scale, scale_dK=dK_scale, scale_dV=dV_scale, scale_dP=dP_scale,
-        attn_scale=attn_scale, use_padding_mask=use_padding_mask, use_deterministic_algorithm=deterministic,
+        attn_scale=attn_scale, use_padding_mask=use_padding_mask,
+        use_deterministic_algorithm=deterministic,
         seq_len_q=seq_len_q, seq_len_kv=seq_len_kv,
     )
 
@@ -334,7 +335,8 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
     k_amax = k_gen.abs().max().item()
     v_amax = v_gen.abs().max().item()
     s_amax = 1.0
-    o_amax = compute_amax(q_gen, k_gen, v_gen, attn_scale)
+    o_amax = compute_amax(q_gen, k_gen, v_gen, attn_scale,
+                          left_bound=left_bound, right_bound=right_bound, diag_align=diag_align)
 
     q_gpu = (q_gen * get_fp8_scale_factor(q_amax, torch_itype)).to(torch_itype)
     k_gpu = (k_gen * get_fp8_scale_factor(k_amax, torch_itype)).to(torch_itype)
@@ -426,7 +428,8 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
                             q_descale=q_descale_gpu, k_descale=k_descale_gpu, v_descale=v_descale_gpu,
                             s_scale=s_scale_gpu, s_descale=s_descale_gpu, torch_itype=torch_itype,
                             o_scale=o_scale_gpu, torch_otype=torch_otype,
-                            padding=padding)
+                            padding=padding,
+                            left_bound=left_bound, right_bound=right_bound, diag_align=diag_align)
 
         if is_ragged:
             # compute_ref returns BSHD, transpose to BHSD for convert_uniform_to_packed
