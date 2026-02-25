@@ -2174,6 +2174,7 @@ class SDPA_fp8_backward_attributes : public Attributes<SDPA_fp8_backward_attribu
 
     bool padding_mask               = false;
     bool is_deterministic_algorithm = false;
+    std::optional<int64_t> left_bound;
     std::optional<int64_t> right_bound;
     DiagonalAlignment_t diagonal_alignment = DiagonalAlignment_t::TOP_LEFT;
 
@@ -2230,6 +2231,7 @@ class SDPA_fp8_backward_attributes : public Attributes<SDPA_fp8_backward_attribu
                                    outputs,
                                    padding_mask,
                                    dropout_probability,
+                                   left_bound,
                                    right_bound,
                                    diagonal_alignment,
                                    attn_scale_value,
@@ -2309,6 +2311,17 @@ class SDPA_fp8_backward_attributes : public Attributes<SDPA_fp8_backward_attribu
     set_diagonal_band_right_bound(int const value) {
         right_bound = value;
         return *this;
+    }
+
+    SDPA_fp8_backward_attributes&
+    set_diagonal_band_left_bound(int const value) {
+        left_bound = value;
+        return *this;
+    }
+
+    bool
+    has_sliding_window() const {
+        return left_bound.has_value();
     }
 
     SDPA_fp8_backward_attributes&

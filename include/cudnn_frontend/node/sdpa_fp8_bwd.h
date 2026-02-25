@@ -204,6 +204,11 @@ class SDPAFP8BackwardNode : public NodeCRTP<SDPAFP8BackwardNode> {
                 error_code_t::GRAPH_NOT_SUPPORTED,
                 "Bottom right causal mask is only supported with s_q multiple of 64, and s_kv multiple of 64");
 
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            attributes.left_bound.has_value() && (!attributes.padding_mask) && s_q > s_kv,
+            error_code_t::GRAPH_NOT_SUPPORTED,
+            "Sliding window attention is only supported with max_s_q <= max_s_kv.");
+
         // validate that datatype is set for the graph
         RETURN_CUDNN_FRONTEND_ERROR_IF(context.get_intermediate_data_type() == DataType_t::NOT_SET,
                                        error_code_t::ATTRIBUTE_NOT_SET,
@@ -757,6 +762,19 @@ class SDPAFP8BackwardNode : public NodeCRTP<SDPAFP8BackwardNode> {
                 row_index_output->set_data_type(DataType_t::INT32);
             }
 
+            // For right_bound > 0, shift row index right by right_bound to widen the window
+            if (attributes.right_bound.value() != 0) {
+                auto right_bound_val = std::make_shared<Tensor_attributes>(
+                    static_cast<int32_t>(attributes.right_bound.value()));
+                row_index_output = pointwise(row_index_output,
+                                             right_bound_val,
+                                             Pointwise_attributes()
+                                                 .set_name("row_add_right_bound")
+                                                 .set_mode(PointwiseMode_t::ADD)
+                                                 .set_compute_data_type(DataType_t::INT32));
+                row_index_output->set_data_type(DataType_t::INT32);
+            }
+
             auto greater_than_attributes = Pointwise_attributes()
                                                .set_name("row_greater_than_col")
                                                .set_mode(PointwiseMode_t::CMP_GE)
@@ -771,6 +789,75 @@ class SDPAFP8BackwardNode : public NodeCRTP<SDPAFP8BackwardNode> {
             auto binary_select_attributes =
                 Pointwise_attributes().set_name("binary_select").set_mode(PointwiseMode_t::BINARY_SELECT);
             last_dV = pointwise(last_dV, negative_inf_causal, row_greater_than_col_output, binary_select_attributes);
+        }
+
+        //// Optional sliding window mask (left bound)
+        if (attributes.has_sliding_window()) {
+            // Generate row and col indices
+            auto row_idx_swa = pointwise(last_dV,
+                Pointwise_attributes().set_name("gen_row_idx_swa")
+                    .set_mode(PointwiseMode_t::GEN_INDEX).set_axis(2));
+            row_idx_swa->set_data_type(DataType_t::INT32);
+
+            auto col_idx_swa = pointwise(last_dV,
+                Pointwise_attributes().set_name("gen_col_idx_swa")
+                    .set_mode(PointwiseMode_t::GEN_INDEX).set_axis(3));
+            col_idx_swa->set_data_type(DataType_t::INT32);
+
+            // For BOTTOM_RIGHT: adjust row index by (s_kv - s_q)
+            if (attributes.diagonal_alignment == DiagonalAlignment_t::BOTTOM_RIGHT) {
+                if (attributes.inputs[input_names::SEQ_LEN_KV]) {
+                    row_idx_swa = pointwise(row_idx_swa,
+                        attributes.inputs[input_names::SEQ_LEN_KV],
+                        Pointwise_attributes().set_name("swa_row_add_skv")
+                            .set_mode(PointwiseMode_t::ADD)
+                            .set_compute_data_type(DataType_t::INT32));
+                } else {
+                    row_idx_swa = pointwise(row_idx_swa,
+                        std::make_shared<Tensor_attributes>(static_cast<int32_t>(s_kv)),
+                        Pointwise_attributes().set_name("swa_row_add_skv")
+                            .set_mode(PointwiseMode_t::ADD)
+                            .set_compute_data_type(DataType_t::INT32));
+                }
+                row_idx_swa->set_data_type(DataType_t::INT32);
+
+                if (attributes.inputs[input_names::SEQ_LEN_Q]) {
+                    row_idx_swa = pointwise(row_idx_swa,
+                        attributes.inputs[input_names::SEQ_LEN_Q],
+                        Pointwise_attributes().set_name("swa_row_sub_sq")
+                            .set_mode(PointwiseMode_t::SUB)
+                            .set_compute_data_type(DataType_t::INT32));
+                } else {
+                    row_idx_swa = pointwise(row_idx_swa,
+                        std::make_shared<Tensor_attributes>(static_cast<int32_t>(s_q)),
+                        Pointwise_attributes().set_name("swa_row_sub_sq")
+                            .set_mode(PointwiseMode_t::SUB)
+                            .set_compute_data_type(DataType_t::INT32));
+                }
+                row_idx_swa->set_data_type(DataType_t::INT32);
+            }
+
+            // Compute col + left_bound
+            auto left_bound_val = std::make_shared<Tensor_attributes>(
+                static_cast<int32_t>(attributes.left_bound.value()));
+            auto col_plus_lb = pointwise(col_idx_swa, left_bound_val,
+                Pointwise_attributes().set_name("col_add_left_bound")
+                    .set_mode(PointwiseMode_t::ADD)
+                    .set_compute_data_type(DataType_t::INT32));
+            col_plus_lb->set_data_type(DataType_t::INT32);
+
+            // Mask: keep where col + left_bound > row
+            auto swa_mask = pointwise(col_plus_lb, row_idx_swa,
+                Pointwise_attributes().set_name("swa_cmp_gt")
+                    .set_mode(PointwiseMode_t::CMP_GT)
+                    .set_compute_data_type(DataType_t::BOOLEAN));
+            swa_mask->set_data_type(DataType_t::BOOLEAN);
+
+            auto negative_inf_swa = std::make_shared<Tensor_attributes>(
+                attn::score_modifiers::get_negative_inf_value());
+            last_dV = pointwise(last_dV, negative_inf_swa, swa_mask,
+                Pointwise_attributes().set_name("swa_binary_select")
+                    .set_mode(PointwiseMode_t::BINARY_SELECT));
         }
 
         //// Apply Softmax

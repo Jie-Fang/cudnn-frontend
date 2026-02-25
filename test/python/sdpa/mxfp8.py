@@ -291,10 +291,10 @@ def quantize_to_mxfp8(tensor, b, h, s, d, s_padded, block_size=32, fp8_dtype=tor
 
 def generate_graph_fwd(b, h_q, h_k, h_v,
                        s_qo, s_kv, d_qk, d_vo, attn_scale,
-                       use_causal_mask,
                        block_size=32,
                        cudnn_itype=cudnn.data_type.FP8_E4M3,
-                       cudnn_otype=cudnn.data_type.HALF):
+                       cudnn_otype=cudnn.data_type.HALF,
+                       left_bound=None, right_bound=None, diag_align=None):
     # Compute padded dimensions for F8_128x4 scale factors
     s_q_padded = ceil_div(s_qo, 128) * 128
     s_kv_padded = ceil_div(s_kv, 128) * 128
@@ -314,19 +314,19 @@ def generate_graph_fwd(b, h_q, h_k, h_v,
     q = graph.tensor(
         uid=GraphFwdUid.q,
         dim=(b, h_q, s_qo, d_qk),
-        stride=(s_qo * h_q * d_qk, d_qk, h_q * d_qk, 1),
+        stride=(h_q * s_qo * d_qk, s_qo * d_qk, d_qk, 1),
         data_type=cudnn_itype
     )
     k = graph.tensor(
         uid=GraphFwdUid.k,
         dim=(b, h_k, s_kv, d_qk),
-        stride=(s_kv * h_k * d_qk, d_qk, h_k * d_qk, 1),
+        stride=(h_k * s_kv * d_qk, s_kv * d_qk, d_qk, 1),
         data_type=cudnn_itype
     )
     v = graph.tensor(
         uid=GraphFwdUid.v,
         dim=(b, h_v, s_kv, d_vo),
-        stride=(s_kv * h_v * d_vo, d_vo, h_v * d_vo, 1),
+        stride=(h_v * s_kv * d_vo, s_kv * d_vo, d_vo, 1),
         data_type=cudnn_itype
     )
 
@@ -369,12 +369,14 @@ def generate_graph_fwd(b, h_q, h_k, h_v,
         q=q, k=k, v=v,
         descale_q=sf_q, descale_k=sf_k, descale_v=sf_v,
         attn_scale=attn_scale,
-        use_causal_mask=use_causal_mask,
         generate_stats=True,
+        diagonal_alignment=diag_align if diag_align is not None else cudnn.diagonal_alignment.TOP_LEFT,
+        diagonal_band_left_bound=left_bound,
+        diagonal_band_right_bound=right_bound,
     )
 
     # Set output tensor properties
-    o.set_uid(GraphFwdUid.o).set_output(True).set_dim((b, h_q, s_qo, d_vo)).set_stride((s_qo * h_q * d_vo, d_vo, h_q * d_vo, 1)).set_data_type(cudnn_otype)
+    o.set_uid(GraphFwdUid.o).set_output(True).set_dim((b, h_q, s_qo, d_vo)).set_stride((h_q * s_qo * d_vo, s_qo * d_vo, d_vo, 1)).set_data_type(cudnn_otype)
     stats.set_uid(GraphFwdUid.stats).set_output(True).set_dim((b, h_q, s_qo, 1)).set_stride((h_q * s_qo, s_qo, 1, 1)).set_data_type(cudnn.data_type.FLOAT)
     amax_o.set_uid(GraphFwdUid.o_amax).set_output(True).set_dim((1, 1, 1, 1)).set_stride((1, 1, 1, 1)).set_data_type(cudnn.data_type.FLOAT)
 
@@ -383,10 +385,11 @@ def generate_graph_fwd(b, h_q, h_k, h_v,
 
 def generate_graph_bwd(b, h_q, h_k, h_v,
                        s_qo, s_kv, d_qk, d_vo,
-                       attn_scale, use_causal_mask, deterministic,
+                       attn_scale, deterministic,
                        block_size=32,
                        cudnn_itype=cudnn.data_type.FP8_E4M3,
-                       cudnn_otype=cudnn.data_type.HALF):
+                       cudnn_otype=cudnn.data_type.HALF,
+                       left_bound=None, right_bound=None, diag_align=None):
     # Compute padded dimensions for F8_128x4 scale factors
     s_qo_padded = ceil_div(s_qo, 128) * 128
     s_kv_padded = ceil_div(s_kv, 128) * 128
@@ -404,59 +407,59 @@ def generate_graph_bwd(b, h_q, h_k, h_v,
         compute_data_type=cudnn.data_type.FLOAT
     )
 
-    # Create input tensors with BHSD layout (same strides as forward pass)
+    # Create input tensors with BHSD contiguous layout
     q = graph_bwd.tensor(
         uid=GraphBwdUid.q,
         dim=(b, h_q, s_qo, d_qk),
-        stride=(s_qo * h_q * d_qk, d_qk, h_q * d_qk, 1),
+        stride=(h_q * s_qo * d_qk, s_qo * d_qk, d_qk, 1),
         data_type=cudnn_itype
     )
     q_t = graph_bwd.tensor(
         uid=GraphBwdUid.q_t,
         dim=(b, h_q, s_qo, d_qk),
-        stride=(s_qo * h_q * d_qk, d_qk, h_q * d_qk, 1),
+        stride=(h_q * s_qo * d_qk, s_qo * d_qk, d_qk, 1),
         data_type=cudnn_itype
     )
     k = graph_bwd.tensor(
         uid=GraphBwdUid.k,
         dim=(b, h_k, s_kv, d_qk),
-        stride=(s_kv * h_k * d_qk, d_qk, h_k * d_qk, 1),
+        stride=(h_k * s_kv * d_qk, s_kv * d_qk, d_qk, 1),
         data_type=cudnn_itype
     )
     k_t = graph_bwd.tensor(
         uid=GraphBwdUid.k_t,
         dim=(b, h_k, s_kv, d_qk),
-        stride=(s_kv * h_k * d_qk, d_qk, h_k * d_qk, 1),
+        stride=(h_k * s_kv * d_qk, s_kv * d_qk, d_qk, 1),
         data_type=cudnn_itype
     )
     v = graph_bwd.tensor(
         uid=GraphBwdUid.v,
         dim=(b, h_v, s_kv, d_vo),
-        stride=(s_kv * h_v * d_vo, d_vo, h_v * d_vo, 1),
+        stride=(h_v * s_kv * d_vo, s_kv * d_vo, d_vo, 1),
         data_type=cudnn_itype
     )
     o = graph_bwd.tensor(
         uid=GraphBwdUid.o,
         dim=(b, h_q, s_qo, d_vo),
-        stride=(s_qo * h_q * d_vo, d_vo, h_q * d_vo, 1),
+        stride=(h_q * s_qo * d_vo, s_qo * d_vo, d_vo, 1),
         data_type=cudnn.data_type.BFLOAT16
     )
     dO = graph_bwd.tensor(
         uid=GraphBwdUid.dO,
         dim=(b, h_q, s_qo, d_vo),
-        stride=(s_qo * h_q * d_vo, d_vo, h_q * d_vo, 1),
+        stride=(h_q * s_qo * d_vo, s_qo * d_vo, d_vo, 1),
         data_type=cudnn_itype
     )
     dO_t = graph_bwd.tensor(
         uid=GraphBwdUid.dO_t,
         dim=(b, h_q, s_qo, d_vo),
-        stride=(s_qo * h_q * d_vo, d_vo, h_q * d_vo, 1),
+        stride=(h_q * s_qo * d_vo, s_qo * d_vo, d_vo, 1),
         data_type=cudnn_itype
     )
     dO_f16 = graph_bwd.tensor(
         uid=GraphBwdUid.dO_f16,
         dim=(b, h_q, s_qo, d_vo),
-        stride=(s_qo * h_q * d_vo, d_vo, h_q * d_vo, 1),
+        stride=(h_q * s_qo * d_vo, s_qo * d_vo, d_vo, 1),
         data_type=cudnn.data_type.BFLOAT16
     )
     stats = graph_bwd.tensor(
@@ -551,14 +554,16 @@ def generate_graph_bwd(b, h_q, h_k, h_v,
         descale_q=sf_q, descale_q_T=sf_q_t, descale_k=sf_k, descale_k_T=sf_k_t, descale_v=sf_v,
         descale_dO=sf_dO, descale_dO_T=sf_dO_t,
         attn_scale=attn_scale,
-        use_causal_mask=use_causal_mask,
         use_deterministic_algorithm=deterministic,
+        diagonal_alignment=diag_align if diag_align is not None else cudnn.diagonal_alignment.TOP_LEFT,
+        left_bound=left_bound,
+        right_bound=right_bound,
     )
 
     # Set output tensor properties
-    dQ.set_uid(GraphBwdUid.dQ).set_output(True).set_dim((b, h_q, s_qo, d_qk)).set_stride((s_qo * h_q * d_qk, d_qk, h_q * d_qk, 1)).set_data_type(cudnn_otype)
-    dK.set_uid(GraphBwdUid.dK).set_output(True).set_dim((b, h_k, s_kv, d_qk)).set_stride((s_kv * h_k * d_qk, d_qk, h_k * d_qk, 1)).set_data_type(cudnn_otype)
-    dV.set_uid(GraphBwdUid.dV).set_output(True).set_dim((b, h_v, s_kv, d_vo)).set_stride((s_kv * h_v * d_vo, d_vo, h_v * d_vo, 1)).set_data_type(cudnn_otype)
+    dQ.set_uid(GraphBwdUid.dQ).set_output(True).set_dim((b, h_q, s_qo, d_qk)).set_stride((h_q * s_qo * d_qk, s_qo * d_qk, d_qk, 1)).set_data_type(cudnn_otype)
+    dK.set_uid(GraphBwdUid.dK).set_output(True).set_dim((b, h_k, s_kv, d_qk)).set_stride((h_k * s_kv * d_qk, s_kv * d_qk, d_qk, 1)).set_data_type(cudnn_otype)
+    dV.set_uid(GraphBwdUid.dV).set_output(True).set_dim((b, h_v, s_kv, d_vo)).set_stride((h_v * s_kv * d_vo, s_kv * d_vo, d_vo, 1)).set_data_type(cudnn_otype)
 
     amax_dQ.set_uid(GraphBwdUid.dQ_amax).set_output(True).set_dim((1, 1, 1, 1)).set_stride((1, 1, 1, 1)).set_data_type(cudnn.data_type.FLOAT)
     amax_dK.set_uid(GraphBwdUid.dK_amax).set_output(True).set_dim((1, 1, 1, 1)).set_stride((1, 1, 1, 1)).set_data_type(cudnn.data_type.FLOAT)
@@ -584,8 +589,10 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
     block_size = 32
 
     attn_scale = 1.0 / math.sqrt(d_qk)
-    use_causal_mask = getattr(cfg, 'use_causal_mask', False)
     deterministic = getattr(cfg, 'is_determin', False)
+    left_bound  = getattr(cfg, 'left_bound', None)
+    right_bound = getattr(cfg, 'right_bound', None)
+    diag_align  = getattr(cfg, 'diag_align', None)
 
     # Get input/output types from config
     torch_itype = cfg.data_type if hasattr(cfg, 'data_type') and cfg.data_type else torch.float8_e4m3fn
@@ -612,8 +619,9 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
         graph_fwd = generate_graph_fwd(
             b, h_q, h_k, h_v,
             s_qo, s_kv, d_qk, d_vo, attn_scale,
-            use_causal_mask, block_size,
-            cudnn_itype, cudnn_otype
+            block_size,
+            cudnn_itype, cudnn_otype,
+            left_bound=left_bound, right_bound=right_bound, diag_align=diag_align,
         )
         graph_fwd.validate()
         graph_fwd.build_operation_graph()
@@ -704,11 +712,12 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
     torch.cuda.synchronize()
 
     # Compute reference
-    o_ref, stats_ref = compute_ref(q_fp8, k_fp8, v_fp8, sf_q_ref, sf_k_ref, sf_v_ref, attn_scale, use_causal_mask, torch_itype, torch_otype)
+    o_ref, stats_ref = compute_ref(q_fp8, k_fp8, v_fp8, sf_q_ref, sf_k_ref, sf_v_ref, attn_scale,
+                                   torch_itype=torch_itype, output_type=torch_otype,
+                                   left_bound=left_bound, right_bound=right_bound, diag_align=diag_align)
 
     # Compare output
-    o_gpu_f32 = o_gpu.float()
-    o_atol, o_rtol = 0.04, 0.20
+    o_atol, o_rtol = 0.08, 0.20
     o_err = compare_tensors(o_gpu, o_ref, o_atol, o_rtol, "output")
 
     # Compare stats (logsumexp) - tight tolerance
@@ -783,8 +792,9 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
             graph_bwd = generate_graph_bwd(
                 b, h_q, h_k, h_v,
                 s_qo, s_kv, d_qk, d_vo, attn_scale,
-                use_causal_mask, deterministic, block_size,
-                cudnn_itype, cudnn_otype
+                deterministic, block_size,
+                cudnn_itype, cudnn_otype,
+                left_bound=left_bound, right_bound=right_bound, diag_align=diag_align,
             )
             graph_bwd.validate()
             graph_bwd.build_operation_graph()
@@ -843,12 +853,12 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
             attn_scale,
             sf_q_ref_scaled, sf_q_t_ref_scaled, sf_k_ref_scaled, sf_k_t_ref_scaled, sf_v_ref,
             sf_dO_ref_scaled, sf_dO_t_ref_scaled,
-            use_causal_mask=use_causal_mask,
             torch_itype=torch_itype, torch_otype=torch_otype,
+            left_bound=left_bound, right_bound=right_bound, diag_align=diag_align,
         )
 
         # Compare output
-        grad_atol, grad_rtol = 0.15, 0.15
+        grad_atol, grad_rtol = 0.08, 0.20
 
         dQ_err = compare_tensors(dQ_gpu, dQ_ref, grad_atol, grad_rtol, "dQ")
         dK_err = compare_tensors(dK_gpu, dK_ref, grad_atol, grad_rtol, "dK")

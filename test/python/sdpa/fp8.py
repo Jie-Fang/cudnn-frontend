@@ -164,7 +164,7 @@ def generate_graph_fwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d
 
     return graph_fwd
 
-def generate_graph_bwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, deterministic, is_ragged=False):
+def generate_graph_bwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, deterministic, is_ragged=False, left_bound=None, right_bound=None, diag_align=None):
     graph_bwd = cudnn.pygraph(io_data_type=cudnn_itype, intermediate_data_type=cudnn.data_type.FLOAT, compute_data_type=cudnn.data_type.FLOAT)
 
     stride_q = (s_qo * h_q * d_qk, d_qk, h_q * d_qk, 1)
@@ -222,6 +222,9 @@ def generate_graph_bwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d
         descale_o=o_descale, descale_dO=dO_descale, descale_s=s_descale, descale_dP=dP_descale,
         scale_s=s_scale, scale_dQ=dQ_scale, scale_dK=dK_scale, scale_dV=dV_scale, scale_dP=dP_scale,
         attn_scale=attn_scale, use_padding_mask=use_padding_mask,
+        diagonal_alignment=diag_align if diag_align is not None else cudnn.diagonal_alignment.TOP_LEFT,
+        left_bound=left_bound,
+        right_bound=right_bound,
         use_deterministic_algorithm=deterministic,
         seq_len_q=seq_len_q, seq_len_kv=seq_len_kv,
     )
@@ -313,7 +316,7 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
         if cfg.is_infer:
             graph = generate_graph_fwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, block_size, is_ragged=is_ragged, left_bound=left_bound, right_bound=right_bound, diag_align=diag_align)
         else:
-            graph = generate_graph_bwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, deterministic, is_ragged=is_ragged)
+            graph = generate_graph_bwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, deterministic, is_ragged=is_ragged, left_bound=left_bound, right_bound=right_bound, diag_align=diag_align)
         graph.validate()
         graph.build_operation_graph()
         graph.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
@@ -517,7 +520,7 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
         torch.cuda.synchronize()
 
         o_gen = o_gpu.float()
-        dP_amax, dQ_amax, dK_amax, dV_amax = compute_backward_amax(q_gen, k_gen, v_gen, o_gen if not is_ragged else torch.einsum("bhsd->bshd", convert_packed_to_uniform(o_gen, torch.tensor(seq_len_q_list, dtype=torch.int32, device="cuda"), s_qo)), dO_gen, attn_scale)
+        dP_amax, dQ_amax, dK_amax, dV_amax = compute_backward_amax(q_gen, k_gen, v_gen, o_gen if not is_ragged else torch.einsum("bhsd->bshd", convert_packed_to_uniform(o_gen, torch.tensor(seq_len_q_list, dtype=torch.int32, device="cuda"), s_qo)), dO_gen, attn_scale, left_bound=left_bound, right_bound=right_bound, diag_align=diag_align)
 
         o_descale_gpu = torch.tensor([get_fp8_descale_factor(o_amax, torch_otype)], dtype=torch.float, device="cuda")
         dO_descale_gpu = torch.tensor([get_fp8_descale_factor(dO_amax, torch_itype)], dtype=torch.float, device="cuda")
@@ -613,7 +616,8 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
             o_descale=o_descale_gpu, dO_descale=dO_descale_gpu,
             dP_scale=dP_scale_gpu, dP_descale=dP_descale_gpu,
             dQ_scale=dQ_scale_gpu, dK_scale=dK_scale_gpu, dV_scale=dV_scale_gpu, torch_otype=torch_otype,
-            padding=padding_bwd
+            padding=padding_bwd,
+            left_bound=left_bound, right_bound=right_bound, diag_align=diag_align
         )
 
         if is_ragged:

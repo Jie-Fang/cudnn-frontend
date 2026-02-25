@@ -741,19 +741,63 @@ PyGraph::sdpa_fp8_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attribu
                            std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_kv,
                            bool const use_causal_mask,
                            bool const use_causal_mask_bottom_right,
+                           cudnn_frontend::DiagonalAlignment_t const& diagonal_alignment,
+                           py::object const& left_bound,
+                           py::object const& right_bound,
                            bool const use_deterministic_algorithm,
                            py::object const& dropout,
                            cudnn_frontend::DataType_t const& compute_data_type,
                            std::string const& name) {
+    cudnn_frontend::DiagonalAlignment_t actual_diagonal_alignment = diagonal_alignment;
+    py::object actual_right_bound                                 = right_bound;
+
+    if (use_causal_mask && use_causal_mask_bottom_right) {
+        throw std::runtime_error("use_causal_mask and use_causal_mask_bottom_right cannot both be true");
+    }
+
+    if (use_causal_mask && !right_bound.is_none()) {
+        throw std::runtime_error("use_causal_mask and diagonal_band_right_bound cannot be set at the same time");
+    }
+
+    if (use_causal_mask_bottom_right && !right_bound.is_none()) {
+        throw std::runtime_error(
+            "use_causal_mask_bottom_right and diagonal_band_right_bound cannot be set at the same time");
+    }
+
+    if (use_causal_mask) {
+        actual_diagonal_alignment = cudnn_frontend::DiagonalAlignment_t::TOP_LEFT;
+        actual_right_bound        = py::int_(0);
+    }
+
+    if (use_causal_mask_bottom_right) {
+        actual_diagonal_alignment = cudnn_frontend::DiagonalAlignment_t::BOTTOM_RIGHT;
+        actual_right_bound        = py::int_(0);
+    }
+
     auto attributes = cudnn_frontend::graph::SDPA_fp8_backward_attributes()
                           .set_padding_mask(use_padding_mask)
                           .set_seq_len_q(seq_len_q)
                           .set_seq_len_kv(seq_len_kv)
-                          .set_causal_mask(use_causal_mask)
-                          .set_causal_mask_bottom_right(use_causal_mask_bottom_right)
+                          .set_diagonal_alignment(actual_diagonal_alignment)
                           .set_deterministic_algorithm(use_deterministic_algorithm)
                           .set_compute_data_type(compute_data_type)
                           .set_name(name);
+
+    if (!left_bound.is_none()) {
+        if (py::isinstance<py::int_>(left_bound)) {
+            attributes.set_diagonal_band_left_bound(left_bound.cast<int64_t>());
+        } else {
+            throw std::runtime_error("left_bound must be an int (or None)");
+        }
+    }
+
+    if (!actual_right_bound.is_none()) {
+        if (py::isinstance<py::int_>(actual_right_bound)) {
+            attributes.set_diagonal_band_right_bound(actual_right_bound.cast<int64_t>());
+        } else {
+            throw std::runtime_error("right_bound must be an int (or None)");
+        }
+    }
 
     if (!attn_scale.is_none()) {
         if (py::isinstance<py::float_>(attn_scale)) {
@@ -850,19 +894,63 @@ PyGraph::sdpa_mxfp8_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attri
                              std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_kv,
                              bool const use_causal_mask,
                              bool const use_causal_mask_bottom_right,
+                             cudnn_frontend::DiagonalAlignment_t const& diagonal_alignment,
+                             py::object const& left_bound,
+                             py::object const& right_bound,
                              bool const use_deterministic_algorithm,
                              py::object const& dropout,
                              cudnn_frontend::DataType_t const& compute_data_type,
                              std::string const& name) {
+    cudnn_frontend::DiagonalAlignment_t actual_diagonal_alignment = diagonal_alignment;
+    py::object actual_right_bound                                 = right_bound;
+
+    if (use_causal_mask && use_causal_mask_bottom_right) {
+        throw std::runtime_error("use_causal_mask and use_causal_mask_bottom_right cannot both be true");
+    }
+
+    if (use_causal_mask && !right_bound.is_none()) {
+        throw std::runtime_error("use_causal_mask and diagonal_band_right_bound cannot be set at the same time");
+    }
+
+    if (use_causal_mask_bottom_right && !right_bound.is_none()) {
+        throw std::runtime_error(
+            "use_causal_mask_bottom_right and diagonal_band_right_bound cannot be set at the same time");
+    }
+
+    if (use_causal_mask) {
+        actual_diagonal_alignment = cudnn_frontend::DiagonalAlignment_t::TOP_LEFT;
+        actual_right_bound        = py::int_(0);
+    }
+
+    if (use_causal_mask_bottom_right) {
+        actual_diagonal_alignment = cudnn_frontend::DiagonalAlignment_t::BOTTOM_RIGHT;
+        actual_right_bound        = py::int_(0);
+    }
+
     auto attributes = cudnn_frontend::graph::SDPA_fp8_backward_attributes()
                           .set_padding_mask(use_padding_mask)
                           .set_seq_len_q(seq_len_q)
                           .set_seq_len_kv(seq_len_kv)
-                          .set_causal_mask(use_causal_mask)
-                          .set_causal_mask_bottom_right(use_causal_mask_bottom_right)
+                          .set_diagonal_alignment(actual_diagonal_alignment)
                           .set_deterministic_algorithm(use_deterministic_algorithm)
                           .set_compute_data_type(compute_data_type)
                           .set_name(name);
+
+    if (!left_bound.is_none()) {
+        if (py::isinstance<py::int_>(left_bound)) {
+            attributes.set_diagonal_band_left_bound(left_bound.cast<int64_t>());
+        } else {
+            throw std::runtime_error("left_bound must be an int (or None)");
+        }
+    }
+
+    if (!actual_right_bound.is_none()) {
+        if (py::isinstance<py::int_>(actual_right_bound)) {
+            attributes.set_diagonal_band_right_bound(actual_right_bound.cast<int64_t>());
+        } else {
+            throw std::runtime_error("right_bound must be an int (or None)");
+        }
+    }
 
     // Set attn_scale
     if (!attn_scale.is_none()) {
@@ -1256,6 +1344,9 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
           py::arg_v("seq_len_kv", nullptr),
           py::arg_v("use_causal_mask", false),
           py::arg_v("use_causal_mask_bottom_right", false),
+          py::arg_v("diagonal_alignment", cudnn_frontend::DiagonalAlignment_t::TOP_LEFT),
+          py::arg_v("left_bound", py::none()),
+          py::arg_v("right_bound", py::none()),
           py::arg_v("use_deterministic_algorithm", false),
           py::arg_v("dropout", py::none()),
           py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
@@ -1288,6 +1379,9 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
                     seq_len_kv (Optional[cudnn_tensor]): The sequence length of the key.
                     use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
                     use_causal_mask_bottom_right (Optional[bool]): Whether to use bottom right aligned causal mask. Default is False.
+                    diagonal_alignment (Optional[cudnn.diagonal_alignment]): One of {"TOP_LEFT", "BOTTOM_RIGHT"}. Default is TOP_LEFT.
+                    left_bound (Optional[int]): Offset to the left of the main diagonal to attend to. Default is None (+Inf).
+                    right_bound (Optional[int]): Offset to the right of the main diagonal to attend to. Default is None (+Inf).
                     use_deterministic_algorithm (Optional[bool]): Whether to always use deterministic algorithm. Default is False.
                     dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)], Tuple[mask: cudnn_tensor, scale: cudnn_tensor]]]): Whether to do dropout. Default is None.
                     compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
@@ -1327,13 +1421,16 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
           py::arg_v("seq_len_kv", nullptr),
           py::arg_v("use_causal_mask", false),
           py::arg_v("use_causal_mask_bottom_right", false),
+          py::arg_v("diagonal_alignment", cudnn_frontend::DiagonalAlignment_t::TOP_LEFT),
+          py::arg_v("left_bound", py::none()),
+          py::arg_v("right_bound", py::none()),
           py::arg_v("use_deterministic_algorithm", false),
           py::arg_v("dropout", py::none()),
           py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
           py::arg_v("name", ""),
           R"pbdoc(
                       Compute the key, query, value gradients of scaled dot product attention with mxfp8 (Microscaling FP8) datatype inputs and outputs.
-      
+
                       Args:
                           q (cudnn_tensor): The query data.
                           q_T (cudnn_tensor): The transposed query data.
@@ -1358,11 +1455,14 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
                           seq_len_kv (Optional[cudnn_tensor]): The sequence length of the key.
                           use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
                           use_causal_mask_bottom_right (Optional[bool]): Whether to use bottom right aligned causal mask. Default is False.
+                          diagonal_alignment (Optional[cudnn.diagonal_alignment]): Alignment of the diagonal band. Default is TOP_LEFT.
+                          left_bound (Optional[int]): Left bound for sliding window attention. Default is None (no left bound).
+                          right_bound (Optional[int]): Right bound for sliding window attention. Default is None (no right bound).
                           use_deterministic_algorithm (Optional[bool]): Whether to always use deterministic algorithm. Default is False.
                           dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)], Tuple[mask: cudnn_tensor, scale: cudnn_tensor]]]): Whether to do dropout. Default is None.
                           compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
                           name (Optional[str]): The name of the operation.
-      
+
                       Returns:
                           dQ (cudnn_tensor): The query gradient data.
                           dK (cudnn_tensor): The key gradient data.

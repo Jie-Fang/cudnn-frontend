@@ -1,8 +1,10 @@
 import torch
+import cudnn
 
 # fmt: off
 
-def compute_ref(q_fp8, k_fp8, v_fp8, sf_q_ref, sf_k_ref, sf_v_ref, attn_scale, use_causal_mask=False, torch_itype=torch.float8_e4m3fn, output_type=torch.bfloat16):
+def compute_ref(q_fp8, k_fp8, v_fp8, sf_q_ref, sf_k_ref, sf_v_ref, attn_scale, torch_itype=torch.float8_e4m3fn, output_type=torch.bfloat16,
+                left_bound=None, right_bound=None, diag_align=None):
     """
     Compute reference SDPA with MXFP8 dequantization.
     Takes FP8 inputs and converts to FP32 to match cuDNN behavior.
@@ -22,17 +24,13 @@ def compute_ref(q_fp8, k_fp8, v_fp8, sf_q_ref, sf_k_ref, sf_v_ref, attn_scale, u
         assert h_q % h_k == 0, "h_q must be divisible by h_k for GQA"
         repeats = h_q // h_k
         k_f32 = k_f32.repeat_interleave(repeats, dim=1)
-        sf_k_ref = sf_k_ref.reshape(sf_k_ref.shape[0], sf_k_ref.shape[1], b, h_k)
-        sf_k_ref = sf_k_ref.repeat_interleave(repeats, dim=3)
-        sf_k_ref = sf_k_ref.reshape(sf_k_ref.shape[0], sf_k_ref.shape[1], b * h_q)
+        sf_k_ref = sf_k_ref.view(b, h_k, *sf_k_ref.shape[1:]).repeat_interleave(repeats, dim=1).reshape(b * h_q, *sf_k_ref.shape[1:])
 
     if h_v != h_q:
         assert h_q % h_v == 0, "h_q must be divisible by h_v for GQA"
         repeats = h_q // h_v
         v_f32 = v_f32.repeat_interleave(repeats, dim=1)
-        sf_v_ref = sf_v_ref.reshape(sf_v_ref.shape[0], sf_v_ref.shape[1], b, h_v)
-        sf_v_ref = sf_v_ref.repeat_interleave(repeats, dim=3)
-        sf_v_ref = sf_v_ref.reshape(sf_v_ref.shape[0], sf_v_ref.shape[1], b * h_q)
+        sf_v_ref = sf_v_ref.view(b, h_v, *sf_v_ref.shape[1:]).repeat_interleave(repeats, dim=1).reshape(b * h_q, *sf_v_ref.shape[1:])
 
     # Reshape for batch processing: [B, H, S, D] -> [B*H, S, D]
     q = q_f32.reshape(b * h_q, s_q, d_qk)
@@ -46,9 +44,20 @@ def compute_ref(q_fp8, k_fp8, v_fp8, sf_q_ref, sf_k_ref, sf_v_ref, attn_scale, u
     v_dq = v * sf_v_ref
 
     bias = torch.zeros((b * h_q, s_q, s_kv), dtype=torch.float32, device=q.device)
-    if use_causal_mask:
-        bias = torch.full((b * h_q, s_q, s_kv), float('-inf'), dtype=torch.float32, device=q.device)
-        bias = torch.triu(bias, diagonal=1)
+    if right_bound is not None and diag_align is not None:
+        causal = torch.full((s_q, s_kv), float('-inf'), dtype=torch.float32, device=q.device)
+        if diag_align == cudnn.diagonal_alignment.TOP_LEFT:
+            causal = torch.triu(causal, diagonal=1 + right_bound)
+        else:
+            causal = torch.triu(causal, diagonal=s_kv - s_q + 1 + right_bound)
+        bias = bias + causal.unsqueeze(0)
+    if left_bound is not None and diag_align is not None:
+        swa = torch.full((s_q, s_kv), float('-inf'), dtype=torch.float32, device=q.device)
+        if diag_align == cudnn.diagonal_alignment.TOP_LEFT:
+            swa = torch.tril(swa, diagonal=-1 * left_bound)
+        else:
+            swa = torch.tril(swa, diagonal=-1 * left_bound + (s_kv - s_q))
+        bias = bias + swa.unsqueeze(0)
 
     block_size = 128
     num_blocks = (s_kv + block_size - 1) // block_size
@@ -96,8 +105,8 @@ def compute_ref(q_fp8, k_fp8, v_fp8, sf_q_ref, sf_k_ref, sf_v_ref, attn_scale, u
 
 def compute_ref_backward(q_fp8, q_t_fp8, k_fp8, k_t_fp8, v_fp8, o_f16, dO_f16, dO_fp8, dO_t_fp8, attn_scale,
                          sf_q_ref, sf_q_t_ref, sf_k_ref, sf_k_t_ref, sf_v_ref, sf_dO_ref, sf_dO_t_ref,
-                         use_causal_mask=False,
-                         torch_itype=torch.float8_e4m3fn, torch_otype=torch.bfloat16):
+                         torch_itype=torch.float8_e4m3fn, torch_otype=torch.bfloat16,
+                         left_bound=None, right_bound=None, diag_align=None):
     # Convert FP8 to FP32
     q_f32 = q_fp8.float()
     q_t_f32 = q_t_fp8.float()
@@ -155,9 +164,18 @@ def compute_ref_backward(q_fp8, q_t_fp8, k_fp8, k_t_fp8, v_fp8, o_f16, dO_f16, d
 
     s = torch.einsum("bqd,bkd->bqk", q_dq, k_dq) * attn_scale
 
-    if use_causal_mask:
-        causal_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=s.device).triu(diagonal=1)
-        s = s.masked_fill(causal_mask.unsqueeze(0), float('-inf'))
+    if right_bound is not None and diag_align is not None:
+        if diag_align == cudnn.diagonal_alignment.TOP_LEFT:
+            mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=s.device).triu(diagonal=1 + right_bound)
+        else:
+            mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=s.device).triu(diagonal=s_kv - s_q + 1 + right_bound)
+        s = s.masked_fill(mask.unsqueeze(0), float('-inf'))
+    if left_bound is not None and diag_align is not None:
+        if diag_align == cudnn.diagonal_alignment.TOP_LEFT:
+            swa_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=s.device).tril(diagonal=-1 * left_bound)
+        else:
+            swa_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=s.device).tril(diagonal=-1 * left_bound + (s_kv - s_q))
+        s = s.masked_fill(swa_mask.unsqueeze(0), float('-inf'))
 
     p = s.softmax(dim=-1).nan_to_num()
 
@@ -206,8 +224,8 @@ def compute_ref_backward(q_fp8, q_t_fp8, k_fp8, k_t_fp8, v_fp8, o_f16, dO_f16, d
         dV = dV.reshape(b, h_v, h_q // h_v, s_kv, d_vo).sum(dim=2)
 
     # Reshape to [B, H, S, D] and convert to output type
-    dQ = dQ.reshape(b, h_q, s_q, d_qk).to(torch_otype)
-    dK = dK.reshape(b, h_k, s_kv, d_qk).to(torch_otype)
-    dV = dV.reshape(b, h_v, s_kv, d_vo).to(torch_otype)
+    dQ = dQ.reshape(b, h_q, s_q, d_qk).to(torch_otype).float()
+    dK = dK.reshape(b, h_k, s_kv, d_qk).to(torch_otype).float()
+    dV = dV.reshape(b, h_v, s_kv, d_vo).to(torch_otype).float()
 
     return dQ, dK, dV
