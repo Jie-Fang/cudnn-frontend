@@ -3153,7 +3153,7 @@ class BlockScaledContiguousGroupedGemmKernel:
                         if reverse_subtile:
                             # Subtile always iterates on N dimension as we only have 4x1DP tmem load pattern for cta_tile_m = 128 cases.
                             real_subtile_idx = subtile_cnt - 1 - subtile_idx
-                    # Load C from global memory to shared memory using TMALDG
+                    # Load C from global memory to shared memory
                     c_pipeline.producer_acquire(c_pipeline_producer_state)
                     cute.copy(
                         tma_atom_c,
