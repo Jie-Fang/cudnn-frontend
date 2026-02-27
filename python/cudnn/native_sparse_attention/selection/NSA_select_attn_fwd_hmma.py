@@ -1045,8 +1045,8 @@ class HopperSelectAttentionFwd:
         warp_idx,
     ):
         cute.arch.fence_proxy(
-            cute.arch.ProxyKind.async_shared,
-            space=cute.arch.SharedSpace.shared_cta,
+            "async.shared",
+            space="cta",
         )
         cute.arch.barrier()
 
@@ -1104,8 +1104,8 @@ class HopperSelectAttentionFwd:
             cute.copy(tiled_copy_r2s, tRS_rD_out, tRS_dv_sD[(None, None, None, epi_buffer)])
 
             cute.arch.fence_proxy(
-                cute.arch.ProxyKind.async_shared,
-                space=cute.arch.SharedSpace.shared_cta,
+                "async.shared",
+                space="cta",
             )
             # barrier for sync
             cute.arch.barrier()

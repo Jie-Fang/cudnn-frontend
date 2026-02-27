@@ -176,9 +176,12 @@ def grouped_gemm_swiglu_init(
     :param b_major: Major dimension for B tensor.
     :return: Configuration dictionary
     """
-    major, _ = torch.cuda.get_device_capability()
-    if major < 10:
+    major, minor = torch.cuda.get_device_capability()
+    compute_capability = major * 10 + minor
+    if compute_capability < 100:
         pytest.skip(f"Environment not supported: requires compute capability >= 10, found {major}")
+    if compute_capability == 103:
+        pytest.skip("cuteDSL is not supported on SM103")
 
     # Parse CLI options
     nkl_str = request.config.getoption("--grouped-gemm-nkl", default=None)

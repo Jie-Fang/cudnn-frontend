@@ -44,7 +44,6 @@ from cutlass.cutlass_dsl import T
 from cutlass._mlir import ir
 from cutlass._mlir.dialects import llvm
 from cutlass._mlir.dialects import vector, arith
-from cutlass._mlir.dialects.nvvm import FPRoundingMode
 
 from ..utils import (
     PersistentTileSchedulerParams,
@@ -1232,7 +1231,7 @@ class BlockScaledContiguousGroupedGemmKernel:
                 ) = cute.arch.mul_packed_f32x2(
                     (vec[ei], vec[ei + 1]),
                     (acc_scale, acc_scale),
-                    rnd=FPRoundingMode.RN,
+                    rnd="rn",
                     ftz=False,
                 )
         else:
@@ -1304,13 +1303,13 @@ class BlockScaledContiguousGroupedGemmKernel:
             max_value0, max_value1 = cute.arch.mul_packed_f32x2(
                 (max_value0, max_value1),
                 (scale, scale),
-                rnd=FPRoundingMode.RN,
+                rnd="rn",
                 ftz=False,
             )
             max_value2, max_value3 = cute.arch.mul_packed_f32x2(
                 (max_value2, max_value3),
                 (scale, scale),
-                rnd=FPRoundingMode.RN,
+                rnd="rn",
                 ftz=False,
             )
 
@@ -1354,26 +1353,26 @@ class BlockScaledContiguousGroupedGemmKernel:
             acc_scale_col0, acc_scale_col1 = cute.arch.mul_packed_f32x2(
                 (norm_const, norm_const),
                 (max_value_rcp0, max_value_rcp1),
-                rnd=FPRoundingMode.RN,
+                rnd="rn",
                 ftz=False,
             )
             acc_scale_col2, acc_scale_col3 = cute.arch.mul_packed_f32x2(
                 (norm_const, norm_const),
                 (max_value_rcp2, max_value_rcp3),
-                rnd=FPRoundingMode.RN,
+                rnd="rn",
                 ftz=False,
             )
 
             tTR_rAcc_frg[vi], tTR_rAcc_frg[vi + 1] = cute.arch.mul_packed_f32x2(
                 (tTR_rAcc_frg[vi], tTR_rAcc_frg[vi + 1]),
                 (acc_scale_col0, acc_scale_col1),
-                rnd=FPRoundingMode.RN,
+                rnd="rn",
                 ftz=False,
             )
             tTR_rAcc_frg[vi + 2], tTR_rAcc_frg[vi + 3] = cute.arch.mul_packed_f32x2(
                 (tTR_rAcc_frg[vi + 2], tTR_rAcc_frg[vi + 3]),
                 (acc_scale_col2, acc_scale_col3),
-                rnd=FPRoundingMode.RN,
+                rnd="rn",
                 ftz=False,
             )
 
@@ -1960,8 +1959,8 @@ class BlockScaledContiguousGroupedGemmKernel:
                             sInfo[(5, tile_info_producer_state.index)] = tokens_presum_this_group
                         # fence view async shared
                     cute.arch.fence_proxy(
-                        cute.arch.ProxyKind.async_shared,
-                        space=cute.arch.SharedSpace.shared_cta,
+                        "async.shared",
+                        space="cta",
                     )
 
                     self.sched_sync_barrier.arrive_and_wait()
@@ -1979,8 +1978,8 @@ class BlockScaledContiguousGroupedGemmKernel:
                 sInfo[(2, tile_info_producer_state.index)] = cutlass.Int32(-1)
                 sInfo[(3, tile_info_producer_state.index)] = cutlass.Int32(0)
             cute.arch.fence_proxy(
-                cute.arch.ProxyKind.async_shared,
-                space=cute.arch.SharedSpace.shared_cta,
+                "async.shared",
+                space="cta",
             )
             self.sched_sync_barrier.arrive_and_wait()
             tile_info_pipeline.producer_commit(tile_info_producer_state)
@@ -2009,8 +2008,8 @@ class BlockScaledContiguousGroupedGemmKernel:
                 tile_info[idx] = sInfo[(idx, tile_info_consumer_state.index)]
             is_valid_tile = tile_info[3] == 1
             cute.arch.fence_proxy(
-                cute.arch.ProxyKind.async_shared,
-                space=cute.arch.SharedSpace.shared_cta,
+                "async.shared",
+                space="cta",
             )
             tile_info_pipeline.consumer_release(tile_info_consumer_state)
             tile_info_consumer_state.advance()
@@ -2108,8 +2107,8 @@ class BlockScaledContiguousGroupedGemmKernel:
                     tile_info[idx] = sInfo[(idx, tile_info_consumer_state.index)]
                 is_valid_tile = tile_info[3] == 1
                 cute.arch.fence_proxy(
-                    cute.arch.ProxyKind.async_shared,
-                    space=cute.arch.SharedSpace.shared_cta,
+                    "async.shared",
+                    space="cta",
                 )
                 tile_info_pipeline.consumer_release(tile_info_consumer_state)
                 tile_info_consumer_state.advance()
@@ -2193,8 +2192,8 @@ class BlockScaledContiguousGroupedGemmKernel:
                 tile_info[idx] = sInfo[(idx, tile_info_consumer_state.index)]
             is_valid_tile = tile_info[3] == 1
             cute.arch.fence_proxy(
-                cute.arch.ProxyKind.async_shared,
-                space=cute.arch.SharedSpace.shared_cta,
+                "async.shared",
+                space="cta",
             )
             tile_info_pipeline.consumer_release(tile_info_consumer_state)
             tile_info_consumer_state.advance()
@@ -2349,8 +2348,8 @@ class BlockScaledContiguousGroupedGemmKernel:
                     tile_info[idx] = sInfo[(idx, tile_info_consumer_state.index)]
                 is_valid_tile = tile_info[3] == 1
                 cute.arch.fence_proxy(
-                    cute.arch.ProxyKind.async_shared,
-                    space=cute.arch.SharedSpace.shared_cta,
+                    "async.shared",
+                    space="cta",
                 )
                 tile_info_pipeline.consumer_release(tile_info_consumer_state)
                 tile_info_consumer_state.advance()
@@ -2495,8 +2494,8 @@ class BlockScaledContiguousGroupedGemmKernel:
                 tile_info[idx] = sInfo[(idx, tile_info_consumer_state.index)]
             is_valid_tile = tile_info[3] == 1
             cute.arch.fence_proxy(
-                cute.arch.ProxyKind.async_shared,
-                space=cute.arch.SharedSpace.shared_cta,
+                "async.shared",
+                space="cta",
             )
             tile_info_pipeline.consumer_release(tile_info_consumer_state)
             tile_info_consumer_state.advance()
@@ -2662,8 +2661,8 @@ class BlockScaledContiguousGroupedGemmKernel:
                         tRS_rC1,
                     )
                     cute.arch.fence_proxy(
-                        cute.arch.ProxyKind.async_shared,
-                        space=cute.arch.SharedSpace.shared_cta,
+                        "async.shared",
+                        space="cta",
                     )
                     c_pipeline.consumer_release(c_pipeline_consumer_state)
                     c_pipeline_consumer_state.advance()
@@ -2674,8 +2673,8 @@ class BlockScaledContiguousGroupedGemmKernel:
                         tRS_rC2,
                     )
                     cute.arch.fence_proxy(
-                        cute.arch.ProxyKind.async_shared,
-                        space=cute.arch.SharedSpace.shared_cta,
+                        "async.shared",
+                        space="cta",
                     )
                     c_pipeline.consumer_release(c_pipeline_consumer_state)
                     c_pipeline_consumer_state.advance()
@@ -2702,7 +2701,7 @@ class BlockScaledContiguousGroupedGemmKernel:
                             ) = cute.arch.mul_packed_f32x2(
                                 (acc_vec[i + 0], acc_vec[i + 1]),
                                 (square_alpha, square_alpha),
-                                rnd=FPRoundingMode.RN,
+                                rnd="rn",
                                 ftz=False,
                             )
                             ab1_vec_acc_type = cute.arch.mul_packed_f32x2(
@@ -2711,7 +2710,7 @@ class BlockScaledContiguousGroupedGemmKernel:
                                     ab1_vec_load[i + 1].to(self.acc_dtype),
                                 ),
                                 (beta_val, beta_val),
-                                rnd=FPRoundingMode.RN,
+                                rnd="rn",
                                 ftz=False,
                             )
                             ab2_vec_acc_type = cute.arch.mul_packed_f32x2(
@@ -2720,13 +2719,13 @@ class BlockScaledContiguousGroupedGemmKernel:
                                     ab2_vec_load[i + 1].to(self.acc_dtype),
                                 ),
                                 (beta_val, beta_val),
-                                rnd=FPRoundingMode.RN,
+                                rnd="rn",
                                 ftz=False,
                             )
                             sig_rcp_0, sig_rcp_1 = cute.arch.mul_packed_f32x2(
                                 (ab1_vec_acc_type),
                                 (-LOG2_E, -LOG2_E),
-                                rnd=FPRoundingMode.RN,
+                                rnd="rn",
                                 ftz=False,
                             )
                             sig_rcp_0, sig_rcp_1 = cute.arch.add_packed_f32x2(
@@ -2735,7 +2734,7 @@ class BlockScaledContiguousGroupedGemmKernel:
                                     cute.math.exp2(sig_rcp_1, fastmath=True),
                                 ),
                                 (1.0, 1.0),
-                                rnd=FPRoundingMode.RN,
+                                rnd="rn",
                                 ftz=False,
                             )
                             sig = (
@@ -2745,7 +2744,7 @@ class BlockScaledContiguousGroupedGemmKernel:
                             swish = cute.arch.mul_packed_f32x2(
                                 ab1_vec_acc_type,
                                 sig,
-                                rnd=FPRoundingMode.RN,
+                                rnd="rn",
                                 ftz=False,
                             )
                             # calculate dprob
@@ -2776,7 +2775,7 @@ class BlockScaledContiguousGroupedGemmKernel:
                             ) = cute.arch.mul_packed_f32x2(
                                 (acc_vec_prob[0], acc_vec_prob[1]),
                                 swish,
-                                rnd=FPRoundingMode.RN,
+                                rnd="rn",
                                 ftz=False,
                             )
                             # calculate d1_vec
@@ -2786,7 +2785,7 @@ class BlockScaledContiguousGroupedGemmKernel:
                             ) = cute.arch.mul_packed_f32x2(
                                 (acc_vec_prob[0], acc_vec_prob[1]),
                                 (ab2_vec_acc_type[0], ab2_vec_acc_type[1]),
-                                rnd=FPRoundingMode.RN,
+                                rnd="rn",
                                 ftz=False,
                             )
                             (
@@ -2795,19 +2794,19 @@ class BlockScaledContiguousGroupedGemmKernel:
                             ) = cute.arch.mul_packed_f32x2(
                                 (d1_vec[i + 0], d1_vec[i + 1]),
                                 sig,
-                                rnd=FPRoundingMode.RN,
+                                rnd="rn",
                                 ftz=False,
                             )
                             dsig = cute.arch.mul_packed_f32x2(
                                 ab1_vec_acc_type,
                                 (1 - sig[0], 1 - sig[1]),
-                                rnd=FPRoundingMode.RN,
+                                rnd="rn",
                                 ftz=False,
                             )
                             dsig_add_1 = cute.arch.add_packed_f32x2(
                                 (dsig[0], dsig[1]),
                                 (1.0, 1.0),
-                                rnd=FPRoundingMode.RN,
+                                rnd="rn",
                                 ftz=False,
                             )
                             (
@@ -2816,7 +2815,7 @@ class BlockScaledContiguousGroupedGemmKernel:
                             ) = cute.arch.mul_packed_f32x2(
                                 (d1_vec[i + 0], d1_vec[i + 1]),
                                 dsig_add_1,
-                                rnd=FPRoundingMode.RN,
+                                rnd="rn",
                                 ftz=False,
                             )
                         d1_vec = d1_vec.load()
@@ -3012,8 +3011,8 @@ class BlockScaledContiguousGroupedGemmKernel:
                             )
                         # Fence and barrier to make sure shared memory store is visible to TMA store
                         cute.arch.fence_proxy(
-                            cute.arch.ProxyKind.async_shared,
-                            space=cute.arch.SharedSpace.shared_cta,
+                            "async.shared",
+                            space="cta",
                         )
                         self.epilog_sync_barrier.arrive_and_wait()
                         #
@@ -3061,8 +3060,8 @@ class BlockScaledContiguousGroupedGemmKernel:
                     tile_info[idx] = sInfo[(idx, tile_info_consumer_state.index)]
                 is_valid_tile = tile_info[3] == 1
                 cute.arch.fence_proxy(
-                    cute.arch.ProxyKind.async_shared,
-                    space=cute.arch.SharedSpace.shared_cta,
+                    "async.shared",
+                    space="cta",
                 )
                 tile_info_pipeline.consumer_release(tile_info_consumer_state)
                 tile_info_consumer_state.advance()
@@ -3123,8 +3122,8 @@ class BlockScaledContiguousGroupedGemmKernel:
                 tile_info[idx] = sInfo[(idx, tile_info_consumer_state.index)]
             is_valid_tile = tile_info[3] == 1
             cute.arch.fence_proxy(
-                cute.arch.ProxyKind.async_shared,
-                space=cute.arch.SharedSpace.shared_cta,
+                "async.shared",
+                space="cta",
             )
             tile_info_pipeline.consumer_release(tile_info_consumer_state)
             tile_info_consumer_state.advance()
@@ -3179,8 +3178,8 @@ class BlockScaledContiguousGroupedGemmKernel:
                     tile_info[idx] = sInfo[(idx, tile_info_consumer_state.index)]
                 is_valid_tile = tile_info[3] == 1
                 cute.arch.fence_proxy(
-                    cute.arch.ProxyKind.async_shared,
-                    space=cute.arch.SharedSpace.shared_cta,
+                    "async.shared",
+                    space="cta",
                 )
                 tile_info_pipeline.consumer_release(tile_info_consumer_state)
                 tile_info_consumer_state.advance()
