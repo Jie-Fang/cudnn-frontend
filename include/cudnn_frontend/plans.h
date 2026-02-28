@@ -11,6 +11,7 @@
 #include "backend/execution_helpers.h"
 #include "backend/plan_helpers.h"
 #include "experimental/sm90_sdpa_prefill_engine.h"
+#include "experimental/sm100_sdpa_prefill_engine.h"
 
 namespace cudnn_frontend {
 
@@ -713,7 +714,7 @@ class Execution_plan_list {
     };
 
     void
-    set_oss_engine(std::shared_ptr<experimental::Sm90SdpaPrefillEngine> engine) {
+    set_oss_engine(std::shared_ptr<experimental::IOssSdpaEngine> engine) {
         oss_engine_ = std::move(engine);
     }
 
@@ -929,7 +930,7 @@ class Execution_plan_list {
     }
 
    private:
-    std::shared_ptr<experimental::Sm90SdpaPrefillEngine> oss_engine_;
+    std::shared_ptr<experimental::IOssSdpaEngine> oss_engine_;
     bool oss_engine_supported_ = false;
     bool oss_engine_built_     = false;
     OssEngineContext oss_ctx_;

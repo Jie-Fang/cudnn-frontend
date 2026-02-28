@@ -414,7 +414,19 @@ class Graph : public ICudnn, public INode {
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "Could not find Q/K/V/O tensors in SDPA node for OPENSOURCE engine");
 
-        auto engine = std::make_shared<experimental::Sm90SdpaPrefillEngine>();
+        // Detect SM version and instantiate the appropriate OSS engine
+        int oss_device_ordinal = 0;
+        experimental::detail::cuda_get_device(&oss_device_ordinal);
+        cudaDeviceProp oss_dev_prop;
+        experimental::detail::cuda_get_device_properties(&oss_dev_prop, oss_device_ordinal);
+        int oss_sm = oss_dev_prop.major * 10 + oss_dev_prop.minor;
+
+        std::shared_ptr<experimental::IOssSdpaEngine> engine;
+        if (oss_sm / 10 == 10) {
+            engine = std::make_shared<experimental::Sm100SdpaPrefillEngine>();
+        } else {
+            engine = std::make_shared<experimental::Sm90SdpaPrefillEngine>();
+        }
         plans.set_oss_engine(engine);
         plans.set_oss_engine_context(std::move(ctx));
 
@@ -2128,7 +2140,7 @@ Graph::create_execution_plans(std::vector<HeurMode_t> const &mode) {
         if (oss_status.is_bad()) {
             CUDNN_FE_LOG_LABEL_ENDL("WARN: Failed to register OSS engine: " << oss_status.get_message());
         } else {
-            CUDNN_FE_LOG_LABEL_ENDL("INFO: Registered OSS SM90 SDPA prefill engine");
+            CUDNN_FE_LOG_LABEL_ENDL("INFO: Registered OSS SDPA prefill engine");
         }
     }
 

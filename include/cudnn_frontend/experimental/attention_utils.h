@@ -24,10 +24,6 @@ struct FastDivisor_t {
     uint32_t val, shr, mul;
 };
 
-struct alignas(64) cudaTmaDesc {
-    uint64_t data[8];
-};
-
 struct tensor_descriptor {
     static const int MAX_DIMS = 12;
     int64_t num_dims;
@@ -44,33 +40,46 @@ div_up(int a, int b) {
     return (a + b - 1) / b;
 }
 
+// floor(log2(x)) for x > 0.
+inline int
+find_log_2_floor(uint32_t x) {
+    if (x <= 1) return 0;
+    int a = 0;
+    while ((1u << (a + 1)) <= x) a++;
+    return a;
+}
+
+// Compute FastDivisor_t for the kernel's fastDivMod which uses:
+//   div = __umulhi(2 * val, mul) >> shr
+// This matches cuDNN's find_divisor_v2 (xmma/fast_math.h:118-125).
 inline FastDivisor_t
 make_fast_divisor(uint32_t divisor) {
     FastDivisor_t d;
     d.val = divisor;
 
-    if (divisor == 1) {
+    if (divisor <= 1) {
+        // Division by 1: umulhi(2*val, 0x80000000) >> 0 = val, mod = 0
         d.shr = 0;
         d.mul = 0x80000000u;
         return d;
     }
 
-    // Find shr such that 2^shr >= divisor
-    uint32_t shr = 0;
-    while ((1u << shr) < divisor) shr++;
-
-    // Check if divisor is an exact power of 2
-    if (divisor == (1u << shr)) {
-        d.mul = 0x80000000u;
-        d.shr = shr;
-    } else {
-        // Compute multiplier: ceil(2^(32+shr) / divisor) - 2^32
-        uint64_t one  = 1ULL;
-        uint64_t num  = (one << (32 + shr));
-        uint64_t quot = (num + divisor - 1) / divisor;
-        d.mul         = (uint32_t)(quot - (one << 32));
-        d.shr         = shr;
+    // find_log_2(2 * divisor, round_up=true)
+    uint32_t x2 = 2u * divisor;
+    int a       = 0;
+    {
+        uint32_t tmp = x2;
+        while (tmp > 1) {
+            tmp >>= 1;
+            a++;
+        }
     }
+    // round up if not a power of 2
+    if (x2 & (x2 - 1)) a++;
+
+    uint32_t p = 31 + static_cast<uint32_t>(a);
+    d.mul      = static_cast<uint32_t>(((1ULL << p) + static_cast<uint64_t>(x2) - 1) / static_cast<uint64_t>(x2));
+    d.shr      = p - 32;
     return d;
 }
 
@@ -265,7 +274,7 @@ cu_init(unsigned int flags) {
 // TMA descriptor creation (4D)
 // ============================================================
 inline error_t
-create_tma_desc_4d(cudaTmaDesc* desc,
+create_tma_desc_4d(CUtensorMap* desc,
                    void* globalAddress,
                    CUtensorMapDataType dataType,
                    uint32_t dim0,
@@ -283,7 +292,7 @@ create_tma_desc_4d(cudaTmaDesc* desc,
     uint32_t boxDims[4]       = {boxDim0, boxDim1, 1, 1};
     uint32_t elemStrides[4]   = {1, 1, 1, 1};
 
-    CUresult err_status = detail::cu_tensor_map_encode_tiled(reinterpret_cast<CUtensorMap*>(desc),
+    CUresult err_status = detail::cu_tensor_map_encode_tiled(desc,
                                                              dataType,
                                                              4,
                                                              globalAddress,

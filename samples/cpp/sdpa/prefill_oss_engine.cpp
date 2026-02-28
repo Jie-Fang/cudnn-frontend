@@ -29,6 +29,7 @@
 
 #include <cudnn_frontend.h>
 #include <cudnn_frontend/experimental/sm90_sdpa_prefill_engine.h>
+#include <cudnn_frontend/experimental/sm100_sdpa_prefill_engine.h>
 
 #include <cmath>
 #include <cstdio>
@@ -43,6 +44,15 @@ namespace fe = cudnn_frontend;
 #define O_UID 4
 #define MAX_UID 6
 #define SUM_EXP_UID 7
+
+// ---------------------------------------------------------------------------
+// Helper: returns true if the current GPU is Hopper (SM90) or Blackwell
+// (SM100), i.e. any architecture supported by the OSS prefill engines.
+// ---------------------------------------------------------------------------
+static bool
+is_oss_supported_arch() {
+    return is_hopper_arch() || is_blackwell_computing_arch();
+}
 
 // ---------------------------------------------------------------------------
 // Helper: build an SDPA forward graph that produces O, max, and sum_exp.
@@ -135,170 +145,6 @@ create_sdpa_forward_graph(int64_t b,
 }
 
 // ---------------------------------------------------------------------------
-// TEST_CASE: Compare cuDNN graph SDPA output against NVRTC engine output
-// ---------------------------------------------------------------------------
-TEST_CASE("SM90 Prefill OSS Engine vs cuDNN Graph", "[graph][sdpa][sm90][engine][oss]") {
-    // ---- Fixed problem configuration ----
-    int64_t const b    = 2;
-    int64_t const h_q  = 4;
-    int64_t const h_kv = 2;
-    int64_t const s_q  = 1024;
-    int64_t const s_kv = 2048;
-    int64_t const d    = 128;
-
-    float const attn_scale = 1.0f / std::sqrt(static_cast<float>(d));
-
-    // ---- Skip if not Hopper architecture ----
-    if (!is_hopper_arch()) {
-        SKIP("Test requires Hopper (SM90) architecture");
-        return;
-    }
-
-    // ---- cuDNN handle ----
-    auto handle_ptr = create_cudnn_handle();
-    auto handle     = *handle_ptr;
-
-    // ---- Shared input tensors (BSHD layout, half precision) ----
-    int64_t const q_elems   = b * h_q * s_q * d;
-    int64_t const k_elems   = b * h_kv * s_kv * d;
-    int64_t const v_elems   = b * h_kv * s_kv * d;
-    int64_t const o_elems   = b * h_q * s_q * d;
-    int64_t const aux_elems = b * h_q * s_q;  // for max and sum_exp
-
-    Surface<half> q_tensor(q_elems, false);
-    Surface<half> k_tensor(k_elems, false);
-    Surface<half> v_tensor(v_elems, false);
-
-    // ================================================================
-    // Path 1: cuDNN Graph API (reference)
-    // ================================================================
-    Surface<half> o_cudnn(o_elems, false);
-    Surface<float> max_cudnn(aux_elems, false);
-    Surface<float> sum_exp_cudnn(aux_elems, false);
-
-    {
-        auto graph = create_sdpa_forward_graph(b, h_q, h_kv, s_q, s_kv, d, attn_scale);
-
-        auto status = graph->validate();
-        REQUIRE(status.is_good());
-
-        REQUIRE(graph->build_operation_graph(handle).is_good());
-        auto plans = graph->create_execution_plans({fe::HeurMode_t::A});
-        REQUIRE(graph->check_support(handle).is_good());
-        REQUIRE(graph->build_plans(handle).is_good());
-
-        std::unordered_map<fe::graph::Tensor_attributes::uid_t, void *> variant_pack = {
-            {Q_UID, q_tensor.devPtr},
-            {K_UID, k_tensor.devPtr},
-            {V_UID, v_tensor.devPtr},
-            {O_UID, o_cudnn.devPtr},
-            {MAX_UID, max_cudnn.devPtr},
-            {SUM_EXP_UID, sum_exp_cudnn.devPtr},
-        };
-
-        int64_t workspace_size = 0;
-        REQUIRE(graph->get_workspace_size(workspace_size).is_good());
-        Surface<int8_t> workspace(workspace_size, false);
-
-        REQUIRE(graph->execute(handle, variant_pack, workspace.devPtr).is_good());
-        CUDA_CHECK(cudaDeviceSynchronize());
-    }
-
-    // ================================================================
-    // Path 2: Same graph structure, but using OPENSOURCE mode
-    // (no manual engine instantiation — everything goes through graph API)
-    // ================================================================
-    Surface<half> o_engine(o_elems, false);
-    Surface<float> max_engine(aux_elems, false);
-    Surface<float> sum_exp_engine(aux_elems, false);
-
-    {
-        auto oss_graph = create_sdpa_forward_graph(b, h_q, h_kv, s_q, s_kv, d, attn_scale);
-
-        auto status = oss_graph->validate();
-        REQUIRE(status.is_good());
-
-        REQUIRE(oss_graph->build_operation_graph(handle).is_good());
-        auto plans_status = oss_graph->create_execution_plans({fe::HeurMode_t::OPENSOURCE});
-        REQUIRE(plans_status.is_good());
-        REQUIRE(oss_graph->check_support(handle).is_good());
-        REQUIRE(oss_graph->build_plans(handle).is_good());
-
-        std::unordered_map<fe::graph::Tensor_attributes::uid_t, void *> oss_variant_pack = {
-            {Q_UID, q_tensor.devPtr},
-            {K_UID, k_tensor.devPtr},
-            {V_UID, v_tensor.devPtr},
-            {O_UID, o_engine.devPtr},
-            {MAX_UID, max_engine.devPtr},
-            {SUM_EXP_UID, sum_exp_engine.devPtr},
-        };
-
-        int64_t oss_workspace_size = 0;
-        REQUIRE(oss_graph->get_workspace_size(oss_workspace_size).is_good());
-        Surface<int8_t> oss_workspace(oss_workspace_size, false);
-
-        auto exec_status = oss_graph->execute(handle, oss_variant_pack, oss_workspace.devPtr);
-        if (exec_status.is_bad()) {
-            std::printf("OSS kernel execute error: %s\n", exec_status.get_message().c_str());
-        }
-        REQUIRE(exec_status.is_good());
-        CUDA_CHECK(cudaDeviceSynchronize());
-    }
-
-    // ================================================================
-    // Comparison: download O tensors and compare element-wise
-    // ================================================================
-    {
-        // Download cuDNN graph output to host
-        std::vector<half> h_o_cudnn(o_elems);
-        CUDA_CHECK(cudaMemcpy(h_o_cudnn.data(), o_cudnn.devPtr, o_elems * sizeof(half), cudaMemcpyDeviceToHost));
-
-        // Download engine output to host
-        std::vector<half> h_o_engine(o_elems);
-        CUDA_CHECK(cudaMemcpy(h_o_engine.data(), o_engine.devPtr, o_elems * sizeof(half), cudaMemcpyDeviceToHost));
-
-        // Element-wise comparison with tolerance
-        double const atol = 5e-2;  // absolute tolerance (half-precision limited)
-        double const rtol = 5e-2;  // relative tolerance
-
-        int64_t num_mismatches = 0;
-        double max_abs_diff    = 0.0;
-        double sum_abs_diff    = 0.0;
-
-        for (int64_t i = 0; i < o_elems; ++i) {
-            float val_cudnn  = cpu_half2float(h_o_cudnn[i]);
-            float val_engine = cpu_half2float(h_o_engine[i]);
-            double abs_diff  = std::fabs(static_cast<double>(val_cudnn) - static_cast<double>(val_engine));
-            double threshold = atol + rtol * std::fabs(static_cast<double>(val_cudnn));
-
-            sum_abs_diff += abs_diff;
-            if (abs_diff > max_abs_diff) {
-                max_abs_diff = abs_diff;
-            }
-            if (abs_diff > threshold) {
-                num_mismatches++;
-            }
-        }
-
-        double mean_abs_diff = sum_abs_diff / static_cast<double>(o_elems);
-
-        // Print comparison statistics
-        std::printf("\n===== SM90 Prefill Engine vs cuDNN Graph Comparison =====\n");
-        std::printf("  Total elements:  %ld\n", static_cast<long>(o_elems));
-        std::printf("  Max abs diff:    %.6e\n", max_abs_diff);
-        std::printf("  Mean abs diff:   %.6e\n", mean_abs_diff);
-        std::printf("  Mismatches:      %ld / %ld (atol=%.1e, rtol=%.1e)\n",
-                    static_cast<long>(num_mismatches),
-                    static_cast<long>(o_elems),
-                    atol,
-                    rtol);
-        std::printf("=========================================================\n\n");
-
-        REQUIRE(num_mismatches == 0);
-    }
-}
-
-// ---------------------------------------------------------------------------
 // BHSD layout: dims (B,H,S,D) with BHSD-contiguous strides {H*S*D, S*D, D, 1}
 // This is the PyTorch-native contiguous layout.
 // ---------------------------------------------------------------------------
@@ -362,9 +208,283 @@ create_sdpa_forward_graph_bhsd(int64_t b,
 }
 
 // ---------------------------------------------------------------------------
-// TEST_CASE: BHSD layout — dims (B,H,S,D) with BHSD-contiguous strides
+// Helper: element-wise comparison of two half-precision buffers on host
 // ---------------------------------------------------------------------------
-TEST_CASE("SM90 Prefill OSS Engine BHSD layout", "[graph][sdpa][sm90][oss][bhsd]") {
+static void
+compare_half_outputs(void *gpu_a, void *gpu_b, int64_t num_elems, double atol, double rtol, const char *label) {
+    std::vector<half> h_a(num_elems);
+    std::vector<half> h_b(num_elems);
+    CUDA_CHECK(cudaMemcpy(h_a.data(), gpu_a, num_elems * sizeof(half), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_b.data(), gpu_b, num_elems * sizeof(half), cudaMemcpyDeviceToHost));
+
+    int64_t num_mismatches = 0;
+    double max_abs_diff    = 0.0;
+    double sum_abs_diff    = 0.0;
+
+    for (int64_t i = 0; i < num_elems; ++i) {
+        float va = cpu_half2float(h_a[i]);
+        float vb = cpu_half2float(h_b[i]);
+        double d = std::fabs(static_cast<double>(va) - static_cast<double>(vb));
+        sum_abs_diff += d;
+        if (d > max_abs_diff) max_abs_diff = d;
+        if (d > atol + rtol * std::fabs(static_cast<double>(va))) num_mismatches++;
+    }
+
+    double mean_abs_diff = sum_abs_diff / static_cast<double>(num_elems);
+    std::printf("\n===== %s =====\n", label);
+    std::printf("  Elements: %ld  Max diff: %.6e  Mean diff: %.6e  Mismatches: %ld\n",
+                static_cast<long>(num_elems),
+                max_abs_diff,
+                mean_abs_diff,
+                static_cast<long>(num_mismatches));
+    std::printf("==========================================\n\n");
+    REQUIRE(num_mismatches == 0);
+}
+
+// ---------------------------------------------------------------------------
+// BSHD stride helper: physical layout (B, S, H, D) expressed in graph API
+// dim order (B, H, S, D).
+// ---------------------------------------------------------------------------
+static std::vector<int64_t>
+bshd_strides(int64_t h, int64_t s, int64_t d) {
+    return {h * s * d, d, h * d, 1};
+}
+
+// ---------------------------------------------------------------------------
+// TEST_CASE: Compare cuDNN graph SDPA output against NVRTC engine output.
+// Uses HeurMode_t::OPENSOURCE which auto-dispatches to the correct engine
+// for the current architecture (SM90 or SM100).
+// ---------------------------------------------------------------------------
+TEST_CASE("Prefill OSS Engine vs cuDNN Graph", "[graph][sdpa][engine][oss]") {
+    // ---- Fixed problem configuration ----
+    int64_t const b    = 2;
+    int64_t const h_q  = 4;
+    int64_t const h_kv = 2;
+    int64_t const s_q  = 1024;
+    int64_t const s_kv = 2048;
+    int64_t const d    = 128;
+
+    float const attn_scale = 1.0f / std::sqrt(static_cast<float>(d));
+
+    // ---- Skip if not a supported architecture ----
+    if (!is_oss_supported_arch()) {
+        SKIP("Test requires Hopper (SM90) or Blackwell (SM100) architecture");
+        return;
+    }
+
+    // ---- cuDNN handle ----
+    auto handle_ptr = create_cudnn_handle();
+    auto handle     = *handle_ptr;
+
+    // ---- Shared input tensors (BSHD layout, half precision) ----
+    int64_t const q_elems   = b * h_q * s_q * d;
+    int64_t const k_elems   = b * h_kv * s_kv * d;
+    int64_t const v_elems   = b * h_kv * s_kv * d;
+    int64_t const o_elems   = b * h_q * s_q * d;
+    int64_t const aux_elems = b * h_q * s_q;  // for max and sum_exp
+
+    Surface<half> q_tensor(q_elems, false);
+    Surface<half> k_tensor(k_elems, false);
+    Surface<half> v_tensor(v_elems, false);
+
+    // ================================================================
+    // Path 1: cuDNN Graph API (reference)
+    // ================================================================
+    Surface<half> o_cudnn(o_elems, false);
+    Surface<float> max_cudnn(aux_elems, false);
+    Surface<float> sum_exp_cudnn(aux_elems, false);
+
+    {
+        auto graph = create_sdpa_forward_graph(b, h_q, h_kv, s_q, s_kv, d, attn_scale);
+
+        auto status = graph->validate();
+        REQUIRE(status.is_good());
+
+        REQUIRE(graph->build_operation_graph(handle).is_good());
+        auto plans = graph->create_execution_plans({fe::HeurMode_t::A});
+        REQUIRE(graph->check_support(handle).is_good());
+        REQUIRE(graph->build_plans(handle).is_good());
+
+        std::unordered_map<fe::graph::Tensor_attributes::uid_t, void *> variant_pack = {
+            {Q_UID, q_tensor.devPtr},
+            {K_UID, k_tensor.devPtr},
+            {V_UID, v_tensor.devPtr},
+            {O_UID, o_cudnn.devPtr},
+            {MAX_UID, max_cudnn.devPtr},
+            {SUM_EXP_UID, sum_exp_cudnn.devPtr},
+        };
+
+        int64_t workspace_size = 0;
+        REQUIRE(graph->get_workspace_size(workspace_size).is_good());
+        Surface<int8_t> workspace(workspace_size, false);
+
+        REQUIRE(graph->execute(handle, variant_pack, workspace.devPtr).is_good());
+        CUDA_CHECK(cudaDeviceSynchronize());
+
+        // ---- Benchmark cuDNN graph path ----
+        int const warmup_iters = 10;
+        int const bench_iters  = 100;
+
+        for (int i = 0; i < warmup_iters; ++i) {
+            REQUIRE(graph->execute(handle, variant_pack, workspace.devPtr).is_good());
+        }
+        CUDA_CHECK(cudaDeviceSynchronize());
+
+        cudaEvent_t start_cudnn, stop_cudnn;
+        CUDA_CHECK(cudaEventCreate(&start_cudnn));
+        CUDA_CHECK(cudaEventCreate(&stop_cudnn));
+
+        CUDA_CHECK(cudaEventRecord(start_cudnn));
+        for (int i = 0; i < bench_iters; ++i) {
+            REQUIRE(graph->execute(handle, variant_pack, workspace.devPtr).is_good());
+        }
+        CUDA_CHECK(cudaEventRecord(stop_cudnn));
+        CUDA_CHECK(cudaEventSynchronize(stop_cudnn));
+
+        float cudnn_total_ms = 0.0f;
+        CUDA_CHECK(cudaEventElapsedTime(&cudnn_total_ms, start_cudnn, stop_cudnn));
+        float cudnn_mean_ms = cudnn_total_ms / static_cast<float>(bench_iters);
+
+        CUDA_CHECK(cudaEventDestroy(start_cudnn));
+        CUDA_CHECK(cudaEventDestroy(stop_cudnn));
+
+        std::printf("\n[cuDNN Graph]  Mean kernel time: %.4f ms  (over %d iters, %d warmup)\n",
+                    cudnn_mean_ms,
+                    bench_iters,
+                    warmup_iters);
+    }
+
+    // ================================================================
+    // Path 2: Same graph structure, but using OPENSOURCE mode
+    // (no manual engine instantiation -- everything goes through graph API)
+    // ================================================================
+    Surface<half> o_engine(o_elems, false);
+    Surface<float> max_engine(aux_elems, false);
+    Surface<float> sum_exp_engine(aux_elems, false);
+
+    {
+        auto oss_graph = create_sdpa_forward_graph(b, h_q, h_kv, s_q, s_kv, d, attn_scale);
+
+        auto status = oss_graph->validate();
+        REQUIRE(status.is_good());
+
+        REQUIRE(oss_graph->build_operation_graph(handle).is_good());
+        auto plans_status = oss_graph->create_execution_plans({fe::HeurMode_t::OPENSOURCE});
+        REQUIRE(plans_status.is_good());
+        REQUIRE(oss_graph->check_support(handle).is_good());
+        REQUIRE(oss_graph->build_plans(handle).is_good());
+
+        std::unordered_map<fe::graph::Tensor_attributes::uid_t, void *> oss_variant_pack = {
+            {Q_UID, q_tensor.devPtr},
+            {K_UID, k_tensor.devPtr},
+            {V_UID, v_tensor.devPtr},
+            {O_UID, o_engine.devPtr},
+            {MAX_UID, max_engine.devPtr},
+            {SUM_EXP_UID, sum_exp_engine.devPtr},
+        };
+
+        int64_t oss_workspace_size = 0;
+        REQUIRE(oss_graph->get_workspace_size(oss_workspace_size).is_good());
+        Surface<int8_t> oss_workspace(oss_workspace_size, false);
+
+        auto exec_status = oss_graph->execute(handle, oss_variant_pack, oss_workspace.devPtr);
+        if (exec_status.is_bad()) {
+            std::printf("OSS kernel execute error: %s\n", exec_status.get_message().c_str());
+        }
+        REQUIRE(exec_status.is_good());
+        CUDA_CHECK(cudaDeviceSynchronize());
+
+        // ---- Benchmark OSS engine path ----
+        int const warmup_iters = 10;
+        int const bench_iters  = 100;
+
+        for (int i = 0; i < warmup_iters; ++i) {
+            REQUIRE(oss_graph->execute(handle, oss_variant_pack, oss_workspace.devPtr).is_good());
+        }
+        CUDA_CHECK(cudaDeviceSynchronize());
+
+        cudaEvent_t start_oss, stop_oss;
+        CUDA_CHECK(cudaEventCreate(&start_oss));
+        CUDA_CHECK(cudaEventCreate(&stop_oss));
+
+        CUDA_CHECK(cudaEventRecord(start_oss));
+        for (int i = 0; i < bench_iters; ++i) {
+            REQUIRE(oss_graph->execute(handle, oss_variant_pack, oss_workspace.devPtr).is_good());
+        }
+        CUDA_CHECK(cudaEventRecord(stop_oss));
+        CUDA_CHECK(cudaEventSynchronize(stop_oss));
+
+        float oss_total_ms = 0.0f;
+        CUDA_CHECK(cudaEventElapsedTime(&oss_total_ms, start_oss, stop_oss));
+        float oss_mean_ms = oss_total_ms / static_cast<float>(bench_iters);
+
+        CUDA_CHECK(cudaEventDestroy(start_oss));
+        CUDA_CHECK(cudaEventDestroy(stop_oss));
+
+        std::printf("[OSS Engine]   Mean kernel time: %.4f ms  (over %d iters, %d warmup)\n",
+                    oss_mean_ms,
+                    bench_iters,
+                    warmup_iters);
+    }
+
+    // ================================================================
+    // Comparison: download O tensors and compare element-wise
+    // ================================================================
+    {
+        // Download cuDNN graph output to host
+        std::vector<half> h_o_cudnn(o_elems);
+        CUDA_CHECK(cudaMemcpy(h_o_cudnn.data(), o_cudnn.devPtr, o_elems * sizeof(half), cudaMemcpyDeviceToHost));
+
+        // Download engine output to host
+        std::vector<half> h_o_engine(o_elems);
+        CUDA_CHECK(cudaMemcpy(h_o_engine.data(), o_engine.devPtr, o_elems * sizeof(half), cudaMemcpyDeviceToHost));
+
+        // Element-wise comparison with tolerance
+        double const atol = 5e-2;  // absolute tolerance (half-precision limited)
+        double const rtol = 5e-2;  // relative tolerance
+
+        int64_t num_mismatches = 0;
+        double max_abs_diff    = 0.0;
+        double sum_abs_diff    = 0.0;
+
+        for (int64_t i = 0; i < o_elems; ++i) {
+            float val_cudnn  = cpu_half2float(h_o_cudnn[i]);
+            float val_engine = cpu_half2float(h_o_engine[i]);
+            double abs_diff  = std::fabs(static_cast<double>(val_cudnn) - static_cast<double>(val_engine));
+            double threshold = atol + rtol * std::fabs(static_cast<double>(val_cudnn));
+
+            sum_abs_diff += abs_diff;
+            if (abs_diff > max_abs_diff) {
+                max_abs_diff = abs_diff;
+            }
+            if (abs_diff > threshold) {
+                num_mismatches++;
+            }
+        }
+
+        double mean_abs_diff = sum_abs_diff / static_cast<double>(o_elems);
+
+        // Print comparison statistics
+        std::printf("\n===== Prefill Engine vs cuDNN Graph Comparison =====\n");
+        std::printf("  Total elements:  %ld\n", static_cast<long>(o_elems));
+        std::printf("  Max abs diff:    %.6e\n", max_abs_diff);
+        std::printf("  Mean abs diff:   %.6e\n", mean_abs_diff);
+        std::printf("  Mismatches:      %ld / %ld (atol=%.1e, rtol=%.1e)\n",
+                    static_cast<long>(num_mismatches),
+                    static_cast<long>(o_elems),
+                    atol,
+                    rtol);
+        std::printf("====================================================\n\n");
+
+        REQUIRE(num_mismatches == 0);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// TEST_CASE: BHSD layout -- dims (B,H,S,D) with BHSD-contiguous strides.
+// Uses HeurMode_t::OPENSOURCE which auto-dispatches to the correct engine.
+// ---------------------------------------------------------------------------
+TEST_CASE("Prefill OSS Engine BHSD layout", "[graph][sdpa][oss][bhsd]") {
     int64_t const b        = 2;
     int64_t const h_q      = 4;
     int64_t const h_kv     = 2;
@@ -373,8 +493,8 @@ TEST_CASE("SM90 Prefill OSS Engine BHSD layout", "[graph][sdpa][sm90][oss][bhsd]
     int64_t const d        = 64;
     float const attn_scale = 1.0f / std::sqrt(static_cast<float>(d));
 
-    if (!is_hopper_arch()) {
-        SKIP("Test requires Hopper (SM90) architecture");
+    if (!is_oss_supported_arch()) {
+        SKIP("Test requires Hopper (SM90) or Blackwell (SM100) architecture");
         return;
     }
 
@@ -471,65 +591,22 @@ TEST_CASE("SM90 Prefill OSS Engine BHSD layout", "[graph][sdpa][sm90][oss][bhsd]
             if (diff > atol + rtol * std::fabs(static_cast<double>(a))) num_mismatches++;
         }
 
-        std::printf("\n===== SM90 Prefill OSS Engine BHSD Layout =====\n");
+        std::printf("\n===== Prefill OSS Engine BHSD Layout =====\n");
         std::printf("  Elements: %ld  Max diff: %.6e  Mismatches: %ld\n",
                     static_cast<long>(o_elems),
                     max_abs_diff,
                     static_cast<long>(num_mismatches));
-        std::printf("================================================\n\n");
+        std::printf("==========================================\n\n");
         REQUIRE(num_mismatches == 0);
     }
 }
 
 // ---------------------------------------------------------------------------
-// Helper: element-wise comparison of two half-precision buffers on host
-// ---------------------------------------------------------------------------
-static void
-compare_half_outputs(void *gpu_a, void *gpu_b, int64_t num_elems, double atol, double rtol, const char *label) {
-    std::vector<half> h_a(num_elems);
-    std::vector<half> h_b(num_elems);
-    CUDA_CHECK(cudaMemcpy(h_a.data(), gpu_a, num_elems * sizeof(half), cudaMemcpyDeviceToHost));
-    CUDA_CHECK(cudaMemcpy(h_b.data(), gpu_b, num_elems * sizeof(half), cudaMemcpyDeviceToHost));
-
-    int64_t num_mismatches = 0;
-    double max_abs_diff    = 0.0;
-    double sum_abs_diff    = 0.0;
-
-    for (int64_t i = 0; i < num_elems; ++i) {
-        float va = cpu_half2float(h_a[i]);
-        float vb = cpu_half2float(h_b[i]);
-        double d = std::fabs(static_cast<double>(va) - static_cast<double>(vb));
-        sum_abs_diff += d;
-        if (d > max_abs_diff) max_abs_diff = d;
-        if (d > atol + rtol * std::fabs(static_cast<double>(va))) num_mismatches++;
-    }
-
-    double mean_abs_diff = sum_abs_diff / static_cast<double>(num_elems);
-    std::printf("\n===== %s =====\n", label);
-    std::printf("  Elements: %ld  Max diff: %.6e  Mean diff: %.6e  Mismatches: %ld\n",
-                static_cast<long>(num_elems),
-                max_abs_diff,
-                mean_abs_diff,
-                static_cast<long>(num_mismatches));
-    std::printf("==========================================\n\n");
-    REQUIRE(num_mismatches == 0);
-}
-
-// ---------------------------------------------------------------------------
-// BSHD stride helper: physical layout (B, S, H, D) expressed in graph API
-// dim order (B, H, S, D).
-// ---------------------------------------------------------------------------
-static std::vector<int64_t>
-bshd_strides(int64_t h, int64_t s, int64_t d) {
-    return {h * s * d, d, h * d, 1};
-}
-
-// ---------------------------------------------------------------------------
-// TEST_CASE: Dynamic shapes — build OSS graph once, execute with two
+// TEST_CASE: Dynamic shapes -- build OSS graph once, execute with two
 // different shape configurations, compare each against a separate cuDNN
-// reference graph.
+// reference graph. Uses HeurMode_t::OPENSOURCE which auto-dispatches.
 // ---------------------------------------------------------------------------
-TEST_CASE("SM90 Prefill OSS Engine Dynamic Shapes", "[graph][sdpa][sm90][oss][dynamic]") {
+TEST_CASE("Prefill OSS Engine Dynamic Shapes", "[graph][sdpa][oss][dynamic]") {
     // ---- Initial shape configuration ----
     int64_t const b    = 2;
     int64_t const h_q  = 4;
@@ -538,15 +615,15 @@ TEST_CASE("SM90 Prefill OSS Engine Dynamic Shapes", "[graph][sdpa][sm90][oss][dy
     int64_t const s_kv = 2048;
     int64_t const d    = 128;
 
-    // ---- Override shape configuration (batch ↑, seq lengths ↓) ----
+    // ---- Override shape configuration (batch up, seq lengths down) ----
     int64_t const new_b    = 4;
     int64_t const new_s_q  = 512;
     int64_t const new_s_kv = 1024;
 
     float const attn_scale = 1.0f / std::sqrt(static_cast<float>(d));
 
-    if (!is_hopper_arch()) {
-        SKIP("Test requires Hopper (SM90) architecture");
+    if (!is_oss_supported_arch()) {
+        SKIP("Test requires Hopper (SM90) or Blackwell (SM100) architecture");
         return;
     }
 
@@ -725,8 +802,9 @@ TEST_CASE("SM90 Prefill OSS Engine Dynamic Shapes", "[graph][sdpa][sm90][oss][dy
 }
 
 // ---------------------------------------------------------------------------
-// TEST_CASE: Direct engine API — instantiate Sm90SdpaPrefillEngine directly
-// (bypassing graph API), build once, execute with two different shape configs.
+// TEST_CASE: SM90 Direct engine API -- instantiate Sm90SdpaPrefillEngine
+// directly (bypassing graph API), build once, execute with two different
+// shape configs.
 // ---------------------------------------------------------------------------
 TEST_CASE("SM90 Prefill OSS Engine Direct API", "[graph][sdpa][sm90][oss][direct]") {
     int64_t const d = 128;
@@ -832,10 +910,86 @@ TEST_CASE("SM90 Prefill OSS Engine Direct API", "[graph][sdpa][sm90][oss][direct
                                           stream,
                                           attn_scale);
         if (exec_status.is_bad()) {
-            std::printf("Direct API config1 execute error: %s\n", exec_status.get_message().c_str());
+            std::printf("SM90 Direct API config1 execute error: %s\n", exec_status.get_message().c_str());
         }
         REQUIRE(exec_status.is_good());
         CUDA_CHECK(cudaStreamSynchronize(stream));
+
+        // ---- Benchmark SM90 Direct API ----
+        {
+            int const warmup_iters = 10;
+            int const bench_iters  = 100;
+
+            for (int i = 0; i < warmup_iters; ++i) {
+                (void)engine.execute(static_cast<int>(b1),
+                                     static_cast<int>(h_q1),
+                                     static_cast<int>(h_kv1),
+                                     static_cast<int>(s_q1),
+                                     static_cast<int>(s_kv1),
+                                     static_cast<int>(d),
+                                     q_tensor.devPtr,
+                                     q_st,
+                                     k_tensor.devPtr,
+                                     kv_st,
+                                     v_tensor.devPtr,
+                                     kv_st,
+                                     o_engine.devPtr,
+                                     o_st,
+                                     max_engine.devPtr,
+                                     max_st,
+                                     se_engine.devPtr,
+                                     se_st,
+                                     workspace.devPtr,
+                                     cu_device,
+                                     stream,
+                                     attn_scale);
+            }
+            CUDA_CHECK(cudaStreamSynchronize(stream));
+
+            cudaEvent_t start, stop;
+            CUDA_CHECK(cudaEventCreate(&start));
+            CUDA_CHECK(cudaEventCreate(&stop));
+
+            CUDA_CHECK(cudaEventRecord(start, stream));
+            for (int i = 0; i < bench_iters; ++i) {
+                (void)engine.execute(static_cast<int>(b1),
+                                     static_cast<int>(h_q1),
+                                     static_cast<int>(h_kv1),
+                                     static_cast<int>(s_q1),
+                                     static_cast<int>(s_kv1),
+                                     static_cast<int>(d),
+                                     q_tensor.devPtr,
+                                     q_st,
+                                     k_tensor.devPtr,
+                                     kv_st,
+                                     v_tensor.devPtr,
+                                     kv_st,
+                                     o_engine.devPtr,
+                                     o_st,
+                                     max_engine.devPtr,
+                                     max_st,
+                                     se_engine.devPtr,
+                                     se_st,
+                                     workspace.devPtr,
+                                     cu_device,
+                                     stream,
+                                     attn_scale);
+            }
+            CUDA_CHECK(cudaEventRecord(stop, stream));
+            CUDA_CHECK(cudaEventSynchronize(stop));
+
+            float total_ms = 0.0f;
+            CUDA_CHECK(cudaEventElapsedTime(&total_ms, start, stop));
+            float mean_ms = total_ms / static_cast<float>(bench_iters);
+
+            CUDA_CHECK(cudaEventDestroy(start));
+            CUDA_CHECK(cudaEventDestroy(stop));
+
+            std::printf("\n[SM90 Direct API]  Mean kernel time: %.4f ms  (over %d iters, %d warmup)\n",
+                        mean_ms,
+                        bench_iters,
+                        warmup_iters);
+        }
 
         // cuDNN reference for config 1
         Surface<half> o_ref(o_elems, false);
@@ -864,7 +1018,7 @@ TEST_CASE("SM90 Prefill OSS Engine Direct API", "[graph][sdpa][sm90][oss][direct
             CUDA_CHECK(cudaDeviceSynchronize());
         }
 
-        compare_half_outputs(o_engine.devPtr, o_ref.devPtr, o_elems, 5e-2, 5e-2, "Direct API config 1");
+        compare_half_outputs(o_engine.devPtr, o_ref.devPtr, o_elems, 5e-2, 5e-2, "SM90 Direct API config 1");
     }
 
     // ================================================================
@@ -913,7 +1067,7 @@ TEST_CASE("SM90 Prefill OSS Engine Direct API", "[graph][sdpa][sm90][oss][direct
                                           stream,
                                           attn_scale);
         if (exec_status.is_bad()) {
-            std::printf("Direct API config2 execute error: %s\n", exec_status.get_message().c_str());
+            std::printf("SM90 Direct API config2 execute error: %s\n", exec_status.get_message().c_str());
         }
         REQUIRE(exec_status.is_good());
         CUDA_CHECK(cudaStreamSynchronize(stream));
@@ -945,7 +1099,311 @@ TEST_CASE("SM90 Prefill OSS Engine Direct API", "[graph][sdpa][sm90][oss][direct
             CUDA_CHECK(cudaDeviceSynchronize());
         }
 
-        compare_half_outputs(o_engine.devPtr, o_ref.devPtr, o_elems, 5e-2, 5e-2, "Direct API config 2");
+        compare_half_outputs(o_engine.devPtr, o_ref.devPtr, o_elems, 5e-2, 5e-2, "SM90 Direct API config 2");
+    }
+
+    CUDA_CHECK(cudaStreamDestroy(stream));
+}
+
+// ---------------------------------------------------------------------------
+// TEST_CASE: SM100 Direct engine API -- instantiate Sm100SdpaPrefillEngine
+// directly (bypassing graph API), build once, execute with two different
+// shape configs.
+// ---------------------------------------------------------------------------
+TEST_CASE("SM100 Prefill OSS Engine Direct API", "[graph][sdpa][sm100][oss][direct]") {
+    int64_t const d = 128;
+
+    // Shape config 1
+    int64_t const b1    = 2;
+    int64_t const h_q1  = 4;
+    int64_t const h_kv1 = 2;
+    int64_t const s_q1  = 1024;
+    int64_t const s_kv1 = 2048;
+
+    // Shape config 2 (batch up, seq lengths down)
+    int64_t const b2    = 4;
+    int64_t const h_q2  = 4;
+    int64_t const h_kv2 = 2;
+    int64_t const s_q2  = 512;
+    int64_t const s_kv2 = 1024;
+
+    float const attn_scale = 1.0f / std::sqrt(static_cast<float>(d));
+
+    auto sm_version = get_compute_capability();
+
+    fe::experimental::AttentionShape_t shape = {
+        static_cast<uint32_t>(b1),
+        static_cast<uint32_t>(h_q1),
+        static_cast<uint32_t>(h_kv1),
+        static_cast<uint32_t>(h_kv1),
+        static_cast<uint32_t>(s_q1),
+        static_cast<uint32_t>(s_kv1),
+        static_cast<uint32_t>(d),
+        static_cast<uint32_t>(d),
+    };
+
+    // ---- Build engine once ----
+    fe::experimental::Sm100SdpaPrefillEngine engine;
+
+    if (is_blackwell_computing_arch()) {
+        REQUIRE(engine.check_support(shape, static_cast<int>(sm_version)).is_good());
+        REQUIRE(engine.build().is_good());
+    } else {
+        REQUIRE(engine.check_support(shape, static_cast<int>(sm_version)).is_bad());
+        SKIP("Test requires Blackwell (SM10X) architecture");
+        return;
+    }
+
+    auto handle_ptr = create_cudnn_handle();
+    auto handle     = *handle_ptr;
+    // ---- Get CUdevice and create stream ----
+    int device_ordinal = 0;
+    CUDA_CHECK(cudaGetDevice(&device_ordinal));
+    CUdevice cu_device;
+    auto cu_err = fe::experimental::detail::cu_device_get(&cu_device, device_ordinal);
+    REQUIRE(cu_err == CUDA_SUCCESS);
+
+    cudaStream_t stream;
+    CUDA_CHECK(cudaStreamCreate(&stream));
+
+    int64_t const ws_size = fe::experimental::Sm100SdpaPrefillEngine::get_workspace_size();
+    Surface<int8_t> workspace(ws_size, false);
+
+    // ================================================================
+    // Config 1: b=2, h_q=4, h_kv=2, s_q=1024, s_kv=2048, d=128
+    // ================================================================
+    {
+        int64_t const q_elems   = b1 * h_q1 * s_q1 * d;
+        int64_t const kv_elems  = b1 * h_kv1 * s_kv1 * d;
+        int64_t const o_elems   = b1 * h_q1 * s_q1 * d;
+        int64_t const aux_elems = b1 * h_q1 * s_q1;
+
+        Surface<half> q_tensor(q_elems, false);
+        Surface<half> k_tensor(kv_elems, false);
+        Surface<half> v_tensor(kv_elems, false);
+        Surface<half> o_engine(o_elems, false);
+        Surface<float> max_engine(aux_elems, false);
+        Surface<float> se_engine(aux_elems, false);
+
+        auto q_st                   = bshd_strides(h_q1, s_q1, d);
+        auto kv_st                  = bshd_strides(h_kv1, s_kv1, d);
+        auto o_st                   = bshd_strides(h_q1, s_q1, d);
+        std::vector<int64_t> max_st = {h_q1 * s_q1, s_q1, 1};
+        std::vector<int64_t> se_st  = {h_q1 * s_q1, s_q1, 1};
+
+        auto exec_status = engine.execute(static_cast<int>(b1),
+                                          static_cast<int>(h_q1),
+                                          static_cast<int>(h_kv1),
+                                          static_cast<int>(s_q1),
+                                          static_cast<int>(s_kv1),
+                                          static_cast<int>(d),
+                                          q_tensor.devPtr,
+                                          q_st,
+                                          k_tensor.devPtr,
+                                          kv_st,
+                                          v_tensor.devPtr,
+                                          kv_st,
+                                          o_engine.devPtr,
+                                          o_st,
+                                          max_engine.devPtr,
+                                          max_st,
+                                          se_engine.devPtr,
+                                          se_st,
+                                          workspace.devPtr,
+                                          cu_device,
+                                          stream,
+                                          attn_scale);
+        if (exec_status.is_bad()) {
+            std::printf("SM100 Direct API config1 execute error: %s\n", exec_status.get_message().c_str());
+        }
+        REQUIRE(exec_status.is_good());
+        CUDA_CHECK(cudaStreamSynchronize(stream));
+
+        // ---- Benchmark SM100 Direct API ----
+        {
+            int const warmup_iters = 10;
+            int const bench_iters  = 100;
+
+            for (int i = 0; i < warmup_iters; ++i) {
+                (void)engine.execute(static_cast<int>(b1),
+                                     static_cast<int>(h_q1),
+                                     static_cast<int>(h_kv1),
+                                     static_cast<int>(s_q1),
+                                     static_cast<int>(s_kv1),
+                                     static_cast<int>(d),
+                                     q_tensor.devPtr,
+                                     q_st,
+                                     k_tensor.devPtr,
+                                     kv_st,
+                                     v_tensor.devPtr,
+                                     kv_st,
+                                     o_engine.devPtr,
+                                     o_st,
+                                     max_engine.devPtr,
+                                     max_st,
+                                     se_engine.devPtr,
+                                     se_st,
+                                     workspace.devPtr,
+                                     cu_device,
+                                     stream,
+                                     attn_scale);
+            }
+            CUDA_CHECK(cudaStreamSynchronize(stream));
+
+            cudaEvent_t start, stop;
+            CUDA_CHECK(cudaEventCreate(&start));
+            CUDA_CHECK(cudaEventCreate(&stop));
+
+            CUDA_CHECK(cudaEventRecord(start, stream));
+            for (int i = 0; i < bench_iters; ++i) {
+                (void)engine.execute(static_cast<int>(b1),
+                                     static_cast<int>(h_q1),
+                                     static_cast<int>(h_kv1),
+                                     static_cast<int>(s_q1),
+                                     static_cast<int>(s_kv1),
+                                     static_cast<int>(d),
+                                     q_tensor.devPtr,
+                                     q_st,
+                                     k_tensor.devPtr,
+                                     kv_st,
+                                     v_tensor.devPtr,
+                                     kv_st,
+                                     o_engine.devPtr,
+                                     o_st,
+                                     max_engine.devPtr,
+                                     max_st,
+                                     se_engine.devPtr,
+                                     se_st,
+                                     workspace.devPtr,
+                                     cu_device,
+                                     stream,
+                                     attn_scale);
+            }
+            CUDA_CHECK(cudaEventRecord(stop, stream));
+            CUDA_CHECK(cudaEventSynchronize(stop));
+
+            float total_ms = 0.0f;
+            CUDA_CHECK(cudaEventElapsedTime(&total_ms, start, stop));
+            float mean_ms = total_ms / static_cast<float>(bench_iters);
+
+            CUDA_CHECK(cudaEventDestroy(start));
+            CUDA_CHECK(cudaEventDestroy(stop));
+
+            std::printf("\n[SM100 Direct API]  Mean kernel time: %.4f ms  (over %d iters, %d warmup)\n",
+                        mean_ms,
+                        bench_iters,
+                        warmup_iters);
+        }
+
+        // cuDNN reference for config 1
+        Surface<half> o_ref(o_elems, false);
+        Surface<float> max_ref(aux_elems, false);
+        Surface<float> se_ref(aux_elems, false);
+        {
+            auto ref_graph = create_sdpa_forward_graph(b1, h_q1, h_kv1, s_q1, s_kv1, d, attn_scale);
+            REQUIRE(ref_graph->validate().is_good());
+            REQUIRE(ref_graph->build_operation_graph(handle).is_good());
+            REQUIRE(ref_graph->create_execution_plans({fe::HeurMode_t::A}).is_good());
+            REQUIRE(ref_graph->check_support(handle).is_good());
+            REQUIRE(ref_graph->build_plans(handle).is_good());
+
+            std::unordered_map<fe::graph::Tensor_attributes::uid_t, void *> vp = {
+                {Q_UID, q_tensor.devPtr},
+                {K_UID, k_tensor.devPtr},
+                {V_UID, v_tensor.devPtr},
+                {O_UID, o_ref.devPtr},
+                {MAX_UID, max_ref.devPtr},
+                {SUM_EXP_UID, se_ref.devPtr},
+            };
+            int64_t ws = 0;
+            REQUIRE(ref_graph->get_workspace_size(ws).is_good());
+            Surface<int8_t> ref_ws(ws, false);
+            REQUIRE(ref_graph->execute(handle, vp, ref_ws.devPtr).is_good());
+            CUDA_CHECK(cudaDeviceSynchronize());
+        }
+
+        compare_half_outputs(o_engine.devPtr, o_ref.devPtr, o_elems, 5e-2, 5e-2, "SM100 Direct API config 1");
+    }
+
+    // ================================================================
+    // Config 2: b=4, h_q=4, h_kv=2, s_q=512, s_kv=1024, d=128
+    // Same engine instance, no rebuild.
+    // ================================================================
+    {
+        int64_t const q_elems   = b2 * h_q2 * s_q2 * d;
+        int64_t const kv_elems  = b2 * h_kv2 * s_kv2 * d;
+        int64_t const o_elems   = b2 * h_q2 * s_q2 * d;
+        int64_t const aux_elems = b2 * h_q2 * s_q2;
+
+        Surface<half> q_tensor(q_elems, false);
+        Surface<half> k_tensor(kv_elems, false);
+        Surface<half> v_tensor(kv_elems, false);
+        Surface<half> o_engine(o_elems, false);
+        Surface<float> max_engine(aux_elems, false);
+        Surface<float> se_engine(aux_elems, false);
+
+        auto q_st                   = bshd_strides(h_q2, s_q2, d);
+        auto kv_st                  = bshd_strides(h_kv2, s_kv2, d);
+        auto o_st                   = bshd_strides(h_q2, s_q2, d);
+        std::vector<int64_t> max_st = {h_q2 * s_q2, s_q2, 1};
+        std::vector<int64_t> se_st  = {h_q2 * s_q2, s_q2, 1};
+
+        auto exec_status = engine.execute(static_cast<int>(b2),
+                                          static_cast<int>(h_q2),
+                                          static_cast<int>(h_kv2),
+                                          static_cast<int>(s_q2),
+                                          static_cast<int>(s_kv2),
+                                          static_cast<int>(d),
+                                          q_tensor.devPtr,
+                                          q_st,
+                                          k_tensor.devPtr,
+                                          kv_st,
+                                          v_tensor.devPtr,
+                                          kv_st,
+                                          o_engine.devPtr,
+                                          o_st,
+                                          max_engine.devPtr,
+                                          max_st,
+                                          se_engine.devPtr,
+                                          se_st,
+                                          workspace.devPtr,
+                                          cu_device,
+                                          stream,
+                                          attn_scale);
+        if (exec_status.is_bad()) {
+            std::printf("SM100 Direct API config2 execute error: %s\n", exec_status.get_message().c_str());
+        }
+        REQUIRE(exec_status.is_good());
+        CUDA_CHECK(cudaStreamSynchronize(stream));
+
+        // cuDNN reference for config 2
+        Surface<half> o_ref(o_elems, false);
+        Surface<float> max_ref(aux_elems, false);
+        Surface<float> se_ref(aux_elems, false);
+        {
+            auto ref_graph = create_sdpa_forward_graph(b2, h_q2, h_kv2, s_q2, s_kv2, d, attn_scale);
+            REQUIRE(ref_graph->validate().is_good());
+            REQUIRE(ref_graph->build_operation_graph(handle).is_good());
+            REQUIRE(ref_graph->create_execution_plans({fe::HeurMode_t::A}).is_good());
+            REQUIRE(ref_graph->check_support(handle).is_good());
+            REQUIRE(ref_graph->build_plans(handle).is_good());
+
+            std::unordered_map<fe::graph::Tensor_attributes::uid_t, void *> vp = {
+                {Q_UID, q_tensor.devPtr},
+                {K_UID, k_tensor.devPtr},
+                {V_UID, v_tensor.devPtr},
+                {O_UID, o_ref.devPtr},
+                {MAX_UID, max_ref.devPtr},
+                {SUM_EXP_UID, se_ref.devPtr},
+            };
+            int64_t ws = 0;
+            REQUIRE(ref_graph->get_workspace_size(ws).is_good());
+            Surface<int8_t> ref_ws(ws, false);
+            REQUIRE(ref_graph->execute(handle, vp, ref_ws.devPtr).is_good());
+            CUDA_CHECK(cudaDeviceSynchronize());
+        }
+
+        compare_half_outputs(o_engine.devPtr, o_ref.devPtr, o_elems, 5e-2, 5e-2, "SM100 Direct API config 2");
     }
 
     CUDA_CHECK(cudaStreamDestroy(stream));

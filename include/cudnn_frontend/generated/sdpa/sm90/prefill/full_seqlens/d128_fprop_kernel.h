@@ -28,6 +28,10 @@ typedef short int16_t;
 typedef signed char int8_t;
 typedef unsigned int r32;
 
+struct CUtensorMap {
+  alignas(64) uint64_t opaque[16];
+};
+
 #define CUDACC_VERSION __CUDACC_VER_MAJOR__ * 10 + __CUDACC_VER_MINOR__
 
 namespace fort {
@@ -44,10 +48,6 @@ namespace fort {
 #define FORT_MAX(a,b) ((a) > (b) ? (a) : (b))
 #define FORT_DIV_UP(a,b) (((a) + (b) - 1) / (b))
 #define FORT_ROUND_UP(a,b) ((((a) + (b) - 1) / (b)) * (b))
-
-    typedef struct alignas(64) {
-        uint64_t data[8];
-    } cudaTmaDesc;
 
     typedef struct tensor_descriptor {
         static const int MAX_DIMS = 12;
@@ -276,11 +276,11 @@ namespace fort {
         uint16_t q_heads_per_k, q_heads_per_v, min_q_heads_per_kv;
     } AttentionDescriptor_t;
 
-    // cudaTmaDesc, when issued using bulk copy async functions, are cached in constant cache.
+    // CUtensorMap, when issued using bulk copy async functions, are cached in constant cache.
     // But the producer kernel may have directly written to global memory, without invalidating this constant cache.
     // This acquire fence, invalidates the memory address in constant cache, using UTMACCTL.IV.
     inline __device__ void tma_descriptor_fence_acquire(
-    cudaTmaDesc const* p_desc
+    CUtensorMap const* p_desc
     ) {
 #if (__CUDA_ARCH__ >= 900) && (CUDACC_VERSION >= 123)
         uint64_t gmem_int_desc = reinterpret_cast<uint64_t>(p_desc);
@@ -876,16 +876,16 @@ void cudnn_generated_oss_sdpa_sm90_flash_fprop_wgmma_f16_knob_7_64x128x128_4x1x1
 , const FastDivisor_t tiles_hr_div_1
 , const FastDivisor_t tiles_r_div_1
 , int32_t* tile_id_counter
-, __grid_constant__ const cudaTmaDesc tma_Q
-, __grid_constant__ const cudaTmaDesc tma_K
+, __grid_constant__ const CUtensorMap tma_Q
+, __grid_constant__ const CUtensorMap tma_K
 , float attn_scale
 , float neg_infinity
 , void* d_max
 , fort::tensor_descriptor desc_max
 , void* d_sum_exp
 , fort::tensor_descriptor desc_sum_exp
-, __grid_constant__ const cudaTmaDesc tma_V
-, __grid_constant__ const cudaTmaDesc tma_O
+, __grid_constant__ const CUtensorMap tma_V
+, __grid_constant__ const CUtensorMap tma_O
 ) {
     extern __shared__ char smem_[];
     uint32_t smem_0 = get_smem_pointer(smem_);
