@@ -5,7 +5,7 @@ import math
 from enum import IntEnum
 from looseversion import LooseVersion
 
-from .helpers import fill_sparse_small_int
+from .helpers import fill_sparse_small_int, time_execution, profile_execution
 from .mxfp8_ref import compute_ref, compute_ref_backward
 
 # Try to import CUTLASS for scale factor conversion
@@ -708,6 +708,10 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
 
     # Execute
     workspace = torch.empty(graph_fwd.get_workspace_size(), dtype=torch.uint8, device="cuda")
+    if request.config.getoption("--perf"):
+        times_ms = time_execution(graph_fwd.execute, variant_pack, workspace, cudnn_handle)
+        print(f"@@@@ MXFP8 Fwd graph_fwd.execute avg_time_ms={times_ms.mean().item():.3f}")
+        profile_execution(graph_fwd.execute, variant_pack, workspace, cudnn_handle)
     graph_fwd.execute(variant_pack, workspace, handle=cudnn_handle)
     torch.cuda.synchronize()
 
@@ -843,6 +847,10 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
 
         # Execute backward graph
         workspace_bwd = torch.empty(graph_bwd.get_workspace_size(), dtype=torch.uint8, device="cuda")
+        if request.config.getoption("--perf"):
+            times_ms = time_execution(graph_bwd.execute, variant_pack_bwd, workspace_bwd, cudnn_handle)
+            print(f"@@@@ MXFP8 Bwd graph_bwd.execute avg_time_ms={times_ms.mean().item():.3f}")
+            profile_execution(graph_bwd.execute, variant_pack_bwd, workspace_bwd, cudnn_handle)
         graph_bwd.execute(variant_pack_bwd, workspace_bwd, handle=cudnn_handle)
         torch.cuda.synchronize()
 

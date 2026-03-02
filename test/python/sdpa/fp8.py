@@ -21,6 +21,8 @@ from .helpers import (
     prefix_sum,
     convert_packed_to_uniform,
     convert_uniform_to_packed,
+    time_execution,
+    profile_execution,
 )
 
 # fmt: off
@@ -412,6 +414,10 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
             variant_pack[int(GraphFwdUid.stats_ragged_offset)] = stats_ragged_offset_gpu
 
         workspace = torch.empty(graph.get_workspace_size(), dtype=torch.uint8, device="cuda")
+        if request.config.getoption("--perf"):
+            times_ms = time_execution(graph.execute, variant_pack, workspace, cudnn_handle)
+            print(f"@@@@ FP8 Fwd graph.execute avg_time_ms={times_ms.mean().item():.3f}")
+            profile_execution(graph.execute, variant_pack, workspace, cudnn_handle)
         graph.execute(variant_pack, workspace, handle=cudnn_handle)
         torch.cuda.synchronize()
 
@@ -516,6 +522,10 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
             variant_pack_fwd[int(GraphFwdUid.stats_ragged_offset)] = stats_ragged_offset_gpu
 
         workspace_fwd = torch.empty(graph_fwd.get_workspace_size(), dtype=torch.uint8, device="cuda")
+        if request.config.getoption("--perf"):
+            times_ms = time_execution(graph_fwd.execute, variant_pack_fwd, workspace_fwd, cudnn_handle)
+            print(f"@@@@ FP8 Bwd-Fwd graph_fwd.execute avg_time_ms={times_ms.mean().item():.3f}")
+            profile_execution(graph_fwd.execute, variant_pack_fwd, workspace_fwd, cudnn_handle)
         graph_fwd.execute(variant_pack_fwd, workspace_fwd, handle=cudnn_handle)
         torch.cuda.synchronize()
 
@@ -568,6 +578,10 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
             variant_pack_bwd[int(GraphBwdUid.dO_ragged_offset)] = o_ragged_offset_gpu
 
         workspace_bwd = torch.empty(graph.get_workspace_size(), dtype=torch.uint8, device="cuda")
+        if request.config.getoption("--perf"):
+            times_ms = time_execution(graph.execute, variant_pack_bwd, workspace_bwd, cudnn_handle)
+            print(f"@@@@ FP8 Bwd graph.execute avg_time_ms={times_ms.mean().item():.3f}")
+            profile_execution(graph.execute, variant_pack_bwd, workspace_bwd, cudnn_handle)
         graph.execute(variant_pack_bwd, workspace_bwd, handle=cudnn_handle)
         torch.cuda.synchronize()
 
