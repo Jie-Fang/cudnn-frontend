@@ -1374,6 +1374,24 @@ else:
             args.sliding_window_size,
         )
 
+    # Compute MMA SOL%
+    _peak_mma_tflops = None
+    try:
+        import pynvml
+
+        pynvml.nvmlInit()
+        _handle = pynvml.nvmlDeviceGetHandleByIndex(torch.cuda.current_device())
+        _max_clock_mhz = pynvml.nvmlDeviceGetMaxClockInfo(_handle, pynvml.NVML_CLOCK_SM)
+        pynvml.nvmlShutdown()
+        _num_sms = torch.cuda.get_device_properties(torch.cuda.current_device()).multi_processor_count
+        _fma_per_clock = 8192 if args.data_type in ("fp8", "mxfp8") else 4096
+        _peak_mma_tflops = _fma_per_clock * 2 * _num_sms * _max_clock_mhz / 1e6
+    except Exception:
+        pass
+
+    fwd_sol_str = f", {fwd_tflops / _peak_mma_tflops * 100:.1f}% SOL" if _peak_mma_tflops and fwd_tflops > 0 else ""
+    bwd_sol_str = f", {bwd_tflops / _peak_mma_tflops * 100:.1f}% SOL" if _peak_mma_tflops and bwd_tflops > 0 else ""
+
     if args.format_output:
         print(
             f"{args.case_tag},{args.sdpa_backend},{args.batch_size},{args.q_seqlen},{args.kv_seqlen},{args.num_q_heads},{args.num_kv_heads},{head_dim_qk},{fwd_median_time:.3f},{bwd_median_time:.3f},{fwd_tflops:.0f},{bwd_tflops:.0f},{(np.max(np.array(forward_diffs[5:])) if len(forward_diffs) > 5 else (np.max(np.array(forward_diffs)) if len(forward_diffs) > 0 else 0.0)):.6f},{num_iters}"
@@ -1381,9 +1399,9 @@ else:
     else:
         if run_fwd and run_bwd:
             print(
-                f"{args.sdpa_backend}:: Median (fwd, bwd) Execution Times: {fwd_median_time:.3f} ms ({fwd_tflops:.0f} TFLOPS), {bwd_median_time:.3f} ms ({bwd_tflops:.0f} TFLOPS)"
+                f"{args.sdpa_backend}:: Median (fwd, bwd) Execution Times: {fwd_median_time:.3f} ms ({fwd_tflops:.0f} TFLOPS{fwd_sol_str}), {bwd_median_time:.3f} ms ({bwd_tflops:.0f} TFLOPS{bwd_sol_str})"
             )
         elif run_fwd:
-            print(f"{args.sdpa_backend}:: Median (fwd) Execution Time: {fwd_median_time:.3f} ms ({fwd_tflops:.0f} TFLOPS)")
+            print(f"{args.sdpa_backend}:: Median (fwd) Execution Time: {fwd_median_time:.3f} ms ({fwd_tflops:.0f} TFLOPS{fwd_sol_str})")
         elif run_bwd:
-            print(f"{args.sdpa_backend}:: Median (bwd) Execution Time: {bwd_median_time:.3f} ms ({bwd_tflops:.0f} TFLOPS)")
+            print(f"{args.sdpa_backend}:: Median (bwd) Execution Time: {bwd_median_time:.3f} ms ({bwd_tflops:.0f} TFLOPS{bwd_sol_str})")
