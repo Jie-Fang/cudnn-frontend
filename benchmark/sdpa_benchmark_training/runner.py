@@ -64,6 +64,31 @@ def log_environment_info():
         pass  # flash_attn is optional
 
 
+def _get_peak_mma_tflops(data_type: str) -> Optional[float]:
+    """Get peak MMA TFLOPS for the current GPU and data type.
+
+    Uses 8192 FMA/clock/SM for FP8/MXFP8 and 4096 FMA/clock/SM for FP16/BF16.
+    """
+    try:
+        import torch
+        import pynvml
+
+        if not torch.cuda.is_available():
+            return None
+
+        pynvml.nvmlInit()
+        handle = pynvml.nvmlDeviceGetHandleByIndex(torch.cuda.current_device())
+        max_clock_mhz = pynvml.nvmlDeviceGetMaxClockInfo(handle, pynvml.NVML_CLOCK_SM)
+        pynvml.nvmlShutdown()
+
+        num_sms = torch.cuda.get_device_properties(torch.cuda.current_device()).multi_processor_count
+
+        fma_per_clock = 8192 if data_type in ("fp8", "mxfp8") else 4096
+        return fma_per_clock * 2 * num_sms * max_clock_mhz / 1e6
+    except Exception:
+        return None
+
+
 class BenchmarkRunner:
     """
     Runs benchmarks from configurations with cartesian product expansion.
@@ -132,6 +157,18 @@ class BenchmarkRunner:
             if det_bwd and config.profile_pass == "fwd":
                 continue
 
+            # MXFP8 constraints: cudnn-only, forward-only, no sliding window
+            if data_type == "mxfp8":
+                if backend != "cudnn":
+                    continue
+                if config.sliding_window_size is not None:
+                    continue
+
+            # For mxfp8, override profile_pass to fwd-only (bwd not supported)
+            case_profile_pass = config.profile_pass
+            if data_type == "mxfp8" and case_profile_pass in ("bwd", "both"):
+                case_profile_pass = "fwd"
+
             yield {
                 "config_name": config.name,
                 "model": model,
@@ -140,7 +177,7 @@ class BenchmarkRunner:
                 "backend": backend,
                 "data_type": data_type,
                 "attn_mask": attn_mask,
-                "profile_pass": config.profile_pass,
+                "profile_pass": case_profile_pass,
                 "batch_size": config.batch_size,
                 "num_iterations": config.num_iterations,
                 "num_warmup_iterations": config.num_warmup_iterations,
@@ -299,8 +336,11 @@ class BenchmarkRunner:
             results.append(result)
 
             if result.success:
-                fwd_info = f"fwd: {result.fwd_time_ms:.3f}ms ({result.fwd_tflops:.0f} TFLOPS)"
-                bwd_info = f"bwd: {result.bwd_time_ms:.3f}ms ({result.bwd_tflops:.0f} TFLOPS)"
+                peak = _get_peak_mma_tflops(case["data_type"])
+                fwd_sol = f", {result.fwd_tflops / peak * 100:.1f}% SOL" if peak and result.fwd_tflops > 0 else ""
+                bwd_sol = f", {result.bwd_tflops / peak * 100:.1f}% SOL" if peak and result.bwd_tflops > 0 else ""
+                fwd_info = f"fwd: {result.fwd_time_ms:.3f}ms ({result.fwd_tflops:.0f} TFLOPS{fwd_sol})"
+                bwd_info = f"bwd: {result.bwd_time_ms:.3f}ms ({result.bwd_tflops:.0f} TFLOPS{bwd_sol})"
                 logger.info(f"  -> {fwd_info}, {bwd_info}")
             else:
                 logger.warning(f"  -> FAILED: {result.error_message}")
