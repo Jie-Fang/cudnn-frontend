@@ -197,3 +197,27 @@ runner.save_csv(results, config)
 - Forward and backward bandwidth comparison across all model configurations
 - Backends: cuDNN, PyTorch, torch.compile
 - Results obtained on NVIDIA GB200 GPU
+
+### GB300 - All Models (Time)
+![All Models Time on GB300](results/gb300/all_models_time.png)
+- Forward and backward time comparison across all model configurations
+- Backends: cuDNN, PyTorch, torch.compile
+- Results obtained on NVIDIA GB300 GPU
+
+### GB300 - All Models (Bandwidth)
+![All Models Bandwidth on GB300](results/gb300/all_models_bandwidth.png)
+- Forward and backward bandwidth comparison across all model configurations
+- Backends: cuDNN, PyTorch, torch.compile
+- Results obtained on NVIDIA GB300 GPU
+
+### H200 - All Models (Time)
+![All Models Time on H200](results/h200/all_models_time.png)
+- Forward and backward time comparison across all model configurations
+- Backends: cuDNN, PyTorch, torch.compile
+- Results obtained on NVIDIA H200 GPU
+
+### H200 - All Models (Bandwidth)
+![All Models Bandwidth on H200](results/h200/all_models_bandwidth.png)
+- Forward and backward bandwidth comparison across all model configurations
+- Backends: cuDNN, PyTorch, torch.compile
+- Results obtained on NVIDIA H200 GPU
