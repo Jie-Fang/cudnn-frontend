@@ -123,7 +123,7 @@ def nsa_init(
 
     scale_softmax = 1.0 / math.sqrt(d_qk) if scale_softmax is None else scale_softmax
 
-    skip_ref = request.config.getoption("--nsa-skip-ref", default=False)
+    skip_ref = request.config.getoption("--skip-ref", default=False)
 
     return {
         "b": b,

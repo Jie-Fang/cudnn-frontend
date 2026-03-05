@@ -88,10 +88,10 @@ Selection Attention performs attention on dynamically selected key-value blocks.
   - `Q` (Query): `(T, H_q, D)` where `T` is total sequence length, `H_q` is number of query heads, `D` is head dimension
   - `K` (Key): `(T, H_kv, D)` where `H_kv` is number of key-value heads
   - `V` (Value): `(T, H_kv, D_v)` where `D_v` is value dimension
-  - `block_indices`: `(T, H_kv, K)` — indices of selected blocks for each query position
-  - `block_counts`: `(T, H_kv)` — number of valid blocks per query position
-  - `cum_seqlen_q`: `(batch_size + 1,)` — cumulative sequence lengths for queries
-  - `cum_seqlen_k`: `(batch_size + 1,)` — cumulative sequence lengths for keys (must equal `cum_seqlen_q`)
+  - `block_indices`: `(T, H_kv, K)` – indices of selected blocks for each query position
+  - `block_counts`: `(T, H_kv)` – number of valid blocks per query position
+  - `cum_seqlen_q`: `(batch_size + 1,)` – cumulative sequence lengths for queries
+  - `cum_seqlen_k`: `(batch_size + 1,)` – cumulative sequence lengths for keys (must equal `cum_seqlen_q`)
 
 - **Outputs**
   - `O` (Output): `(T, H_q, D_v)`
@@ -201,10 +201,10 @@ Compression Attention performs attention over compressed key-value sequences. Th
 
 - **Inputs**
   - `Q` (Query): `(B, H_q, S_q, D)` or `(T, H_q, D)`
-  - `K` (Key): `(B, H_kv, S_kv, D)` or `(T_kv, H_kv, D)` — compressed KV sequence
+  - `K` (Key): `(B, H_kv, S_kv, D)` or `(T_kv, H_kv, D)` – compressed KV sequence
   - `V` (Value): `(B, H_kv, S_kv, D_v)` or `(T_kv, H_kv, D_v)`
-  - `cum_seqlen_q`: `(batch_size + 1,)` — cumulative sequence lengths for queries (T,H,D layout only)
-  - `cum_seqlen_k`: `(batch_size + 1,)` — cumulative sequence lengths for compressed keys (T,H,D layout only)
+  - `cum_seqlen_q`: `(batch_size + 1,)` – cumulative sequence lengths for queries (T,H,D layout only)
+  - `cum_seqlen_k`: `(batch_size + 1,)` – cumulative sequence lengths for compressed keys (T,H,D layout only)
 
 - **Outputs**
   - `O` (Output): Same shape as `Q`
@@ -322,12 +322,12 @@ This implementation is a wrapper around cudnn backend (and is not strictly open 
   - `Q` (Query): `(B, H_q, S_q, D)` or `(T, H_q, D)`
   - `K` (Key): `(B, H_kv, S_kv, D)` or `(T, H_kv, D)`
   - `V` (Value): `(B, H_kv, S_kv, D_v)` or `(T, H_kv, D_v)`
-  - `seq_len_q`: `(B, 1, 1, 1)` — sequence lengths for queries (T,H,D layout only)
-  - `seq_len_kv`: `(B, 1, 1, 1)` — sequence lengths for keys/values (T,H,D layout only)
+  - `seq_len_q`: `(B, 1, 1, 1)` – sequence lengths for queries (T,H,D layout only)
+  - `seq_len_kv`: `(B, 1, 1, 1)` – sequence lengths for keys/values (T,H,D layout only)
 
 - **Outputs**
   - `O` (Output): Same shape as `Q`
-  - `Stats` (optional): `(B, H_q, S_q, 1)` or `(T, H_q, 1)` — softmax statistics for training
+  - `Stats` (optional): `(B, H_q, S_q, 1)` or `(T, H_q, 1)` – softmax statistics for training
 
 #### Equation
 
@@ -434,13 +434,13 @@ Top-K Reduction identifies the most important key-value blocks for each query po
 - **Inputs**
   - `Q` (Query): `(B, H_q, S_q, D)` or `(T, H_q, D)`
   - `K` (Key): `(B, H_kv, S_kv, D)` or `(T, H_kv, D)`
-  - `LSE` (LogSumExp): `(B, H_q, S_q)` or `(T, H_q)` — from a prior attention pass
-  - `cum_seqlen_q`: `(batch_size + 1,)` — cumulative sequence lengths (T,H,D layout only)
-  - `cum_seqlen_k`: `(batch_size + 1,)` — cumulative sequence lengths (T,H,D layout only)
+  - `LSE` (LogSumExp): `(B, H_q, S_q)` or `(T, H_q)` – from a prior attention pass
+  - `cum_seqlen_q`: `(batch_size + 1,)` – cumulative sequence lengths (T,H,D layout only)
+  - `cum_seqlen_k`: `(batch_size + 1,)` – cumulative sequence lengths (T,H,D layout only)
 
 - **Outputs**
-  - `topk_scores`: `(B, H_kv, S_q, K)` or `(T, H_kv, K)` — top-K attention scores
-  - `topk_indices`: `(B, H_kv, S_q, K)` or `(T, H_kv, K)` — indices of top-K blocks
+  - `topk_scores`: `(B, H_kv, S_q, K)` or `(T, H_kv, K)` – top-K attention scores
+  - `topk_indices`: `(B, H_kv, S_q, K)` or `(T, H_kv, K)` – indices of top-K blocks
 
 #### Equation
 
@@ -559,7 +559,7 @@ topk.execute(
 Used for sequences of varying lengths packed into a single tensor:
 
 - **Q/K/V**: `(T, H, D)` where `T = sum(seq_lengths)`
-- **cum_seqlen**: `(batch_size + 1,)` — cumulative sequence lengths, e.g., `[0, 128, 320, 512]` for 3 sequences of lengths 128, 192, 192
+- **cum_seqlen**: `(batch_size + 1,)` – cumulative sequence lengths, e.g., `[0, 128, 320, 512]` for 3 sequences of lengths 128, 192, 192
 
 ### B,H,S,D Format (Fixed-Length Batched)
 

@@ -8,6 +8,7 @@ This folder documents the Python FE APIs implemented under `python/cudnn`. For d
 - [Grouped GEMM + SwiGLU](gemm_fusions/grouped_gemm_swiglu.md)
 - [Grouped GEMM + dSwiGLU](gemm_fusions/grouped_gemm_dswiglu.md)
 - [Native Sparse Attention (NSA)](nsa.md)
+- [SDPA Backward (SM100, D=256)](attention/sdpa_bwd_d256.md)
 
 ## Installation and setup
 
@@ -80,9 +81,9 @@ op.execute(
 )
 ```
 Methods:
-- `check_support()` — validates target problem configuration (i.e. tensor shapes, tensor strides, dtypes, tiling/cluster/kernel configurations, environment, etc.)
-- `compile()` — compiles the kernel with the provided sample tensors and parameters.
-- `execute(inputs, ..., outputs, ..., current_stream)` — runs the kernel with the provided inputs and outputs.
+- `check_support()` – validates target problem configuration (i.e. tensor shapes, tensor strides, dtypes, tiling/cluster/kernel configurations, environment, etc.)
+- `compile()` – compiles the kernel with the provided sample tensors and parameters.
+- `execute(inputs, ..., outputs, ..., current_stream)` – runs the kernel with the provided inputs and outputs.
   
 ## Common Parameters and Conventions
 

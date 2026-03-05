@@ -16,8 +16,8 @@ This API supports two modes:
   - `A`: shape `(M, K, L)`
   - `B`: shape `(N, K, L)`
 - Outputs:
-  - `AB12`: shape `(M, N, L)` — full GEMM result
-  - `C`: shape `(M, N/2, L)` — SwiGLU-projected result
+  - `AB12`: shape `(M, N, L)` – full GEMM result
+  - `C`: shape `(M, N/2, L)` – SwiGLU-projected result
 
     `L` is the batch dimension.
 
@@ -290,13 +290,13 @@ Tuple unpacking order is always:
 
 #### `GemmSwigluSm100` (constructor)
 
-- `sample_a`, `sample_b`, `sample_ab12`, `sample_c` — see Input/Output tensors
-- `sample_sfa`, `sample_sfb`, `sample_sfc`, `sample_amax`, `sample_norm_const` — see Scale factor tensors (quantized mode)
+- `sample_a`, `sample_b`, `sample_ab12`, `sample_c` – see Input/Output tensors
+- `sample_sfa`, `sample_sfb`, `sample_sfc`, `sample_amax`, `sample_norm_const` – see Scale factor tensors (quantized mode)
 
 #### `GemmSwigluSm100.execute`
 
-- `a_tensor`, `b_tensor`, `ab12_tensor`, `c_tensor` — see Input/Output tensors. Must have same layout as sample tensors provided in constructor.
-- `sfa_tensor`, `sfb_tensor`, `sfc_tensor`, `amax_tensor`, `norm_const_tensor` — see Scale factor tensors (quantized mode)
+- `a_tensor`, `b_tensor`, `ab12_tensor`, `c_tensor` – see Input/Output tensors. Must have same layout as sample tensors provided in constructor.
+- `sfa_tensor`, `sfb_tensor`, `sfc_tensor`, `amax_tensor`, `norm_const_tensor` – see Scale factor tensors (quantized mode)
 
 ---
 

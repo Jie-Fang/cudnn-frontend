@@ -39,6 +39,9 @@ To add a new frontend-only API, follow these steps:
 **Currently implemented frontend-only APIs**:
 - `GEMM + Amax`
 - `GEMM + SwiGLU`
+- `Grouped Gemm + SwiGLU`
+- `Grouped Gemm + dSwiglu`
+- `SDPA Backward (SM100, D=256)`
 
 **In progress frontend-only APIs**:
 - GEMM + Dswiglu
