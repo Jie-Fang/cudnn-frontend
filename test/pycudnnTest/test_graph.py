@@ -87,7 +87,18 @@ class PytorchReference:
     @staticmethod
     def identity(kwargs, test_tensor_out_list):
         dtype = eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
-        return [kwargs["input"].to(dtype=dtype)]
+        shape = tuple(test_tensor_out_list[0].dim)
+        input_val = kwargs["input"]
+        if isinstance(input_val, torch.Tensor) and input_val.numel() == 1:
+            return [
+                torch.full(
+                    shape, input_val.item(), dtype=dtype, device=input_val.device
+                )
+            ]
+        if not isinstance(input_val, torch.Tensor):
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            return [torch.full(shape, float(input_val), dtype=dtype, device=device)]
+        return [input_val.to(dtype=dtype)]
 
     @staticmethod
     def reciprocal(kwargs, test_tensor_out_list):
