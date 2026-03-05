@@ -186,7 +186,7 @@ def grouped_gemm_swiglu_init(
     # Parse CLI options
     nkl_str = request.config.getoption("--grouped-gemm-nkl", default=None)
     group_m_str = request.config.getoption("--grouped-gemm-group-m", default=None)
-    skip_ref = request.config.getoption("--grouped-gemm-skip-ref", default=False)
+    skip_ref = request.config.getoption("--skip-ref", default=False)
 
     # Default values
     if nkl_str is not None:

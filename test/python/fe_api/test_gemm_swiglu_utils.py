@@ -222,7 +222,7 @@ def gemm_swiglu_init(
     mma_tiler_str = request.config.getoption("--gemm-swiglu-mma-tiler", default=None)
     cluster_shape_str = request.config.getoption("--gemm-swiglu-cluster-shape", default=None)
     alpha_opt = request.config.getoption("--gemm-swiglu-alpha", default=None)
-    skip_ref = request.config.getoption("--gemm-swiglu-skip-ref", default=False)
+    skip_ref = request.config.getoption("--skip-ref", default=False)
 
     if mnkl_str is not None:
         m, n, k, l = [int(x.strip()) for x in mnkl_str.split(",")]

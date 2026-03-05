@@ -126,7 +126,7 @@ def gemm_amax_init(
     mnkl_str = request.config.getoption("--gemm-amax-mnkl", default=None)
     mma_tiler_str = request.config.getoption("--gemm-amax-mma-tiler", default=None)
     cluster_shape_str = request.config.getoption("--gemm-amax-cluster-shape", default=None)
-    skip_ref = request.config.getoption("--gemm-amax-skip-ref", default=False)
+    skip_ref = request.config.getoption("--skip-ref", default=False)
 
     if mnkl_str is not None:
         m, n, k, l = [int(x.strip()) for x in mnkl_str.split(",")]

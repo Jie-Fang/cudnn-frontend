@@ -30,7 +30,7 @@ include = ["**/*"]
 
 [project.optional-dependencies]
 cutedsl = [
-    "nvidia-cutlass-dsl==4.4.0",
+    "nvidia-cutlass-dsl==4.4.1",
     "cuda-python",
     "torch",
     "apache-tvm-ffi",
