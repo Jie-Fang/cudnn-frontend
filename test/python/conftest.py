@@ -1,8 +1,27 @@
+import os
+import sys
+import traceback
 import pytest
 import cudnn
 import torch
 
 # fmt: off
+
+# =================== CUDA Synchronize Guard =====================
+torch.cuda.synchronize_unsafe = torch.cuda.synchronize
+
+def cuda_synchronize_safe(*args, **kwargs):
+    try:
+        torch.cuda.synchronize_unsafe(*args, **kwargs)
+    except Exception as e:
+        entries = traceback.extract_stack(sys._getframe(1))
+        test_entries = [f for f in entries if "/test/python/" in f.filename]
+        print("Traceback (most recent call last):", flush=True)
+        print(*traceback.format_list(test_entries), end="", flush=True)
+        print(e, flush=True)
+        os._exit(os.EX_SOFTWARE)
+
+torch.cuda.synchronize = cuda_synchronize_safe
 
 # =================== Fixtures =====================
 @pytest.fixture(scope="session", autouse=True)
