@@ -179,10 +179,10 @@ TEST_CASE("sdpa_mxfp8_mha_bprop", "[graph][sdpa][mxfp8][backward]") {
                                        .set_data_type(fe::DataType_t::FP8_E8M0)
                                        .set_reordering_type(fe::TensorReordering_t::F8_128x4));
 
-    // SF_V: [b, h, s_scale_padded, d_v_padded]
-    auto SF_V_dims = std::vector<int64_t>({b, h, s_scale_padded, d_v_padded});
+    // SF_V: [b, h, s_padded, d_v_scale_padded]
+    auto SF_V_dims = std::vector<int64_t>({b, h, s_padded, d_v_scale_padded});
     auto SF_V_strides =
-        std::vector<int64_t>({h * s_scale_padded * d_v_padded, s_scale_padded * d_v_padded, 1, s_scale_padded});
+        std::vector<int64_t>({h * s_padded * d_v_scale_padded, s_padded * d_v_scale_padded, d_v_scale_padded, 1});
     auto SF_V = mha_graph.tensor(fe::graph::Tensor_attributes()
                                      .set_name("SF_V")
                                      .set_dim(SF_V_dims)
@@ -300,7 +300,7 @@ TEST_CASE("sdpa_mxfp8_mha_bprop", "[graph][sdpa][mxfp8][backward]") {
     int64_t sf_dO_t_size = b * h * s_scale_padded * d_v_padded;
     Surface<int8_t> SF_dO_T_Tensor(sf_dO_t_size, false);
 
-    int64_t sf_v_size = b * h * s_scale_padded * d_v_padded;
+    int64_t sf_v_size = b * h * s_padded * d_v_scale_padded;
     Surface<int8_t> SF_V_Tensor(sf_v_size, false);
 
     Surface<float> Amax_dQ_Tensor(1, false);
@@ -493,10 +493,10 @@ TEST_CASE("sdpa_mxfp8_gqa_bprop", "[graph][sdpa][mxfp8][backward]") {
                                        .set_data_type(fe::DataType_t::FP8_E8M0)
                                        .set_reordering_type(fe::TensorReordering_t::F8_128x4));
 
-    // SF_V: [b, h, s_scale_padded, d_v_padded]
-    auto SF_V_dims = std::vector<int64_t>({b, h_kv, s_scale_padded, d_v_padded});
+    // SF_V: [b, h, s_padded, d_v_scale_padded]
+    auto SF_V_dims = std::vector<int64_t>({b, h_kv, s_padded, d_v_scale_padded});
     auto SF_V_strides =
-        std::vector<int64_t>({h_kv * s_scale_padded * d_v_padded, s_scale_padded * d_v_padded, 1, s_scale_padded});
+        std::vector<int64_t>({h_kv * s_padded * d_v_scale_padded, s_padded * d_v_scale_padded, d_v_scale_padded, 1});
     auto SF_V = mha_graph.tensor(fe::graph::Tensor_attributes()
                                      .set_name("SF_V")
                                      .set_dim(SF_V_dims)
@@ -618,7 +618,7 @@ TEST_CASE("sdpa_mxfp8_gqa_bprop", "[graph][sdpa][mxfp8][backward]") {
     int64_t sf_dO_t_size = b * h_q * s_scale_padded * d_v_padded;
     Surface<int8_t> SF_dO_T_Tensor(sf_dO_t_size, false);
 
-    int64_t sf_v_size = b * h_kv * s_scale_padded * d_v_padded;
+    int64_t sf_v_size = b * h_kv * s_padded * d_v_scale_padded;
     Surface<int8_t> SF_V_Tensor(sf_v_size, false);
 
     Surface<float> Amax_dQ_Tensor(1, false);
@@ -810,10 +810,10 @@ TEST_CASE("sdpa_mxfp8_mla_bprop", "[graph][sdpa][mxfp8][backward]") {
                                        .set_data_type(fe::DataType_t::FP8_E8M0)
                                        .set_reordering_type(fe::TensorReordering_t::F8_128x4));
 
-    // SF_V: [b, h, s_scale_padded, d_v_padded]
-    auto SF_V_dims = std::vector<int64_t>({b, h, s_scale_padded, d_v_padded});
+    // SF_V: [b, h, s_padded, d_v_scale_padded]
+    auto SF_V_dims = std::vector<int64_t>({b, h, s_padded, d_v_scale_padded});
     auto SF_V_strides =
-        std::vector<int64_t>({h * s_scale_padded * d_v_padded, s_scale_padded * d_v_padded, 1, s_scale_padded});
+        std::vector<int64_t>({h * s_padded * d_v_scale_padded, s_padded * d_v_scale_padded, d_v_scale_padded, 1});
     auto SF_V = mha_graph.tensor(fe::graph::Tensor_attributes()
                                      .set_name("SF_V")
                                      .set_dim(SF_V_dims)
@@ -932,7 +932,7 @@ TEST_CASE("sdpa_mxfp8_mla_bprop", "[graph][sdpa][mxfp8][backward]") {
     int64_t sf_dO_t_size = b * h * s_scale_padded * d_v_padded;
     Surface<int8_t> SF_dO_T_Tensor(sf_dO_t_size, false);
 
-    int64_t sf_v_size = b * h * s_scale_padded * d_v_padded;
+    int64_t sf_v_size = b * h * s_padded * d_v_scale_padded;
     Surface<int8_t> SF_V_Tensor(sf_v_size, false);
 
     Surface<float> Amax_dQ_Tensor(1, false);

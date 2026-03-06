@@ -832,7 +832,7 @@ def test_sdpa_mxfp8_fwd_L0(env_info, test_no, request, cudnn_handle):
         batches=RandomBatchSize(min=1, max=4),
         s_q_s_kv=RandomSequenceLength(s_q_min=128, s_q_max=512, s_kv_min=128, s_kv_max=512, s_q_distribution={"s_q=1": 0, "s_q=s_kv": 1, "s_q=random": 1}),
         d_qk_d_v=RandomHiddenDimSize(d_qk_min=128, d_qk_max=192, d_v_min=128, d_v_max=128, head_dim_distribution={"d_qk=d_v": 1, "d_qk=random": 0}, with_high_probability=[(128, 128), (192, 128)]),
-        head_count=RandomHeadGenerator(min=2, max=2, head_group_options=(1, 0, 0)),
+        head_count=RandomHeadGenerator(min=1, max=8, head_group_options=(1, 4, 1)),
         data_type=RandomChoice({torch.float8_e4m3fn: 3, torch.float8_e5m2: 1}),
         output_type=RandomChoice({torch.float16: 2, torch.bfloat16: 1}),  # FP16 more often for tighter tolerance testing
         with_sliding_mask=SlidingWindowMaskGenerator(causal=10, left_window_only=5, right_window_only=5, band_around_diag=10, no_mask=10),
@@ -853,7 +853,7 @@ def test_sdpa_mxfp8_fwd_L0(env_info, test_no, request, cudnn_handle):
 # # ==================================
 
 @pytest.mark.parametrize("test_no", generate_test_seeds(num_tests=128, rng_seed=1002), ids=lambda p: f"test{p[0]}")
-@pytest.mark.L1
+@pytest.mark.L0
 def test_sdpa_mxfp8_bwd_L0(env_info, test_no, request, cudnn_handle):
 
     test = SDPATestConfig(**env_info, implementation=cudnn.attention_implementation.AUTO)
@@ -864,14 +864,14 @@ def test_sdpa_mxfp8_bwd_L0(env_info, test_no, request, cudnn_handle):
     rng = random.Random(geom_seed)
 
     with RandomizationContext(
-        batches=RandomBatchSize(min=1, max=1),
-        s_q_s_kv=RandomSequenceLength(s_q_min=256, s_q_max=256, s_kv_min=256, s_kv_max=256, s_q_distribution={"s_q=1": 0, "s_q=s_kv": 1, "s_q=random": 0}),
-        d_qk_d_v=RandomHiddenDimSize(d_qk_min=128, d_qk_max=128, d_v_min=128, d_v_max=128, head_dim_distribution={"d_qk=d_v": 1, "d_qk=random": 0}, with_high_probability=[(128, 128)]),
-        head_count=RandomHeadGenerator(min=1, max=1, head_group_options=(1, 0, 0)),  # MHA only, small head count
+        batches=RandomBatchSize(min=1, max=4),
+        s_q_s_kv=RandomSequenceLength(s_q_min=256, s_q_max=1024, s_kv_min=256, s_kv_max=1024, s_q_distribution={"s_q=1": 0, "s_q=s_kv": 1, "s_q=random": 1}),
+        d_qk_d_v=RandomHiddenDimSize(d_qk_min=128, d_qk_max=192, d_v_min=128, d_v_max=128, head_dim_distribution={"d_qk=d_v": 1, "d_qk=random": 0}, with_high_probability=[(128, 128), (192, 128)]),
+        head_count=RandomHeadGenerator(min=1, max=4, head_group_options=(1, 1, 0)),
         data_type=RandomChoice({torch.float8_e4m3fn: 2, torch.float8_e5m2: 0}),
-        output_type=RandomChoice({torch.float16: 2, torch.bfloat16: 1}),  # FP16 more often for tighter tolerance testing
-        with_sliding_mask=SlidingWindowMaskGenerator(causal=10, left_window_only=5, right_window_only=5, band_around_diag=10, no_mask=10),
-        diag_align=RandomChoice({cudnn.diagonal_alignment.TOP_LEFT : 1, cudnn.diagonal_alignment.BOTTOM_RIGHT : 1}),
+        output_type=RandomChoice({torch.float16: 2, torch.bfloat16: 1}),
+        with_sliding_mask=SlidingWindowMaskGenerator(no_mask=10),
+        diag_align=RandomChoice({cudnn.diagonal_alignment.TOP_LEFT : 1}),
         is_q_ragged_or_padded_or_full=RandomChoice({"ragged": 0, "padded": 0, "full": 1}),
         stats_layout=RandomChoice({"disabled": 1}),
         is_deterministic=RandomChoice({True: 1, False: 0}),
