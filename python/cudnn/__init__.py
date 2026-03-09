@@ -326,25 +326,5 @@ def __getattr__(name: str) -> Any:
                 f"grouped_gemm_dswiglu_wrapper_sm100 requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]': {e}"
             ) from e
 
-    elif name == "SdpabwdSm100D256":
-        try:
-            from .sdpa_bwd import SdpabwdSm100D256 as _SdpabwdSm100D256
-
-            return _SdpabwdSm100D256
-        except Exception as e:
-            raise ImportError(f"SdpabwdSm100D256 requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]': {e}") from e
-
-    elif name == "sdpa_bwd_wrapper_sm100_d256":
-        try:
-            from .sdpa_bwd import (
-                sdpa_bwd_wrapper_sm100_d256 as _sdpa_bwd_wrapper_sm100_d256,
-            )
-
-            return _sdpa_bwd_wrapper_sm100_d256
-        except Exception as e:
-            raise ImportError(
-                f"sdpa_bwd_wrapper_sm100_d256 requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]': {e}"
-            ) from e
-
     else:
         raise AttributeError(name)
