@@ -238,9 +238,9 @@ TEST_CASE("sdpa_mxfp8_mha_bprop", "[graph][sdpa][mxfp8][backward]") {
                                                                                SF_dO_T,
                                                                                sdpa_fp8_bwd_options);
 
-    dQ->set_output(true).set_dim(QK_dims).set_stride(QK_strides).set_data_type(fe::DataType_t::FP8_E4M3);
-    dK->set_output(true).set_dim(QK_dims).set_stride(QK_strides).set_data_type(fe::DataType_t::FP8_E4M3);
-    dV->set_output(true).set_dim(V_dims).set_stride(V_strides).set_data_type(fe::DataType_t::FP8_E4M3);
+    dQ->set_output(true).set_dim(QK_dims).set_stride(QK_strides).set_data_type(fe::DataType_t::BFLOAT16);
+    dK->set_output(true).set_dim(QK_dims).set_stride(QK_strides).set_data_type(fe::DataType_t::BFLOAT16);
+    dV->set_output(true).set_dim(V_dims).set_stride(V_strides).set_data_type(fe::DataType_t::BFLOAT16);
     Amax_dQ->set_output(true).set_dim({1, 1, 1, 1}).set_stride({1, 1, 1, 1}).set_data_type(fe::DataType_t::FLOAT);
     Amax_dK->set_output(true).set_dim({1, 1, 1, 1}).set_stride({1, 1, 1, 1}).set_data_type(fe::DataType_t::FLOAT);
     Amax_dV->set_output(true).set_dim({1, 1, 1, 1}).set_stride({1, 1, 1, 1}).set_data_type(fe::DataType_t::FLOAT);
@@ -270,9 +270,9 @@ TEST_CASE("sdpa_mxfp8_mha_bprop", "[graph][sdpa][mxfp8][backward]") {
     Surface<int8_t> K_Tensor(qk_size, false);
     Surface<int8_t> V_Tensor(v_size, false);
 
-    Surface<int8_t> dQ_Tensor(qk_size, false);
-    Surface<int8_t> dK_Tensor(qk_size, false);
-    Surface<int8_t> dV_Tensor(v_size, false);
+    Surface<half> dQ_Tensor(qk_size, false);
+    Surface<half> dK_Tensor(qk_size, false);
+    Surface<half> dV_Tensor(v_size, false);
 
     // O and dO in bfloat16 (2 bytes per element)
     Surface<int8_t> O_f16_Tensor(o_dO_size * 2, false);
@@ -553,9 +553,9 @@ TEST_CASE("sdpa_mxfp8_gqa_bprop", "[graph][sdpa][mxfp8][backward]") {
                                                                                SF_dO_T,
                                                                                sdpa_fp8_bwd_options);
 
-    dQ->set_output(true).set_dim(Q_dims).set_stride(Q_strides).set_data_type(fe::DataType_t::FP8_E4M3);
-    dK->set_output(true).set_dim(K_dims).set_stride(K_strides).set_data_type(fe::DataType_t::FP8_E4M3);
-    dV->set_output(true).set_dim(V_dims).set_stride(V_strides).set_data_type(fe::DataType_t::FP8_E4M3);
+    dQ->set_output(true).set_dim(Q_dims).set_stride(Q_strides).set_data_type(fe::DataType_t::BFLOAT16);
+    dK->set_output(true).set_dim(K_dims).set_stride(K_strides).set_data_type(fe::DataType_t::BFLOAT16);
+    dV->set_output(true).set_dim(V_dims).set_stride(V_strides).set_data_type(fe::DataType_t::BFLOAT16);
     Amax_dQ->set_output(true).set_dim({1, 1, 1, 1}).set_stride({1, 1, 1, 1}).set_data_type(fe::DataType_t::FLOAT);
     Amax_dK->set_output(true).set_dim({1, 1, 1, 1}).set_stride({1, 1, 1, 1}).set_data_type(fe::DataType_t::FLOAT);
     Amax_dV->set_output(true).set_dim({1, 1, 1, 1}).set_stride({1, 1, 1, 1}).set_data_type(fe::DataType_t::FLOAT);
@@ -586,9 +586,9 @@ TEST_CASE("sdpa_mxfp8_gqa_bprop", "[graph][sdpa][mxfp8][backward]") {
     Surface<int8_t> K_Tensor(k_size, false);
     Surface<int8_t> V_Tensor(v_size, false);
 
-    Surface<int8_t> dQ_Tensor(q_size, false);
-    Surface<int8_t> dK_Tensor(k_size, false);
-    Surface<int8_t> dV_Tensor(v_size, false);
+    Surface<half> dQ_Tensor(q_size, false);
+    Surface<half> dK_Tensor(k_size, false);
+    Surface<half> dV_Tensor(v_size, false);
 
     // O and dO in bfloat16 (2 bytes per element)
     Surface<int8_t> O_f16_Tensor(o_dO_size * 2, false);
@@ -870,9 +870,9 @@ TEST_CASE("sdpa_mxfp8_mla_bprop", "[graph][sdpa][mxfp8][backward]") {
                                                                                SF_dO_T,
                                                                                sdpa_fp8_bwd_options);
 
-    dQ->set_output(true).set_dim(QK_dims).set_stride(QK_strides).set_data_type(fe::DataType_t::FP8_E4M3);
-    dK->set_output(true).set_dim(QK_dims).set_stride(QK_strides).set_data_type(fe::DataType_t::FP8_E4M3);
-    dV->set_output(true).set_dim(V_dims).set_stride(V_strides).set_data_type(fe::DataType_t::FP8_E4M3);
+    dQ->set_output(true).set_dim(QK_dims).set_stride(QK_strides).set_data_type(fe::DataType_t::BFLOAT16);
+    dK->set_output(true).set_dim(QK_dims).set_stride(QK_strides).set_data_type(fe::DataType_t::BFLOAT16);
+    dV->set_output(true).set_dim(V_dims).set_stride(V_strides).set_data_type(fe::DataType_t::BFLOAT16);
     Amax_dQ->set_output(true).set_dim({1, 1, 1, 1}).set_stride({1, 1, 1, 1}).set_data_type(fe::DataType_t::FLOAT);
     Amax_dK->set_output(true).set_dim({1, 1, 1, 1}).set_stride({1, 1, 1, 1}).set_data_type(fe::DataType_t::FLOAT);
     Amax_dV->set_output(true).set_dim({1, 1, 1, 1}).set_stride({1, 1, 1, 1}).set_data_type(fe::DataType_t::FLOAT);
@@ -902,9 +902,9 @@ TEST_CASE("sdpa_mxfp8_mla_bprop", "[graph][sdpa][mxfp8][backward]") {
     Surface<int8_t> K_Tensor(qk_size, false);
     Surface<int8_t> V_Tensor(v_size, false);
 
-    Surface<int8_t> dQ_Tensor(qk_size, false);
-    Surface<int8_t> dK_Tensor(qk_size, false);
-    Surface<int8_t> dV_Tensor(v_size, false);
+    Surface<half> dQ_Tensor(qk_size, false);
+    Surface<half> dK_Tensor(qk_size, false);
+    Surface<half> dV_Tensor(v_size, false);
 
     // O and dO in bfloat16 (2 bytes per element)
     Surface<int8_t> O_f16_Tensor(o_dO_size * 2, false);
