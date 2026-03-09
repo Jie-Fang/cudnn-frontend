@@ -133,7 +133,6 @@ def atomic_max_float32(
     value_int = llvm.bitcast(T.i32(), value.ir_value(loc=loc, ip=ip), loc=loc, ip=ip)
 
     old_value_int = nvvm.atomicrmw(
-        res=T.i32(),
         op=cutlass._mlir.dialects.nvvm.AtomicOpKind.MAX,
         ptr=ptr,
         a=value_int,
@@ -158,7 +157,6 @@ def atomic_add_float32(
     :return: The old value at the memory location
     """
     old_value = nvvm.atomicrmw(
-        res=T.f32(),
         op=cutlass._mlir.dialects.nvvm.AtomicOpKind.FADD,
         ptr=ptr,
         a=value.ir_value(loc=loc, ip=ip),
