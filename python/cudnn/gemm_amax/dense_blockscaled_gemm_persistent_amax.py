@@ -1325,7 +1325,6 @@ class Sm100BlockScaledPersistentDenseGemmKernel:
                     # Since we compute absolute values, all values are non-negative
                     _value_int = llvm.bitcast(T.i32(), block_amax.ir_value(), loc=None, ip=None)
                     _old_value_int = nvvm.atomicrmw(
-                        res=T.i32(),
                         op=nvvm.AtomicOpKind.MAX,
                         ptr=mAmax.iterator.llvm_ptr,
                         a=_value_int,

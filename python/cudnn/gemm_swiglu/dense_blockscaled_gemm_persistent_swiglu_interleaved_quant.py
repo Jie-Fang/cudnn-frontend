@@ -1701,7 +1701,6 @@ class Sm100BlockScaledPersistentDenseGemmKernel:
                             ip=None,
                         )
                         _old_value_int = cutlass._mlir.dialects.nvvm.atomicrmw(
-                            res=cutlass.cutlass_dsl.T.i32(),
                             op=cutlass._mlir.dialects.nvvm.AtomicOpKind.MAX,
                             ptr=mAmax_tensor.iterator.llvm_ptr,
                             a=_value_int,
