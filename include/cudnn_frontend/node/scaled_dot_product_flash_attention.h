@@ -1887,11 +1887,7 @@ class CompositeSDPABackwardNode : public NodeCRTP<CompositeSDPABackwardNode> {
     std::pair<int64_t, std::unordered_map<KnobType_t, int64_t>>
     override_heuristics_query() const {
         if (is_deterministic_algorithm_supported_on_blackwell) {
-            if (detail::get_backend_version() < 92100) {
-                return {5, {{KnobType_t::KERNEL_CFG, 31}, {KnobType_t::STAGES, 2}}};
-            } else {
-                return {5, {{KnobType_t::KERNEL_CFG, 1}, {KnobType_t::STAGES, 2}}};
-            }
+            return {5, {{KnobType_t::KERNEL_CFG, 31}, {KnobType_t::STAGES, 2}}};
         } else {
             return {-1, {}};
         }
