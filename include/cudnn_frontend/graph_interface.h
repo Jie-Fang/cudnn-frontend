@@ -85,6 +85,33 @@ class Graph : public ICudnn, public INode {
     }
 
     error_t
+    log_tensors_to_dump_(cudnnHandle_t handle, std::unordered_map<int64_t, void *> const &tensor_uid_to_pointer_map) const {
+        if (!isLoggingTensorDumpEnabled()) {
+            return {error_code_t::OK, ""};
+        }
+
+        for (auto const &[uid, ptr] : tensor_uid_to_pointer_map) {
+            CHECK_CUDNN_FRONTEND_ERROR(detail::log_variant_pack_memory_type(uid, ptr));
+        }
+
+        cudaStream_t stream;
+        _CUDNN_CHECK_CUDNN_ERROR(detail::get_stream(handle, &stream));
+        for (auto const &[tensor, fmt] : tensors_to_dump) {
+            auto it = tensor_uid_to_pointer_map.find(tensor->get_uid());
+            if (it != tensor_uid_to_pointer_map.end()) {
+                auto const &dims    = tensor->get_dim();
+                size_t num_elements = 1;
+                for (auto d : dims) num_elements *= static_cast<size_t>(d);
+                size_t elem_size = detail::get_data_type_size(tensor->get_data_type());
+                CHECK_CUDNN_FRONTEND_ERROR(
+                    detail::log_dump_tensor_content(it->first, tensor->get_name(), it->second, num_elements, elem_size, fmt, stream));
+            }
+        }
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
     pre_validate_node() const override final {
         RETURN_CUDNN_FRONTEND_ERROR_IF(
             (context.get_dynamic_shape_enabled() || kernel_cache != nullptr) && detail::get_backend_version() < 90400,
@@ -283,21 +310,6 @@ class Graph : public ICudnn, public INode {
         if (attributes.mma_core_mode == DataType_t::FP8_E4M3 || attributes.mma_core_mode == DataType_t::FP8_E5M2) {
             sdpa_outputs.Amax_O = attributes.outputs[SDPA_attributes::output_names::Amax_O] =
                 output_tensor(attributes.name + "::Amax_O");
-        }
-
-        auto seq_len_q_it  = attributes.inputs.find(SDPA_attributes::input_names::SEQ_LEN_Q);
-        auto seq_len_kv_it = attributes.inputs.find(SDPA_attributes::input_names::SEQ_LEN_KV);
-        if (seq_len_q_it != attributes.inputs.end() && seq_len_q_it->second != nullptr) {
-            tensors_to_dump.emplace_back(seq_len_q_it->second, 'd');
-        }
-        if (seq_len_kv_it != attributes.inputs.end() && seq_len_kv_it->second != nullptr) {
-            tensors_to_dump.emplace_back(seq_len_kv_it->second, 'd');
-        }
-
-        for (auto t : {q, k, v, sdpa_outputs.O}) {
-            if (auto ragged = t->get_ragged_offset()) {
-                tensors_to_dump.emplace_back(ragged, 'd');
-            }
         }
 
         if (attributes.implementation == AttentionImplementation_t::AUTO) {
@@ -784,6 +796,8 @@ class Graph : public ICudnn, public INode {
 
         Tensor_attributes::uid_t start_uid = 1;
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensors_subtree(uid_to_tensors, start_uid, used_uids));
+        tensors_to_dump.clear();
+        CHECK_CUDNN_FRONTEND_ERROR(collect_tensors_to_dump_subtree(tensors_to_dump));
 
         CUDNN_FE_LOG_BANNER("  3/4 CREATE OPERATIONS  ");
         // INode keeps track of all uids that an operation graph uses.
@@ -928,7 +942,6 @@ class Graph : public ICudnn, public INode {
                           void *workspace,
                           int64_t plan_index) const {
         CUDNN_FE_LOG_BANNER(" EXECUTE PLAN AT INDEX  for plan index (with Tensor keys) " << plan_index << "  ");
-        CUDNN_FE_LOG(*this << std::endl;);
         // First get all the uids from the map
         std::unordered_map<int64_t, void *> tensor_uid_to_pointer_map;
         for (auto const &[tensor, pointer] : tensor_to_pointer_map) {
@@ -943,7 +956,6 @@ class Graph : public ICudnn, public INode {
             std::unordered_map<std::shared_ptr<Tensor_attributes>, void *> &tensor_to_pointer_map,
             void *workspace) const {
         CUDNN_FE_LOG_BANNER(" EXECUTE PLAN (with Tensor keys) ");
-        CUDNN_FE_LOG(*this << std::endl;);
         // First get all the uids from the map
         std::unordered_map<int64_t, void *> tensor_uid_to_pointer_map;
         for (auto const &[tensor, pointer] : tensor_to_pointer_map) {
@@ -964,7 +976,6 @@ class Graph : public ICudnn, public INode {
         // Using cached values to avoid repeated tree traversal overhead.
         // Object lifetime is controlled by cached_pass_by_value which persists for the Graph's lifetime.
         CUDNN_FE_LOG_BANNER("  EXECUTE PLAN AT INDEX  for plan index " << plan_index << "  ");
-        CUDNN_FE_LOG(*this << std::endl;);
 
         CHECK_CUDNN_FRONTEND_ERROR(
             extend_tensor_map_with_pass_by_value_tensors_(tensor_uid_to_pointer_map, cached_pass_by_value));
@@ -980,25 +991,7 @@ class Graph : public ICudnn, public INode {
         // this is where cudnn backend can start using workspace for its execution plans
         void *cudnn_workspace = static_cast<char *>(workspace) + fe_workspace_size;
 
-        if (isLoggingTensorDumpEnabled()) {
-            for (auto const &[uid, ptr] : tensor_uid_to_pointer_map) {
-                CHECK_CUDNN_FRONTEND_ERROR(detail::log_variant_pack_memory_type(uid, ptr));
-            }
-
-            cudaStream_t stream;
-            _CUDNN_CHECK_CUDNN_ERROR(detail::get_stream(handle, &stream));
-            for (auto const &[tensor, fmt] : tensors_to_dump) {
-                auto it = tensor_uid_to_pointer_map.find(tensor->get_uid());
-                if (it != tensor_uid_to_pointer_map.end()) {
-                    auto const &dims    = tensor->get_dim();
-                    size_t num_elements = 1;
-                    for (auto d : dims) num_elements *= static_cast<size_t>(d);
-                    size_t elem_size = detail::get_data_type_size(tensor->get_data_type());
-                    CHECK_CUDNN_FRONTEND_ERROR(detail::log_dump_tensor_content(
-                        it->first, tensor->get_name(), it->second, num_elements, elem_size, fmt, stream));
-                }
-            }
-        }
+        CHECK_CUDNN_FRONTEND_ERROR(log_tensors_to_dump_(handle, tensor_uid_to_pointer_map));
 
         CHECK_CUDNN_FRONTEND_ERROR(execute_cudnn_plan_with_uid(handle,
                                                                tensor_uid_to_pointer_map,
@@ -1059,25 +1052,7 @@ class Graph : public ICudnn, public INode {
         // this is where cudnn backend can start using workspace for its execution plans
         void *cudnn_workspace = static_cast<char *>(workspace) + fe_workspace_size;
 
-        if (isLoggingTensorDumpEnabled()) {
-            for (auto const &[uid, ptr] : tensor_uid_to_pointer_map) {
-                CHECK_CUDNN_FRONTEND_ERROR(detail::log_variant_pack_memory_type(uid, ptr));
-            }
-
-            cudaStream_t stream;
-            _CUDNN_CHECK_CUDNN_ERROR(detail::get_stream(handle, &stream));
-            for (auto const &[tensor, fmt] : tensors_to_dump) {
-                auto it = tensor_uid_to_pointer_map.find(tensor->get_uid());
-                if (it != tensor_uid_to_pointer_map.end()) {
-                    auto const &dims    = tensor->get_dim();
-                    size_t num_elements = 1;
-                    for (auto d : dims) num_elements *= static_cast<size_t>(d);
-                    size_t elem_size = detail::get_data_type_size(tensor->get_data_type());
-                    CHECK_CUDNN_FRONTEND_ERROR(detail::log_dump_tensor_content(
-                        it->first, tensor->get_name(), it->second, num_elements, elem_size, fmt, stream));
-                }
-            }
-        }
+        CHECK_CUDNN_FRONTEND_ERROR(log_tensors_to_dump_(handle, tensor_uid_to_pointer_map));
 
         CHECK_CUDNN_FRONTEND_ERROR(execute_cudnn_plan_with_uid(handle,
                                                                tensor_uid_to_pointer_map,
@@ -1097,7 +1072,6 @@ class Graph : public ICudnn, public INode {
                           void *workspace,
                           int64_t plan_index) const {
         CUDNN_FE_LOG_BANNER(" EXECUTE PLAN AT INDEX  for plan index " << plan_index << "  ");
-        CUDNN_FE_LOG(*this << std::endl;);
         // Add pass_by_value data pointers to uid_to_pointer map
         // object lifetime is controlled by tensor_to_pass_by_value which means the pointer should stay valid during
         // execute.
@@ -1113,7 +1087,6 @@ class Graph : public ICudnn, public INode {
         // Add pass_by_value data pointers to uid_to_pointer map.
         // Using cached values to avoid repeated tree traversal overhead.
         CUDNN_FE_LOG_BANNER(" EXECUTE PLAN  ");
-        CUDNN_FE_LOG(*this << std::endl;);
 
         CHECK_CUDNN_FRONTEND_ERROR(
             extend_tensor_map_with_pass_by_value_tensors_(tensor_uid_to_pointer_map, cached_pass_by_value));
@@ -1146,6 +1119,8 @@ class Graph : public ICudnn, public INode {
         // offset workspace by the already used fe graph workspace
         // this is where cudnn backend can start using workspace for its execution plans
         void *cudnn_workspace = static_cast<char *>(workspace) + fe_workspace_size;
+
+        CHECK_CUDNN_FRONTEND_ERROR(log_tensors_to_dump_(handle, tensor_uid_to_pointer_map));
 
         CHECK_CUDNN_FRONTEND_ERROR(execute_cudnn_plan_with_uid(
             handle, tensor_uid_to_pointer_map, cudnn_workspace, plans.candidate, {}, {}, {}));
