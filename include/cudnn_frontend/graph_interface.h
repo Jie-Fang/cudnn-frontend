@@ -445,6 +445,155 @@ class Graph : public ICudnn, public INode {
         return {error_code_t::OK, ""};
     }
 
+    // Register an OSS NVRTC engine for RmsNorm+SiLU by detecting the fusion pattern:
+    //   RMSNormNode(X, SCALE) → Y → PointwiseNode(SWISH_FWD) → Z
+    // Extracts tensor metadata and instantiates the appropriate arch-specific engine.
+    error_t
+    register_oss_rms_norm_silu_engine_() {
+        // Scan sub_nodes for the RMSNorm → SiLU pattern
+        Rmsnorm_attributes const* rmsnorm_attrs = nullptr;
+        Pointwise_attributes const* swish_attrs = nullptr;
+        std::shared_ptr<Tensor_attributes> swish_output;
+
+        for (size_t i = 0; i + 1 < sub_nodes.size(); ++i) {
+            auto* rmsnorm_node = dynamic_cast<RMSNormNode*>(sub_nodes[i].get());
+            if (!rmsnorm_node) continue;
+
+            auto* pointwise_node = dynamic_cast<PointwiseNode*>(sub_nodes[i + 1].get());
+            if (!pointwise_node) continue;
+
+            if (pointwise_node->attributes.get_mode() != PointwiseMode_t::SWISH_FWD) continue;
+
+            // OSS engine only supports SiLU (Swish with beta=1.0).
+            // Reject if beta is explicitly set to a non-1.0 value.
+            auto beta = pointwise_node->attributes.get_swish_beta().value_or(1.0f);
+            if (beta != 1.0f) continue;
+
+            // Verify the RMSNorm output feeds into the pointwise input
+            auto rmsnorm_y_it = rmsnorm_node->attributes.outputs.find(Rmsnorm_attributes::output_names::Y);
+            if (rmsnorm_y_it == rmsnorm_node->attributes.outputs.end() || !rmsnorm_y_it->second) continue;
+
+            auto swish_in0_it = pointwise_node->attributes.inputs.find(Pointwise_attributes::input_names::IN_0);
+            if (swish_in0_it == pointwise_node->attributes.inputs.end() || !swish_in0_it->second) continue;
+
+            // Check that RMSNorm output Y == SiLU input IN_0 (same tensor)
+            if (rmsnorm_y_it->second->get_uid() != swish_in0_it->second->get_uid()) continue;
+
+            // Pattern matched!
+            rmsnorm_attrs = &rmsnorm_node->attributes;
+            swish_attrs   = &pointwise_node->attributes;
+            swish_output  = pointwise_node->attributes.outputs.at(Pointwise_attributes::output_names::OUT_0);
+            break;
+        }
+
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            rmsnorm_attrs == nullptr || swish_attrs == nullptr,
+            error_code_t::GRAPH_NOT_SUPPORTED,
+            "No RMSNorm → SiLU fusion pattern found for OPENSOURCE engine");
+
+        // Only inference is supported (no mean/inv_variance output for training)
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            rmsnorm_attrs->forward_phase != NormFwdPhase_t::INFERENCE,
+            error_code_t::GRAPH_NOT_SUPPORTED,
+            "OSS RmsNorm+SiLU engine only supports INFERENCE phase");
+
+        // Extract tensor metadata
+        graph::Execution_plan_list::OssRmsNormSiluContext ctx;
+
+        // X input tensor
+        auto x_it = rmsnorm_attrs->inputs.find(Rmsnorm_attributes::input_names::X);
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            x_it == rmsnorm_attrs->inputs.end() || !x_it->second,
+            error_code_t::GRAPH_NOT_SUPPORTED, "X tensor not found in RMSNorm node");
+
+        // Input must be bf16 (the kernel always uses ITYPE = nv_bfloat16)
+        auto x_dtype = x_it->second->get_data_type();
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            x_dtype != DataType_t::BFLOAT16,
+            error_code_t::GRAPH_NOT_SUPPORTED,
+            "OSS RmsNorm+SiLU engine requires BFLOAT16 input");
+
+        ctx.x_uid = x_it->second->get_uid();
+        auto x_dim = x_it->second->get_dim();
+        // X shape in NCHW: [N, C, H, W] where norm operates per-row (N) across columns (C*H*W)
+        // num_tokens = N (first dim), C = product of remaining dims (C*H*W)
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            x_dim.size() < 2, error_code_t::GRAPH_NOT_SUPPORTED,
+            "X tensor must have at least 2 dimensions");
+        ctx.num_tokens = x_dim[0];
+        ctx.C = 1;
+        for (size_t d = 1; d < x_dim.size(); ++d) {
+            ctx.C *= x_dim[d];
+        }
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            ctx.num_tokens <= 0 || ctx.C <= 0,
+            error_code_t::GRAPH_NOT_SUPPORTED,
+            "Invalid problem dimensions: num_tokens=" + std::to_string(ctx.num_tokens) +
+            " C=" + std::to_string(ctx.C));
+
+        // SCALE (gamma) tensor — must be bf16 (kernel uses WTYPE = nv_bfloat16)
+        auto scale_it = rmsnorm_attrs->inputs.find(Rmsnorm_attributes::input_names::SCALE);
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            scale_it == rmsnorm_attrs->inputs.end() || !scale_it->second,
+            error_code_t::GRAPH_NOT_SUPPORTED, "SCALE tensor not found in RMSNorm node");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            scale_it->second->get_data_type() != DataType_t::BFLOAT16,
+            error_code_t::GRAPH_NOT_SUPPORTED,
+            "OSS RmsNorm+SiLU engine requires BFLOAT16 scale weights");
+        ctx.scale_uid = scale_it->second->get_uid();
+
+        // BIAS (beta) tensor — optional
+        auto bias_it = rmsnorm_attrs->inputs.find(Rmsnorm_attributes::input_names::BIAS);
+        if (bias_it != rmsnorm_attrs->inputs.end() && bias_it->second) {
+            ctx.bias_uid = bias_it->second->get_uid();
+        }
+
+        // EPSILON tensor
+        auto eps_it = rmsnorm_attrs->inputs.find(Rmsnorm_attributes::input_names::EPSILON);
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            eps_it == rmsnorm_attrs->inputs.end() || !eps_it->second,
+            error_code_t::GRAPH_NOT_SUPPORTED, "EPSILON tensor not found in RMSNorm node");
+        ctx.epsilon_uid = eps_it->second->get_uid();
+
+        // Output Z tensor (output of SiLU, not RMSNorm)
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            !swish_output, error_code_t::GRAPH_NOT_SUPPORTED, "Output tensor not found in SiLU node");
+        ctx.y_uid = swish_output->get_uid();
+
+        // Determine output dtype from the output tensor
+        auto out_dtype = swish_output->get_data_type();
+        if (out_dtype == DataType_t::BFLOAT16) {
+            ctx.output_dtype = experimental::RmsNormSiluDtype::BF16;
+        } else if (out_dtype == DataType_t::FP8_E4M3) {
+            ctx.output_dtype = experimental::RmsNormSiluDtype::FP8;
+        } else if (out_dtype == DataType_t::FP4_E2M1) {
+            ctx.output_dtype = experimental::RmsNormSiluDtype::NVFP4;
+        } else {
+            return {error_code_t::GRAPH_NOT_SUPPORTED,
+                    "OSS RmsNorm+SiLU engine supports BFLOAT16, FP8_E4M3, or FP4_E2M1 output"};
+        }
+
+        // Detect SM version and instantiate the appropriate OSS engine
+        int oss_device_ordinal = 0;
+        experimental::detail::cuda_get_device(&oss_device_ordinal);
+        cudaDeviceProp oss_dev_prop;
+        experimental::detail::cuda_get_device_properties(&oss_dev_prop, oss_device_ordinal);
+        int oss_sm = oss_dev_prop.major * 10 + oss_dev_prop.minor;
+
+        std::shared_ptr<experimental::IOssNormEngine> engine;
+        if (oss_sm >= 80) {
+            engine = std::make_shared<experimental::Sm100RmsNormSiluEngine>();
+        } else {
+            return {error_code_t::GRAPH_NOT_SUPPORTED,
+                    "RmsNorm+SiLU OSS engine requires SM80+, got SM" + std::to_string(oss_sm)};
+        }
+
+        plans.set_oss_rms_norm_silu_engine(engine);
+        plans.set_oss_rms_norm_silu_context(std::move(ctx));
+
+        return {error_code_t::OK, ""};
+    }
+
    public:
     Graph() : INode(detail::Context{}) {}
 
@@ -856,10 +1005,17 @@ class Graph : public ICudnn, public INode {
 
     error_t
     get_workspace_size_plan_at_index(int64_t plan_index, int64_t &cudnn_workspace_size) const {
-        // OSS engine workspace: 16 bytes for tile_id_counter
+        // OSS SDPA engine workspace: 16 bytes for tile_id_counter
         if (plan_index == graph::Execution_plan_list::OSS_ENGINE_CANDIDATE) {
             cudnn_workspace_size = fe_workspace_size + experimental::Sm90SdpaPrefillEngine::get_workspace_size();
-            CUDNN_FE_LOG_LABEL_ENDL("INFO: get_workspace_size() is " << cudnn_workspace_size << " (OSS engine)");
+            CUDNN_FE_LOG_LABEL_ENDL("INFO: get_workspace_size() is " << cudnn_workspace_size << " (OSS SDPA engine)");
+            return {error_code_t::OK, ""};
+        }
+
+        // OSS RmsNorm+SiLU engine workspace
+        if (plan_index == graph::Execution_plan_list::OSS_RMS_NORM_SILU_ENGINE_CANDIDATE) {
+            cudnn_workspace_size = fe_workspace_size + plans.get_oss_rms_norm_silu_workspace_size();
+            CUDNN_FE_LOG_LABEL_ENDL("INFO: get_workspace_size() is " << cudnn_workspace_size << " (OSS RmsNorm+SiLU engine)");
             return {error_code_t::OK, ""};
         }
 
@@ -1021,7 +1177,7 @@ class Graph : public ICudnn, public INode {
         CHECK_CUDNN_FRONTEND_ERROR(
             make_variant_pack_replacements(tensor_uid_to_pointer_map, variant_pack_replacements));
 
-        // OSS engine dispatch with dynamic shape overrides
+        // OSS SDPA engine dispatch with dynamic shape overrides
         if (plans.is_oss_candidate()) {
             cudaStream_t stream = nullptr;
             _CUDNN_CHECK_CUDNN_ERROR(detail::get_stream(handle, &stream));
@@ -1040,7 +1196,25 @@ class Graph : public ICudnn, public INode {
                                                                 override_shapes,
                                                                 override_strides));
 
-            CUDNN_FE_LOG_BANNER(" EXECUTE PLAN  ALL OK (OSS engine, dynamic shapes) ");
+            CUDNN_FE_LOG_BANNER(" EXECUTE PLAN  ALL OK (OSS SDPA engine, dynamic shapes) ");
+            return {error_code_t::OK, ""};
+        }
+
+        // OSS RmsNorm+SiLU engine dispatch
+        if (plans.is_oss_rms_norm_silu_candidate()) {
+            cudaStream_t stream = nullptr;
+            _CUDNN_CHECK_CUDNN_ERROR(detail::get_stream(handle, &stream));
+
+            int device_ordinal = 0;
+            detail::cuda_get_device(&device_ordinal);
+            CUdevice cu_device;
+            experimental::detail::cu_device_get(&cu_device, device_ordinal);
+
+            void *oss_workspace = static_cast<char *>(workspace) + fe_workspace_size;
+            CHECK_CUDNN_FRONTEND_ERROR(plans.execute_oss_rms_norm_silu_engine(
+                tensor_uid_to_pointer_map, oss_workspace, cu_device, stream));
+
+            CUDNN_FE_LOG_BANNER(" EXECUTE PLAN  ALL OK (OSS RmsNorm+SiLU engine) ");
             return {error_code_t::OK, ""};
         }
 
@@ -1093,7 +1267,7 @@ class Graph : public ICudnn, public INode {
         CHECK_CUDNN_FRONTEND_ERROR(
             make_variant_pack_replacements(tensor_uid_to_pointer_map, variant_pack_replacements));
 
-        // OSS engine dispatch: bypass cuDNN backend entirely
+        // OSS SDPA engine dispatch: bypass cuDNN backend entirely
         if (plans.is_oss_candidate()) {
             cudaStream_t stream = nullptr;
             _CUDNN_CHECK_CUDNN_ERROR(detail::get_stream(handle, &stream));
@@ -1108,7 +1282,25 @@ class Graph : public ICudnn, public INode {
             CHECK_CUDNN_FRONTEND_ERROR(
                 plans.execute_oss_engine(tensor_uid_to_pointer_map, oss_workspace, cu_device, stream));
 
-            CUDNN_FE_LOG_BANNER(" EXECUTE PLAN  ALL OK (OSS engine) ");
+            CUDNN_FE_LOG_BANNER(" EXECUTE PLAN  ALL OK (OSS SDPA engine) ");
+            return {error_code_t::OK, ""};
+        }
+
+        // OSS RmsNorm+SiLU engine dispatch: bypass cuDNN backend entirely
+        if (plans.is_oss_rms_norm_silu_candidate()) {
+            cudaStream_t stream = nullptr;
+            _CUDNN_CHECK_CUDNN_ERROR(detail::get_stream(handle, &stream));
+
+            int device_ordinal = 0;
+            detail::cuda_get_device(&device_ordinal);
+            CUdevice cu_device;
+            experimental::detail::cu_device_get(&cu_device, device_ordinal);
+
+            void *oss_workspace = static_cast<char *>(workspace) + fe_workspace_size;
+            CHECK_CUDNN_FRONTEND_ERROR(plans.execute_oss_rms_norm_silu_engine(
+                tensor_uid_to_pointer_map, oss_workspace, cu_device, stream));
+
+            CUDNN_FE_LOG_BANNER(" EXECUTE PLAN  ALL OK (OSS RmsNorm+SiLU engine) ");
             return {error_code_t::OK, ""};
         }
 
@@ -1589,8 +1781,19 @@ class Graph : public ICudnn, public INode {
 
         CHECK_CUDNN_FRONTEND_ERROR(context.populate_sm_version_from_device());
         auto sm_version = context.get_sm_version();
+
+        // Check OSS SDPA engine
         if (plans.has_oss_engine()) {
             auto oss_status = plans.check_oss_engine_support(sm_version);
+            if (oss_status.is_good()) {
+                return {error_code_t::OK, ""};
+            }
+            // Fall through to check other engines
+        }
+
+        // Check OSS RmsNorm+SiLU engine
+        if (plans.has_oss_rms_norm_silu_engine()) {
+            auto oss_status = plans.check_oss_rms_norm_silu_support(sm_version);
             if (oss_status.is_good()) {
                 return {error_code_t::OK, ""};
             }
@@ -2109,13 +2312,22 @@ Graph::create_execution_plans(std::vector<HeurMode_t> const &mode) {
         }
     }
 
-    // Register OSS engine if OPENSOURCE mode requested
+    // Register OSS engines if OPENSOURCE mode requested
     if (has_opensource) {
-        auto oss_status = register_oss_engine_();
-        if (oss_status.is_bad()) {
-            CUDNN_FE_LOG_LABEL_ENDL("WARN: Failed to register OSS engine: " << oss_status.get_message());
-        } else {
+        // Try SDPA OSS engine
+        auto oss_sdpa_status = register_oss_engine_();
+        if (oss_sdpa_status.is_good()) {
             CUDNN_FE_LOG_LABEL_ENDL("INFO: Registered OSS SDPA prefill engine");
+        }
+
+        // Try RmsNorm+SiLU OSS engine
+        auto oss_norm_status = register_oss_rms_norm_silu_engine_();
+        if (oss_norm_status.is_good()) {
+            CUDNN_FE_LOG_LABEL_ENDL("INFO: Registered OSS RmsNorm+SiLU engine");
+        }
+
+        if (oss_sdpa_status.is_bad() && oss_norm_status.is_bad()) {
+            CUDNN_FE_LOG_LABEL_ENDL("WARN: No OSS engine matched the graph pattern");
         }
     }
 
@@ -2179,17 +2391,31 @@ Graph::build_plans(BuildPlanPolicy_t const policy, bool const do_multithreaded_b
     CUDNN_FE_LOG_BANNER("  BUILD PLANS  for policy " << static_cast<int>(policy) << "  ");
 #endif
 
-    // Build OSS engine if it passed check_support
+    // Build OSS SDPA engine if it passed check_support
     if (plans.has_oss_engine()) {
         auto oss_status = plans.build_oss_engine();
         if (oss_status.is_good()) {
-            CUDNN_FE_LOG_LABEL_ENDL("INFO: OSS engine built successfully (NVRTC compilation done)");
+            CUDNN_FE_LOG_LABEL_ENDL("INFO: OSS SDPA engine built successfully (NVRTC compilation done)");
             if (policy == BuildPlanPolicy_t::HEURISTICS_CHOICE) {
-                CUDNN_FE_LOG_BANNER("  BUILD PLANS ALL OK (OSS engine)  ");
+                CUDNN_FE_LOG_BANNER("  BUILD PLANS ALL OK (OSS SDPA engine)  ");
                 return {error_code_t::OK, ""};
             }
         } else {
-            CUDNN_FE_LOG_LABEL_ENDL("WARN: OSS engine build failed: " << oss_status.get_message());
+            CUDNN_FE_LOG_LABEL_ENDL("WARN: OSS SDPA engine build failed: " << oss_status.get_message());
+        }
+    }
+
+    // Build OSS RmsNorm+SiLU engine if it passed check_support
+    if (plans.has_oss_rms_norm_silu_engine()) {
+        auto oss_status = plans.build_oss_rms_norm_silu_engine();
+        if (oss_status.is_good()) {
+            CUDNN_FE_LOG_LABEL_ENDL("INFO: OSS RmsNorm+SiLU engine built successfully (NVRTC compilation done)");
+            if (policy == BuildPlanPolicy_t::HEURISTICS_CHOICE) {
+                CUDNN_FE_LOG_BANNER("  BUILD PLANS ALL OK (OSS RmsNorm+SiLU engine)  ");
+                return {error_code_t::OK, ""};
+            }
+        } else {
+            CUDNN_FE_LOG_LABEL_ENDL("WARN: OSS RmsNorm+SiLU engine build failed: " << oss_status.get_message());
         }
     }
 
