@@ -189,7 +189,6 @@ selection_attention.execute(
 - Currently only supports `T,H,D` layout (variable-length batched sequences)
 - `cum_seqlen_q` and `cum_seqlen_k` must be identical
 - Requires SM90+ (Hopper or newer)
-- SM103 is not supported
 
 ---
 
@@ -307,7 +306,6 @@ comp_attn.execute(
 - Head dimension `D` must be one of `{32, 64, 128}`
 - `H_q` must be divisible by `H_kv` (supports GQA/MQA)
 - Requires SM100+ (Blackwell or newer)
-- SM103 is not supported
 
 ---
 
@@ -537,7 +535,6 @@ topk.execute(
 - LSE dtype must match `acc_dtype`
 - `topk_indices` must be `int32`
 - Requires SM100+ (Blackwell or newer)
-- SM103 is not supported
 
 **Note**: The returned values exclude the first block and neighboring blocks from the reduction. Rows with all `-inf` scores and `-1` indices are expected for positions near the beginning of sequences.
 
@@ -589,10 +586,10 @@ All components require `float32` accumulator dtype for numerical stability.
 
 | Component | Minimum SM | Notes |
 |-----------|------------|-------|
-| Selection Attention | SM90 (Hopper) | SM103 not supported |
-| Compression Attention | SM100 (Blackwell) | SM103 not supported |
+| Selection Attention | SM90 (Hopper) | - |
+| Compression Attention | SM100 (Blackwell) | - |
 | Sliding Window Attention | SM80+ | Uses cuDNN backend |
-| Top-K Reduction | SM100 (Blackwell) | SM103 not supported |
+| Top-K Reduction | SM100 (Blackwell) | - |
 
 ---
 

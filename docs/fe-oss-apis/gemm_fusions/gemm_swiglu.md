@@ -345,7 +345,6 @@ Additional constraints:
 ### Environment
 
 - Requires CUDA with SM100+ compute capability
-- SM103 is not supported
 
 ---
 
