@@ -8,6 +8,7 @@ This folder documents the Python FE APIs implemented under `python/cudnn`. For d
 - [Grouped GEMM + SwiGLU](gemm_fusions/grouped_gemm_swiglu.md)
 - [Grouped GEMM + dSwiGLU](gemm_fusions/grouped_gemm_dswiglu.md)
 - [Native Sparse Attention (NSA)](nsa.md)
+- [RMSNorm + SiLU](rmsnorm_silu.md)
 
 ## Installation and setup
 
