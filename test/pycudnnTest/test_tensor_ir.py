@@ -1470,6 +1470,7 @@ class test_tensor_ir:
                                 "tile_size": tile_size,
                             }
                         torch.cuda.synchronize()
+                    finished_cnt += 1
             print(f"@@@@ Best perf achieved is {best_perf / 1000} msec with kernel config: {best_config}")
         print(f"@@@@ Run {finished_cnt} kernels successfully from {len(kernel_configs)} configs")
         if finished_cnt > 0:
