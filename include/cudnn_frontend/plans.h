@@ -949,11 +949,11 @@ class Execution_plan_list {
         int64_t C          = 0;
 
         // Tensor UIDs for pointer lookup from variant pack
-        int64_t x_uid       = -1;   // input [num_tokens, C]
-        int64_t y_uid       = -1;   // output [num_tokens, C] (after SiLU)
-        int64_t scale_uid   = -1;   // gamma weights [C]
-        int64_t bias_uid    = -1;   // beta bias [C], optional (-1 if absent)
-        int64_t epsilon_uid = -1;   // epsilon scalar
+        int64_t x_uid       = -1;  // input [num_tokens, C]
+        int64_t y_uid       = -1;  // output [num_tokens, C] (after SiLU)
+        int64_t scale_uid   = -1;  // gamma weights [C]
+        int64_t bias_uid    = -1;  // beta bias [C], optional (-1 if absent)
+        int64_t epsilon_uid = -1;  // epsilon scalar
 
         // FP8 output: optional scale/scale_inv/amax tensor UIDs
         int64_t fp8_scale_uid     = -1;
@@ -994,7 +994,7 @@ class Execution_plan_list {
         shape.C            = static_cast<int>(oss_rms_norm_silu_ctx_.C);
         shape.num_tokens   = static_cast<int>(oss_rms_norm_silu_ctx_.num_tokens);
         shape.output_dtype = oss_rms_norm_silu_ctx_.output_dtype;
-        auto status = oss_rms_norm_silu_engine_->check_support(shape, static_cast<int>(sm_version));
+        auto status        = oss_rms_norm_silu_engine_->check_support(shape, static_cast<int>(sm_version));
         if (status.is_good()) {
             oss_rms_norm_silu_supported_ = true;
             candidate                    = OSS_RMS_NORM_SILU_ENGINE_CANDIDATE;
@@ -1036,9 +1036,7 @@ class Execution_plan_list {
         void* x_ptr     = get_ptr(oss_rms_norm_silu_ctx_.x_uid);
         void* y_ptr     = get_ptr(oss_rms_norm_silu_ctx_.y_uid);
         void* scale_ptr = get_ptr(oss_rms_norm_silu_ctx_.scale_uid);
-        void* bias_ptr  = (oss_rms_norm_silu_ctx_.bias_uid >= 0)
-                              ? get_ptr(oss_rms_norm_silu_ctx_.bias_uid)
-                              : nullptr;
+        void* bias_ptr  = (oss_rms_norm_silu_ctx_.bias_uid >= 0) ? get_ptr(oss_rms_norm_silu_ctx_.bias_uid) : nullptr;
         void* eps_ptr   = get_ptr(oss_rms_norm_silu_ctx_.epsilon_uid);
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(!x_ptr || !y_ptr || !scale_ptr,
@@ -1053,26 +1051,23 @@ class Execution_plan_list {
 
         // Populate FP8 / NVFP4 extra params from variant pack
         experimental::RmsNormSiluExtraParams extra;
-        auto opt_ptr = [&](int64_t uid) -> void* {
-            return (uid >= 0) ? get_ptr(uid) : nullptr;
-        };
-        extra.fp8_scale     = opt_ptr(oss_rms_norm_silu_ctx_.fp8_scale_uid);
-        extra.fp8_scale_inv = opt_ptr(oss_rms_norm_silu_ctx_.fp8_scale_inv_uid);
-        extra.fp8_amax      = opt_ptr(oss_rms_norm_silu_ctx_.fp8_amax_uid);
+        auto opt_ptr          = [&](int64_t uid) -> void* { return (uid >= 0) ? get_ptr(uid) : nullptr; };
+        extra.fp8_scale       = opt_ptr(oss_rms_norm_silu_ctx_.fp8_scale_uid);
+        extra.fp8_scale_inv   = opt_ptr(oss_rms_norm_silu_ctx_.fp8_scale_inv_uid);
+        extra.fp8_amax        = opt_ptr(oss_rms_norm_silu_ctx_.fp8_amax_uid);
         extra.nvfp4_scale_row = opt_ptr(oss_rms_norm_silu_ctx_.nvfp4_scale_row_uid);
 
-        return oss_rms_norm_silu_engine_->execute(
-            x_ptr,
-            y_ptr,
-            scale_ptr,
-            bias_ptr,
-            static_cast<int>(oss_rms_norm_silu_ctx_.num_tokens),
-            static_cast<int>(oss_rms_norm_silu_ctx_.C),
-            epsilon,
-            workspace,
-            device,
-            stream,
-            extra);
+        return oss_rms_norm_silu_engine_->execute(x_ptr,
+                                                  y_ptr,
+                                                  scale_ptr,
+                                                  bias_ptr,
+                                                  static_cast<int>(oss_rms_norm_silu_ctx_.num_tokens),
+                                                  static_cast<int>(oss_rms_norm_silu_ctx_.C),
+                                                  epsilon,
+                                                  workspace,
+                                                  device,
+                                                  stream,
+                                                  extra);
     }
 
    private:

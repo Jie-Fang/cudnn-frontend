@@ -69,11 +69,11 @@ load_cuda_so() {
     dlerror();
 
     // Attempt to open the cuda library
-    HMODULE handle    = dlopen("libcuda.so", RTLD_NOW);
+    HMODULE handle    = dlopen("libcuda.so.1", RTLD_NOW);
     const char *error = reinterpret_cast<const char *>(dlerror());
     if (!handle || error) {
         // If opening the library fails, throw an exception with the error message
-        throw std::runtime_error("Unable to dlopen libcuda.so : " + std::string(error ? error : "Unknown error"));
+        throw std::runtime_error("Unable to dlopen libcuda.so.1 : " + std::string(error ? error : "Unknown error"));
     }
 
     return handle;
@@ -85,7 +85,7 @@ load_cudart_so() {
     dlerror();
 
     // List of potential libcudart libraries (Adding major version to support python package)
-    constexpr const char *libs[] = {"libcudart.so.13"};
+    constexpr const char *libs[] = {"libcudart.so.12", "libcudart.so.13"};
     constexpr size_t num_libs    = sizeof(libs) / sizeof(libs[0]);
 
     HMODULE lib_handle = nullptr;

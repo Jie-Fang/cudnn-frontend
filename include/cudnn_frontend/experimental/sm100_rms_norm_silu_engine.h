@@ -137,16 +137,14 @@ class Sm100RmsNormSiluEngine : public IOssNormEngine {
             sm_version < 80, error_code_t::GRAPH_NOT_SUPPORTED, "RmsNormSiluEngine requires SM80+");
 
         // FP8 output requires SM89+ (Ada Lovelace / Hopper)
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            shape.output_dtype == RmsNormSiluDtype::FP8 && sm_version < 89,
-            error_code_t::GRAPH_NOT_SUPPORTED,
-            "FP8 output requires SM89+ (Ada/Hopper)");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(shape.output_dtype == RmsNormSiluDtype::FP8 && sm_version < 89,
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "FP8 output requires SM89+ (Ada/Hopper)");
 
         // NVFP4 output requires SM100+ (Blackwell)
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            shape.output_dtype == RmsNormSiluDtype::NVFP4 && sm_version < 100,
-            error_code_t::GRAPH_NOT_SUPPORTED,
-            "NVFP4 output requires SM100+ (Blackwell)");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(shape.output_dtype == RmsNormSiluDtype::NVFP4 && sm_version < 100,
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "NVFP4 output requires SM100+ (Blackwell)");
 
         sm_version_ = sm_version;
 
@@ -177,9 +175,9 @@ class Sm100RmsNormSiluEngine : public IOssNormEngine {
             int num_elts     = bytes_per_ldg_ / input_size;
             int elts_per_ldg = num_elts * warps_n_ * 32;
             if (elts_per_ldg > 0 && shape.C % elts_per_ldg == 0) {
-                int ldgs_per_row                = shape.C / elts_per_ldg;
+                int ldgs_per_row                 = shape.C / elts_per_ldg;
                 int ldgs_to_cause_register_spill = (num_elts > 0) ? (64 / num_elts) : 1;
-                ctas_per_row_ = 1;
+                ctas_per_row_                    = 1;
                 for (int ldgs = std::min(ldgs_per_row, ldgs_to_cause_register_spill - 1); ldgs > 0; ldgs--) {
                     if (ldgs_per_row % ldgs == 0) {
                         ctas_per_row_ = ldgs_per_row / ldgs;
@@ -260,8 +258,8 @@ class Sm100RmsNormSiluEngine : public IOssNormEngine {
     error_t
     build() override {
         RETURN_CUDNN_FRONTEND_ERROR_IF(!support_checked_ || knobs_ == nullptr,
-            error_code_t::INVALID_VALUE,
-            "build() called before check_support()");
+                                       error_code_t::INVALID_VALUE,
+                                       "build() called before check_support()");
 
         // Assemble the full kernel source:
         // 1. Generate constexpr defines from knobs
@@ -287,13 +285,20 @@ class Sm100RmsNormSiluEngine : public IOssNormEngine {
         // The kernel source has #if __CUDA_ARCH__ guards for SM-specific instructions.
         {
             std::string target_arch;
-            if (sm_version_ == 100) target_arch = "sm_100a";  // B200: arch-specific for best codegen
-            else if (sm_version_ > 100 && sm_version_ < 110) target_arch = "sm_100f";  // GB300 etc: forward-compat
-            else if (sm_version_ == 90) target_arch = "sm_90a";
-            else if (sm_version_ > 90 && sm_version_ < 100) target_arch = "sm_90";  // SM92 etc
-            else if (sm_version_ >= 89) target_arch = "sm_89";
-            else if (sm_version_ >= 86) target_arch = "sm_86";
-            else                        target_arch = "sm_80";
+            if (sm_version_ == 100)
+                target_arch = "sm_100a";  // B200: arch-specific for best codegen
+            else if (sm_version_ > 100 && sm_version_ < 110)
+                target_arch = "sm_100f";  // GB300 etc: forward-compat
+            else if (sm_version_ == 90)
+                target_arch = "sm_90a";
+            else if (sm_version_ > 90 && sm_version_ < 100)
+                target_arch = "sm_90";  // SM92 etc
+            else if (sm_version_ >= 89)
+                target_arch = "sm_89";
+            else if (sm_version_ >= 86)
+                target_arch = "sm_86";
+            else
+                target_arch = "sm_80";
 
             for (auto& f : flags) {
                 if (f.find("--gpu-architecture=") == 0) {
@@ -368,12 +373,12 @@ class Sm100RmsNormSiluEngine : public IOssNormEngine {
         cu_err = detail::cu_library_load_data(&module_, cubin_.get(), nullptr, nullptr, 0, nullptr, nullptr, 0);
         RETURN_CUDNN_FRONTEND_ERROR_IF(cu_err != CUDA_SUCCESS,
                                        error_code_t::CUDA_API_FAILED,
-            "cuLibraryLoadData failed: " + detail::cu_result_to_string(cu_err));
+                                       "cuLibraryLoadData failed: " + detail::cu_result_to_string(cu_err));
 
         cu_err = detail::cu_library_get_kernel(&kernelPtr_, module_, "ln_fwd_kernel");
         RETURN_CUDNN_FRONTEND_ERROR_IF(cu_err != CUDA_SUCCESS,
                                        error_code_t::CUDA_API_FAILED,
-            "cuLibraryGetKernel failed: " + detail::cu_result_to_string(cu_err));
+                                       "cuLibraryGetKernel failed: " + detail::cu_result_to_string(cu_err));
 
         built_ = true;
         return {error_code_t::OK, ""};
@@ -402,8 +407,7 @@ class Sm100RmsNormSiluEngine : public IOssNormEngine {
             // CuDNN overrides ctas_per_col to max when use_non_persistent_mode=true.
             ctas_per_col = ctas_per_col_max;
         } else {
-            ctas_per_col = std::min(
-                sm_count_ * static_cast<int>(knobs_->occupancy) / ctas_per_row_, ctas_per_col_max);
+            ctas_per_col = std::min(sm_count_ * static_cast<int>(knobs_->occupancy) / ctas_per_row_, ctas_per_col_max);
         }
         ctas_per_col = std::max(ctas_per_col, 1);
 
@@ -448,8 +452,8 @@ class Sm100RmsNormSiluEngine : public IOssNormEngine {
                 // Use default scale = 1.0 from workspace (device memory)
                 // Write 1.0f (IEEE 754: 0x3F800000) via 32-bit memset to avoid cudart dependency
                 float* default_scale = reinterpret_cast<float*>(ws_ptr);
-                CUresult memset_err = detail::cu_mem_set_d32_async(
-                    reinterpret_cast<CUdeviceptr>(default_scale), 0x3F800000u, 1, stream);
+                CUresult memset_err =
+                    detail::cu_mem_set_d32_async(reinterpret_cast<CUdeviceptr>(default_scale), 0x3F800000u, 1, stream);
                 RETURN_CUDNN_FRONTEND_ERROR_IF(
                     memset_err != CUDA_SUCCESS, error_code_t::CUDA_API_FAILED, "cuMemsetD32Async failed");
                 params.scale = default_scale;
@@ -493,11 +497,11 @@ class Sm100RmsNormSiluEngine : public IOssNormEngine {
             params.barrier        = reinterpret_cast<int*>(static_cast<char*>(workspace) + coop_off);
             cudaError_t memset_err =
                 detail::cuda_mem_set_async(params.barrier, 0, barrier_count * sizeof(int32_t), stream);
-            RETURN_CUDNN_FRONTEND_ERROR_IF(memset_err != cudaSuccess,
-                                           error_code_t::CUDA_API_FAILED,
-                                           "cudaMemsetAsync failed for cooperative barrier (count=" +
-                                               std::to_string(barrier_count) + " offset=" +
-                                               std::to_string(coop_off) + ")");
+            RETURN_CUDNN_FRONTEND_ERROR_IF(
+                memset_err != cudaSuccess,
+                error_code_t::CUDA_API_FAILED,
+                "cudaMemsetAsync failed for cooperative barrier (count=" + std::to_string(barrier_count) +
+                    " offset=" + std::to_string(coop_off) + ")");
         }
 
         // reduced_divisor for batch/seqLen (batchFirst=true, so divide by seqLen=rows)
@@ -520,7 +524,7 @@ class Sm100RmsNormSiluEngine : public IOssNormEngine {
             CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES, smem_bytes, kernelPtr_, device);
         RETURN_CUDNN_FRONTEND_ERROR_IF(cu_err != CUDA_SUCCESS,
                                        error_code_t::CUDA_API_FAILED,
-            "cuKernelSetAttribute failed: " + detail::cu_result_to_string(cu_err));
+                                       "cuKernelSetAttribute failed: " + detail::cu_result_to_string(cu_err));
 
         // Launch
         cu_err = detail::cu_launch_kernel((CUfunction)kernelPtr_,
@@ -530,10 +534,10 @@ class Sm100RmsNormSiluEngine : public IOssNormEngine {
                                           block.x,
                                           block.y,
                                           block.z,
-            smem_bytes,
-            stream,
-            kernelParams,
-            nullptr);
+                                          smem_bytes,
+                                          stream,
+                                          kernelParams,
+                                          nullptr);
         RETURN_CUDNN_FRONTEND_ERROR_IF(cu_err != CUDA_SUCCESS,
                                        error_code_t::CUDA_API_FAILED,
                                        "cuLaunchKernel failed: " + detail::cu_result_to_string(cu_err) +

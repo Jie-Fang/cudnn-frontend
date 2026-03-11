@@ -85,7 +85,8 @@ class Graph : public ICudnn, public INode {
     }
 
     error_t
-    log_tensors_to_dump_(cudnnHandle_t handle, std::unordered_map<int64_t, void *> const &tensor_uid_to_pointer_map) const {
+    log_tensors_to_dump_(cudnnHandle_t handle,
+                         std::unordered_map<int64_t, void *> const &tensor_uid_to_pointer_map) const {
         if (!isLoggingTensorDumpEnabled()) {
             return {error_code_t::OK, ""};
         }
@@ -103,8 +104,8 @@ class Graph : public ICudnn, public INode {
                 size_t num_elements = 1;
                 for (auto d : dims) num_elements *= static_cast<size_t>(d);
                 size_t elem_size = detail::get_data_type_size(tensor->get_data_type());
-                CHECK_CUDNN_FRONTEND_ERROR(
-                    detail::log_dump_tensor_content(it->first, tensor->get_name(), it->second, num_elements, elem_size, fmt, stream));
+                CHECK_CUDNN_FRONTEND_ERROR(detail::log_dump_tensor_content(
+                    it->first, tensor->get_name(), it->second, num_elements, elem_size, fmt, stream));
             }
         }
 
@@ -451,15 +452,15 @@ class Graph : public ICudnn, public INode {
     error_t
     register_oss_rms_norm_silu_engine_() {
         // Scan sub_nodes for the RMSNorm → SiLU pattern
-        Rmsnorm_attributes const* rmsnorm_attrs = nullptr;
-        Pointwise_attributes const* swish_attrs = nullptr;
+        Rmsnorm_attributes const *rmsnorm_attrs = nullptr;
+        Pointwise_attributes const *swish_attrs = nullptr;
         std::shared_ptr<Tensor_attributes> swish_output;
 
         for (size_t i = 0; i + 1 < sub_nodes.size(); ++i) {
-            auto* rmsnorm_node = dynamic_cast<RMSNormNode*>(sub_nodes[i].get());
+            auto *rmsnorm_node = dynamic_cast<RMSNormNode *>(sub_nodes[i].get());
             if (!rmsnorm_node) continue;
 
-            auto* pointwise_node = dynamic_cast<PointwiseNode*>(sub_nodes[i + 1].get());
+            auto *pointwise_node = dynamic_cast<PointwiseNode *>(sub_nodes[i + 1].get());
             if (!pointwise_node) continue;
 
             if (pointwise_node->attributes.get_mode() != PointwiseMode_t::SWISH_FWD) continue;
@@ -486,60 +487,54 @@ class Graph : public ICudnn, public INode {
             break;
         }
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            rmsnorm_attrs == nullptr || swish_attrs == nullptr,
-            error_code_t::GRAPH_NOT_SUPPORTED,
-            "No RMSNorm → SiLU fusion pattern found for OPENSOURCE engine");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(rmsnorm_attrs == nullptr || swish_attrs == nullptr,
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "No RMSNorm → SiLU fusion pattern found for OPENSOURCE engine");
 
         // Only inference is supported (no mean/inv_variance output for training)
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            rmsnorm_attrs->forward_phase != NormFwdPhase_t::INFERENCE,
-            error_code_t::GRAPH_NOT_SUPPORTED,
-            "OSS RmsNorm+SiLU engine only supports INFERENCE phase");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(rmsnorm_attrs->forward_phase != NormFwdPhase_t::INFERENCE,
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "OSS RmsNorm+SiLU engine only supports INFERENCE phase");
 
         // Extract tensor metadata
         graph::Execution_plan_list::OssRmsNormSiluContext ctx;
 
         // X input tensor
         auto x_it = rmsnorm_attrs->inputs.find(Rmsnorm_attributes::input_names::X);
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            x_it == rmsnorm_attrs->inputs.end() || !x_it->second,
-            error_code_t::GRAPH_NOT_SUPPORTED, "X tensor not found in RMSNorm node");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(x_it == rmsnorm_attrs->inputs.end() || !x_it->second,
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "X tensor not found in RMSNorm node");
 
         // Input must be bf16 (the kernel always uses ITYPE = nv_bfloat16)
         auto x_dtype = x_it->second->get_data_type();
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            x_dtype != DataType_t::BFLOAT16,
-            error_code_t::GRAPH_NOT_SUPPORTED,
-            "OSS RmsNorm+SiLU engine requires BFLOAT16 input");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(x_dtype != DataType_t::BFLOAT16,
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "OSS RmsNorm+SiLU engine requires BFLOAT16 input");
 
-        ctx.x_uid = x_it->second->get_uid();
+        ctx.x_uid  = x_it->second->get_uid();
         auto x_dim = x_it->second->get_dim();
         // X shape in NCHW: [N, C, H, W] where norm operates per-row (N) across columns (C*H*W)
         // num_tokens = N (first dim), C = product of remaining dims (C*H*W)
         RETURN_CUDNN_FRONTEND_ERROR_IF(
-            x_dim.size() < 2, error_code_t::GRAPH_NOT_SUPPORTED,
-            "X tensor must have at least 2 dimensions");
+            x_dim.size() < 2, error_code_t::GRAPH_NOT_SUPPORTED, "X tensor must have at least 2 dimensions");
         ctx.num_tokens = x_dim[0];
-        ctx.C = 1;
+        ctx.C          = 1;
         for (size_t d = 1; d < x_dim.size(); ++d) {
             ctx.C *= x_dim[d];
         }
         RETURN_CUDNN_FRONTEND_ERROR_IF(
             ctx.num_tokens <= 0 || ctx.C <= 0,
             error_code_t::GRAPH_NOT_SUPPORTED,
-            "Invalid problem dimensions: num_tokens=" + std::to_string(ctx.num_tokens) +
-            " C=" + std::to_string(ctx.C));
+            "Invalid problem dimensions: num_tokens=" + std::to_string(ctx.num_tokens) + " C=" + std::to_string(ctx.C));
 
         // SCALE (gamma) tensor — must be bf16 (kernel uses WTYPE = nv_bfloat16)
         auto scale_it = rmsnorm_attrs->inputs.find(Rmsnorm_attributes::input_names::SCALE);
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            scale_it == rmsnorm_attrs->inputs.end() || !scale_it->second,
-            error_code_t::GRAPH_NOT_SUPPORTED, "SCALE tensor not found in RMSNorm node");
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            scale_it->second->get_data_type() != DataType_t::BFLOAT16,
-            error_code_t::GRAPH_NOT_SUPPORTED,
-            "OSS RmsNorm+SiLU engine requires BFLOAT16 scale weights");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(scale_it == rmsnorm_attrs->inputs.end() || !scale_it->second,
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "SCALE tensor not found in RMSNorm node");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(scale_it->second->get_data_type() != DataType_t::BFLOAT16,
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "OSS RmsNorm+SiLU engine requires BFLOAT16 scale weights");
         ctx.scale_uid = scale_it->second->get_uid();
 
         // BIAS (beta) tensor — optional
@@ -550,9 +545,9 @@ class Graph : public ICudnn, public INode {
 
         // EPSILON tensor
         auto eps_it = rmsnorm_attrs->inputs.find(Rmsnorm_attributes::input_names::EPSILON);
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            eps_it == rmsnorm_attrs->inputs.end() || !eps_it->second,
-            error_code_t::GRAPH_NOT_SUPPORTED, "EPSILON tensor not found in RMSNorm node");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(eps_it == rmsnorm_attrs->inputs.end() || !eps_it->second,
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "EPSILON tensor not found in RMSNorm node");
         ctx.epsilon_uid = eps_it->second->get_uid();
 
         // Output Z tensor (output of SiLU, not RMSNorm)
@@ -1015,7 +1010,8 @@ class Graph : public ICudnn, public INode {
         // OSS RmsNorm+SiLU engine workspace
         if (plan_index == graph::Execution_plan_list::OSS_RMS_NORM_SILU_ENGINE_CANDIDATE) {
             cudnn_workspace_size = fe_workspace_size + plans.get_oss_rms_norm_silu_workspace_size();
-            CUDNN_FE_LOG_LABEL_ENDL("INFO: get_workspace_size() is " << cudnn_workspace_size << " (OSS RmsNorm+SiLU engine)");
+            CUDNN_FE_LOG_LABEL_ENDL("INFO: get_workspace_size() is " << cudnn_workspace_size
+                                                                     << " (OSS RmsNorm+SiLU engine)");
             return {error_code_t::OK, ""};
         }
 
@@ -1211,8 +1207,8 @@ class Graph : public ICudnn, public INode {
             experimental::detail::cu_device_get(&cu_device, device_ordinal);
 
             void *oss_workspace = static_cast<char *>(workspace) + fe_workspace_size;
-            CHECK_CUDNN_FRONTEND_ERROR(plans.execute_oss_rms_norm_silu_engine(
-                tensor_uid_to_pointer_map, oss_workspace, cu_device, stream));
+            CHECK_CUDNN_FRONTEND_ERROR(
+                plans.execute_oss_rms_norm_silu_engine(tensor_uid_to_pointer_map, oss_workspace, cu_device, stream));
 
             CUDNN_FE_LOG_BANNER(" EXECUTE PLAN  ALL OK (OSS RmsNorm+SiLU engine) ");
             return {error_code_t::OK, ""};
@@ -1297,8 +1293,8 @@ class Graph : public ICudnn, public INode {
             experimental::detail::cu_device_get(&cu_device, device_ordinal);
 
             void *oss_workspace = static_cast<char *>(workspace) + fe_workspace_size;
-            CHECK_CUDNN_FRONTEND_ERROR(plans.execute_oss_rms_norm_silu_engine(
-                tensor_uid_to_pointer_map, oss_workspace, cu_device, stream));
+            CHECK_CUDNN_FRONTEND_ERROR(
+                plans.execute_oss_rms_norm_silu_engine(tensor_uid_to_pointer_map, oss_workspace, cu_device, stream));
 
             CUDNN_FE_LOG_BANNER(" EXECUTE PLAN  ALL OK (OSS RmsNorm+SiLU engine) ");
             return {error_code_t::OK, ""};
