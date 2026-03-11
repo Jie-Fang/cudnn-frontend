@@ -22,6 +22,10 @@ RUN wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86
     dpkg -i cuda-keyring_1.1-1_all.deb && \
     apt-get update -qq --fix-missing
 
+RUN apt-get -y install cuda-toolkit-${CUDA_VERSION_}
+
+RUN echo 0 | update-alternatives --config cuda
+
 RUN CUDNN_VERSION_M=${CUDNN_VERSION_%%.*} && \
     CUDA_VERSION_M=${CUDA_VERSION_%%.*} && \
     if [ "${CUDNN_VERSION_M}" == "9" ]; then \

@@ -25,13 +25,13 @@ before_script:
     - if: $CI_PIPELINE_SOURCE == "web"
 
 .cudnn_dev_image:template:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_13.1.0
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_13.2.0
 
 .cudnn_rel_image:template:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_13.1.0
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_13.2.0
 
 .cudnn_ga_image:template:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.19.0.56_13.1.0
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.20.0.48_13.2.0
 
 .device_matrix:template:
     parallel:
