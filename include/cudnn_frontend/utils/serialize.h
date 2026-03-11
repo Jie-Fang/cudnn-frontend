@@ -524,7 +524,7 @@ to_json(nlohmann::json& j, const Tensor_attributes& ta) {
                        {"uid", ta.uid},
                        {"uid_assigned", ta.uid_assigned}};
     if (ta.ragged_offset) {
-        j["ragged_offset_uid"] = ta.ragged_offset->get_uid();
+        j["ragged_offset_uid"]  = ta.ragged_offset->get_uid();
         j["ragged_offset_name"] = ta.ragged_offset->get_name();
     }
 }

@@ -140,7 +140,7 @@ def parse_args():
         default="no_mask",
         type=str,
         help="Attn mask to use. Can be 'top_left' (causal) or 'no_mask' (bidirectional).",
-        choices=["top_left", "no_mask"],
+        choices=["top_left", "bottom_right", "no_mask"],
     )
     parser.add_argument(
         "--sdpa_backend",
@@ -216,7 +216,7 @@ def run_benchmark(
         head_dim_vo: Head dimension for V/O (optional, for asymmetric)
         data_type: Data type ("bfloat16", "float16", "fp8")
         backend: Backend name ("cudnn", "flash_attention_4", etc.)
-        attn_mask: Attention mask ("no_mask", "top_left")
+        attn_mask: Attention mask ("no_mask", "top_left", "bottom_right")
         profile_pass: Which pass to profile ("fwd", "bwd", "both")
         num_iterations: Number of benchmark iterations
         num_warmup_iterations: Warmup iterations before measurement
@@ -365,8 +365,8 @@ else:
     else:
         raise ValueError(f"Invalid data type: {args.data_type}")
 
-    if args.sliding_window_size is not None and args.attn_mask != "top_left":
-        raise ValueError("Sliding window attention requires attn_mask='top_left' (causal)")
+    if args.sliding_window_size is not None and args.attn_mask not in ("top_left", "bottom_right"):
+        raise ValueError("Sliding window attention requires attn_mask='top_left' or 'bottom_right' (causal)")
 
     # Parse input arguments
     num_iters = args.num_iterations
@@ -536,6 +536,7 @@ else:
         # Compute diagonal band bounds for masking (shared by FP8 and non-FP8)
         right_bound = None if args.attn_mask == "no_mask" else 0
         left_bound = args.sliding_window_size if args.sliding_window_size else None
+        diagonal_align = cudnn.diagonal_alignment.BOTTOM_RIGHT if args.attn_mask == "bottom_right" else cudnn.diagonal_alignment.TOP_LEFT
 
         if args.data_type == "fp8":
             q_fwd = graph_fwd.tensor_like(query).set_data_type(cudnn.data_type.FP8_E4M3)
@@ -562,7 +563,7 @@ else:
                 # generate_stats=not is_infer,
                 is_inference=is_infer,
                 attn_scale=attn_scale,
-                diagonal_alignment=cudnn.diagonal_alignment.TOP_LEFT,
+                diagonal_alignment=diagonal_align,
                 left_bound=left_bound,
                 right_bound=right_bound,
                 # dropout=dropout_tuple if is_dropout else None,
@@ -600,6 +601,10 @@ else:
                 descale_v=sf_v_fwd,
                 attn_scale=attn_scale,
                 use_causal_mask=(args.attn_mask == "top_left"),
+                use_causal_mask_bottom_right=(args.attn_mask == "bottom_right"),
+                diagonal_alignment=diagonal_align,
+                diagonal_band_left_bound=left_bound,
+                diagonal_band_right_bound=right_bound,
                 generate_stats=True,
             )
         else:
@@ -613,7 +618,7 @@ else:
                 # generate_stats=not is_infer,
                 is_inference=is_infer,
                 attn_scale=attn_scale,
-                diagonal_alignment=cudnn.diagonal_alignment.TOP_LEFT,
+                diagonal_alignment=diagonal_align,
                 diagonal_band_left_bound=left_bound,
                 diagonal_band_right_bound=right_bound,
                 dropout=dropout_tuple if is_dropout else None,
@@ -711,8 +716,8 @@ else:
                     scale_dV=scale_dV_bwd,
                     scale_dP=scale_dP_bwd,
                     attn_scale=attn_scale,
-                    use_causal_mask=args.attn_mask == "top_left",
-                    use_causal_mask_bottom_right=False,
+                    use_causal_mask=(args.attn_mask == "top_left"),
+                    use_causal_mask_bottom_right=(args.attn_mask == "bottom_right"),
                     dropout=dropout_tuple if is_dropout else None,
                     use_deterministic_algorithm=args.deterministic_bwd,
                 )
@@ -820,6 +825,8 @@ else:
                     descale_dO_T=sf_dO_t_bwd,
                     attn_scale=attn_scale,
                     use_causal_mask=(args.attn_mask == "top_left"),
+                    use_causal_mask_bottom_right=(args.attn_mask == "bottom_right"),
+                    diagonal_alignment=diagonal_align,
                     use_deterministic_algorithm=args.deterministic_bwd,
                 )
             else:
@@ -837,7 +844,7 @@ else:
                     dO=dO_bwd,
                     stats=stats_bwd,
                     attn_scale=attn_scale,
-                    diagonal_alignment=cudnn.diagonal_alignment.TOP_LEFT,
+                    diagonal_alignment=diagonal_align,
                     diagonal_band_left_bound=left_bound,
                     diagonal_band_right_bound=right_bound,
                     dropout=dropout_tuple if is_dropout else None,
@@ -1044,6 +1051,9 @@ else:
     ## Done setting up cuDNN graph.
 
     # For backends MATH, EFFICIENT_ATTENTION, CUDNN_ATTENTION, PYTORCH_FLASH_ATTENTION
+    if args.attn_mask == "bottom_right" and args.sdpa_backend.startswith("pyt_"):
+        raise ValueError("bottom_right attention mask is only supported with the 'cudnn' backend, not PyTorch backends")
+
     def pyt_backend_sdpa(query, key, value, backend):
         with sdpa_kernel(backends=[backend]):
             return torch.nn.functional.scaled_dot_product_attention(
@@ -1051,7 +1061,7 @@ else:
                 key,
                 value,
                 enable_gqa=enable_gqa,
-                is_causal=args.attn_mask == "top_left",
+                is_causal=args.attn_mask in ("top_left", "bottom_right"),
             )
 
     if args.sdpa_backend == "flash_attention":
@@ -1152,7 +1162,7 @@ else:
 
         if attn_mask == "no_mask":
             num_nonmasked_elems = q_seqlen * kv_seqlen
-        elif attn_mask == "top_left":
+        elif attn_mask in ("top_left", "bottom_right"):
             if sliding_window_size is not None:
                 # With sliding window: each query attends to at most W keys
                 # (left_bound is exclusive, right_bound is inclusive)

@@ -94,8 +94,7 @@ class INode {
     };
 
     virtual error_t
-    collect_tensors_to_dump_node(
-        std::vector<std::pair<std::shared_ptr<Tensor_attributes>, char>>&) const {
+    collect_tensors_to_dump_node(std::vector<std::pair<std::shared_ptr<Tensor_attributes>, char>>&) const {
         return {error_code_t::OK, ""};
     };
 

@@ -33,8 +33,22 @@ def _is_blackwell():
 # Subnormal (exp=0): ±0, ±0.5
 # Normal (exp>0):    ±2^(exp-1) * (1 + 0.5*man)
 _FP4_E2M1_TABLE = [
-    0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0,           # positive
-    -0.0, -0.5, -1.0, -1.5, -2.0, -3.0, -4.0, -6.0,    # negative
+    0.0,
+    0.5,
+    1.0,
+    1.5,
+    2.0,
+    3.0,
+    4.0,
+    6.0,  # positive
+    -0.0,
+    -0.5,
+    -1.0,
+    -1.5,
+    -2.0,
+    -3.0,
+    -4.0,
+    -6.0,  # negative
 ]
 
 
@@ -59,7 +73,7 @@ def _quantize_to_fp4_reference(values_f32, C):
     Key: quantize by magnitude first, then apply sign bit. This matches the
     hardware's nv_fp4x2_e2m1 which preserves sign. A naive argmin over all
     16 FP4 values would pick +0.0 over -0.0 for small negative values (tie
-    broken by index order), causing nibble_diff=8 mismatches.
+    resolved by index order), causing nibble_diff=8 mismatches.
     """
     BLOCK_SIZE = 16
     FP4_MAX = 6.0
@@ -116,9 +130,7 @@ def dequantize_nvfp4(packed_bytes, scale_row_fp8, num_tokens, C):
     output = torch.zeros(num_tokens, C, dtype=torch.float32, device=packed_bytes.device)
     for col in range(C):
         block = col // BLOCK_SIZE
-        fp4_vals = torch.tensor(
-            [_FP4_E2M1_TABLE[v] for v in nibbles[:, col].cpu().tolist()],
-            dtype=torch.float32, device=packed_bytes.device)
+        fp4_vals = torch.tensor([_FP4_E2M1_TABLE[v] for v in nibbles[:, col].cpu().tolist()], dtype=torch.float32, device=packed_bytes.device)
         output[:, col] = fp4_vals * scale_f32[:, block]
     return output
 
@@ -142,8 +154,7 @@ def rmsnorm_silu_reference(x, weight, eps, output_dtype=None):
     return result.to(x.dtype)
 
 
-def _build_rmsnorm_silu_graph(num_tokens, C, input_dtype=cudnn.data_type.BFLOAT16,
-                               output_dtype=None):
+def _build_rmsnorm_silu_graph(num_tokens, C, input_dtype=cudnn.data_type.BFLOAT16, output_dtype=None):
     """Build a graph with RMSNorm → SiLU pattern.
 
     Args:
@@ -213,9 +224,9 @@ def _run_rmsnorm_silu_test(C, num_tokens, atol=2e-2, rtol=2e-2):
 
     eps = 1e-6 / C  # L2Norm-equivalent epsilon
     # Non-zero-mean input so RMSNorm actually normalizes (not already centered)
-    x_gpu = (torch.randn(num_tokens, C, dtype=torch.bfloat16, device="cuda") * 5.0 + 5.0)
+    x_gpu = torch.randn(num_tokens, C, dtype=torch.bfloat16, device="cuda") * 5.0 + 5.0
     # Random positive weights to test gamma scaling
-    weight_1d = (torch.rand(C, dtype=torch.bfloat16, device="cuda") * 1.5 + 0.5)  # [0.5, 2.0]
+    weight_1d = torch.rand(C, dtype=torch.bfloat16, device="cuda") * 1.5 + 0.5  # [0.5, 2.0]
     weight_gpu = weight_1d.view(1, C, 1, 1).contiguous()
     epsilon_cpu = torch.full((1, 1, 1, 1), eps, dtype=torch.float32, device="cpu")
 
@@ -276,21 +287,16 @@ def test_bf16_full_sweep(C, num_tokens):
     """Test all 40 VAE problem sizes with bf16 output via graph API."""
     result = _run_rmsnorm_silu_test(C, num_tokens)
 
-    print(f"C={C:>4}, tokens={num_tokens:>6}: "
-          f"max_diff={result['max_diff']:.3e}, "
-          f"mismatches={result['mismatches']}/{result['elements']}")
+    print(f"C={C:>4}, tokens={num_tokens:>6}: " f"max_diff={result['max_diff']:.3e}, " f"mismatches={result['mismatches']}/{result['elements']}")
 
     assert result["nan_count"] == 0, f"Output has {result['nan_count']} NaN values"
-    assert result["passed"], (
-        f"C={C}, tokens={num_tokens}: "
-        f"{result['mismatches']}/{result['elements']} mismatches "
-        f"(max_diff={result['max_diff']:.6e})"
-    )
+    assert result["passed"], f"C={C}, tokens={num_tokens}: " f"{result['mismatches']}/{result['elements']} mismatches " f"(max_diff={result['max_diff']:.6e})"
 
 
 # ============================================================
 # Test 2: Quick smoke test (single config, for CI)
 # ============================================================
+
 
 @pytest.mark.skipif(not _is_blackwell(), reason="Requires SM100 (Blackwell)")
 def test_bf16_smoke():
@@ -302,6 +308,7 @@ def test_bf16_smoke():
 # ============================================================
 # Test 3: FP8 output (all 40 problem sizes)
 # ============================================================
+
 
 def _run_fp8_rmsnorm_silu_test(C, num_tokens, atol=0.125, rtol=0.125):
     """Run RmsNorm+SiLU with FP8 (E4M3) output and compare against float32 reference.
@@ -317,8 +324,8 @@ def _run_fp8_rmsnorm_silu_test(C, num_tokens, atol=0.125, rtol=0.125):
     eps = 1e-6 / C
 
     # Same realistic inputs as bf16 test
-    x_gpu = (torch.randn(num_tokens, C, dtype=torch.bfloat16, device="cuda") * 5.0 + 5.0)
-    weight_1d = (torch.rand(C, dtype=torch.bfloat16, device="cuda") * 1.5 + 0.5)
+    x_gpu = torch.randn(num_tokens, C, dtype=torch.bfloat16, device="cuda") * 5.0 + 5.0
+    weight_1d = torch.rand(C, dtype=torch.bfloat16, device="cuda") * 1.5 + 0.5
     weight_gpu = weight_1d.view(1, C, 1, 1).contiguous()
     epsilon_cpu = torch.full((1, 1, 1, 1), eps, dtype=torch.float32, device="cpu")
 
@@ -327,9 +334,7 @@ def _run_fp8_rmsnorm_silu_test(C, num_tokens, atol=0.125, rtol=0.125):
     ref_f32 = rmsnorm_silu_reference(x_gpu, weight_1d, eps, output_dtype=torch.float32)
     ref_fp8 = ref_f32.clamp(-448.0, 448.0).to(torch.float8_e4m3fn)
 
-    graph, X, scale, epsilon, Z = _build_rmsnorm_silu_graph(
-        num_tokens, C, output_dtype=cudnn.data_type.FP8_E4M3
-    )
+    graph, X, scale, epsilon, Z = _build_rmsnorm_silu_graph(num_tokens, C, output_dtype=cudnn.data_type.FP8_E4M3)
     graph.validate()
     graph.build_operation_graph()
     graph.create_execution_plans([cudnn.heur_mode.OPENSOURCE])
@@ -380,21 +385,18 @@ def test_fp8_full_sweep(C, num_tokens):
     """Test all 40 VAE problem sizes with FP8 (E4M3) output via graph API."""
     result = _run_fp8_rmsnorm_silu_test(C, num_tokens)
 
-    print(f"  FP8 C={C:>4}, tokens={num_tokens:>6}: "
-          f"max_diff={result['max_diff']:.3e}  "
-          f"mismatches={result['mismatches']}/{result['elements']}")
+    print(f"  FP8 C={C:>4}, tokens={num_tokens:>6}: " f"max_diff={result['max_diff']:.3e}  " f"mismatches={result['mismatches']}/{result['elements']}")
 
     assert result["nan_count"] == 0, f"Output has {result['nan_count']} NaN values"
     assert result["passed"], (
-        f"FP8 C={C}, tokens={num_tokens}: "
-        f"{result['mismatches']}/{result['elements']} mismatches "
-        f"(max_diff={result['max_diff']:.6e})"
+        f"FP8 C={C}, tokens={num_tokens}: " f"{result['mismatches']}/{result['elements']} mismatches " f"(max_diff={result['max_diff']:.6e})"
     )
 
 
 # ============================================================
 # Test 4: NVFP4 output (representative problem sizes)
 # ============================================================
+
 
 def _run_nvfp4_rmsnorm_silu_test(C, num_tokens):
     """Run RmsNorm+SiLU with NVFP4 (FP4_E2M1) 1D1X1X block-scale output.
@@ -411,17 +413,15 @@ def _run_nvfp4_rmsnorm_silu_test(C, num_tokens):
     torch.manual_seed(42)
     eps = 1e-6 / C
 
-    x_gpu = (torch.randn(num_tokens, C, dtype=torch.bfloat16, device="cuda") * 5.0 + 5.0)
-    weight_1d = (torch.rand(C, dtype=torch.bfloat16, device="cuda") * 1.5 + 0.5)
+    x_gpu = torch.randn(num_tokens, C, dtype=torch.bfloat16, device="cuda") * 5.0 + 5.0
+    weight_1d = torch.rand(C, dtype=torch.bfloat16, device="cuda") * 1.5 + 0.5
     weight_gpu = weight_1d.view(1, C, 1, 1).contiguous()
     epsilon_cpu = torch.full((1, 1, 1, 1), eps, dtype=torch.float32, device="cpu")
 
     # Float32 reference (pre-quantization)
     ref_f32 = rmsnorm_silu_reference(x_gpu, weight_1d, eps, output_dtype=torch.float32)
 
-    graph, X, scale, epsilon, Z = _build_rmsnorm_silu_graph(
-        num_tokens, C, output_dtype=cudnn.data_type.FP4_E2M1
-    )
+    graph, X, scale, epsilon, Z = _build_rmsnorm_silu_graph(num_tokens, C, output_dtype=cudnn.data_type.FP4_E2M1)
     graph.validate()
     graph.build_operation_graph()
     graph.create_execution_plans([cudnn.heur_mode.OPENSOURCE])
@@ -443,14 +443,12 @@ def _run_nvfp4_rmsnorm_silu_test(C, num_tokens):
 
     # Read scale_row from workspace (auto-allocated by engine)
     # Offset matches engine's get_scale_row_workspace_offset()
-    rs_size = num_tokens * 4                                # rs buffer
+    rs_size = num_tokens * 4  # rs buffer
     rs_size_aligned = ((rs_size + 127) // 128) * 128
     fp8_scale_aligned = ((rs_size_aligned + 4 + 127) // 128) * 128
     scale_row_offset = fp8_scale_aligned
     scale_row_numel = num_tokens * (C // 16)
-    scale_row_fp8 = workspace[scale_row_offset:scale_row_offset + scale_row_numel].reshape(
-        num_tokens, C // 16
-    )
+    scale_row_fp8 = workspace[scale_row_offset : scale_row_offset + scale_row_numel].reshape(num_tokens, C // 16)
 
     # Compare FP4 nibbles directly: quantize the Python reference using the
     # kernel's block scales, then check if the FP4 values match.
@@ -485,6 +483,7 @@ def _run_nvfp4_rmsnorm_silu_test(C, num_tokens):
 
 # NVFP4 requires C % 16 == 0 (block size). All our C values satisfy this.
 
+
 @pytest.mark.skipif(not _is_blackwell(), reason="Requires SM100 (Blackwell)")
 @pytest.mark.parametrize("C", C_VALUES)
 @pytest.mark.parametrize("num_tokens", TOKEN_VALUES)
@@ -492,27 +491,28 @@ def test_nvfp4_sweep(C, num_tokens):
     """Test NVFP4 (FP4_E2M1) output with 1D1X1X block-scale quantization."""
     result = _run_nvfp4_rmsnorm_silu_test(C, num_tokens)
 
-    print(f"  NVFP4 C={C:>4}, tokens={num_tokens:>6}: "
-          f"max_nibble_diff={result['max_nibble_diff']}  "
-          f"mismatches={result['mismatches']}/{result['elements']}")
-
-    assert result["passed"], (
-        f"NVFP4 C={C}, tokens={num_tokens}: "
-        f"{result['mismatches']}/{result['elements']} nibbles differ by >1 ULP"
+    print(
+        f"  NVFP4 C={C:>4}, tokens={num_tokens:>6}: " f"max_nibble_diff={result['max_nibble_diff']}  " f"mismatches={result['mismatches']}/{result['elements']}"
     )
+
+    assert result["passed"], f"NVFP4 C={C}, tokens={num_tokens}: " f"{result['mismatches']}/{result['elements']} nibbles differ by >1 ULP"
 
 
 # ============================================================
 # Test 5: Negative tests — unsupported problem sizes
 # ============================================================
 
+
 @pytest.mark.skipif(not _is_blackwell(), reason="Requires SM100 (Blackwell)")
-@pytest.mark.parametrize("C,num_tokens", [
-    (48, 1560),       # C=48 not in LUT
-    (512, 10000),     # tokens=10000 not in LUT
-    (2048, 24960),    # C=2048 not in LUT
-    (100, 100),       # Neither C nor tokens in LUT
-])
+@pytest.mark.parametrize(
+    "C,num_tokens",
+    [
+        (48, 1560),  # C=48 not in LUT
+        (512, 10000),  # tokens=10000 not in LUT
+        (2048, 24960),  # C=2048 not in LUT
+        (100, 100),  # Neither C nor tokens in LUT
+    ],
+)
 def test_unsupported_problem_sizes(C, num_tokens):
     """Verify that unsupported problem sizes are rejected gracefully."""
     graph, X, scale, epsilon, Z = _build_rmsnorm_silu_graph(num_tokens, C)
@@ -529,6 +529,7 @@ def test_unsupported_problem_sizes(C, num_tokens):
 # Test 4: Verify L2Norm ↔ RMSNorm epsilon equivalence
 # ============================================================
 
+
 @pytest.mark.skipif(not _is_blackwell(), reason="Requires SM100 (Blackwell)")
 @pytest.mark.parametrize("C", [64, 256, 512, 1024])
 def test_epsilon_equivalence(C):
@@ -539,7 +540,7 @@ def test_epsilon_equivalence(C):
 
     x = torch.randn(num_tokens, C, dtype=torch.bfloat16, device="cuda")
     weight = torch.randn(C, dtype=torch.bfloat16, device="cuda")
-    scale = C ** 0.5
+    scale = C**0.5
 
     # L2Norm + SiLU
     l2norm = torch.sqrt(torch.sum(x.float() ** 2, dim=-1, keepdim=True) + eps)
@@ -551,10 +552,7 @@ def test_epsilon_equivalence(C):
 
     atol, rtol = 1e-2, 1e-2
     mismatches = ~torch.isclose(l2_out.float(), rms_out.float(), atol=atol, rtol=rtol)
-    assert mismatches.sum().item() == 0, (
-        f"L2Norm vs RMSNorm(eps/C) mismatch for C={C}: "
-        f"{mismatches.sum().item()} elements differ"
-    )
+    assert mismatches.sum().item() == 0, f"L2Norm vs RMSNorm(eps/C) mismatch for C={C}: " f"{mismatches.sum().item()} elements differ"
 
 
 # ============================================================
@@ -583,9 +581,11 @@ if __name__ == "__main__":
                     passed += 1
                 else:
                     failed += 1
-                print(f"  C={C:>4}, tokens={tokens:>6}: {status}  "
-                      f"max_diff={result['max_diff']:.3e}  "
-                      f"mismatches={result['mismatches']}/{result['elements']}")
+                print(
+                    f"  C={C:>4}, tokens={tokens:>6}: {status}  "
+                    f"max_diff={result['max_diff']:.3e}  "
+                    f"mismatches={result['mismatches']}/{result['elements']}"
+                )
             except Exception as e:
                 failed += 1
                 print(f"  C={C:>4}, tokens={tokens:>6}: ERROR  {e}")
@@ -606,9 +606,11 @@ if __name__ == "__main__":
                     passed += 1
                 else:
                     failed += 1
-                print(f"  FP8 C={C:>4}, tokens={tokens:>6}: {status}  "
-                      f"max_diff={result['max_diff']:.3e}  "
-                      f"mismatches={result['mismatches']}/{result['elements']}")
+                print(
+                    f"  FP8 C={C:>4}, tokens={tokens:>6}: {status}  "
+                    f"max_diff={result['max_diff']:.3e}  "
+                    f"mismatches={result['mismatches']}/{result['elements']}"
+                )
             except Exception as e:
                 failed += 1
                 print(f"  FP8 C={C:>4}, tokens={tokens:>6}: ERROR  {e}")
@@ -629,9 +631,11 @@ if __name__ == "__main__":
                     passed += 1
                 else:
                     failed += 1
-                print(f"  NVFP4 C={C:>4}, tokens={tokens:>6}: {status}  "
-                      f"max_nibble_diff={result['max_nibble_diff']}  "
-                      f"mismatches={result['mismatches']}/{result['elements']}")
+                print(
+                    f"  NVFP4 C={C:>4}, tokens={tokens:>6}: {status}  "
+                    f"max_nibble_diff={result['max_nibble_diff']}  "
+                    f"mismatches={result['mismatches']}/{result['elements']}"
+                )
             except Exception as e:
                 failed += 1
                 print(f"  NVFP4 C={C:>4}, tokens={tokens:>6}: ERROR  {e}")

@@ -1,4 +1,5 @@
 #pragma once
+
 // Auto-generated from ln_fwd_silu_kernel.cu
 // Do not edit manually.
 
@@ -460,6 +461,6 @@ inline constexpr const char ln_fwd_silu_kernel_flags[] = R"FLAGS(--gpu-architect
 -default-device
 --use_fast_math
 )FLAGS";
-inline constexpr size_t ln_fwd_silu_kernel_flags_len = sizeof(ln_fwd_silu_kernel_flags) - 1;
+inline constexpr size_t ln_fwd_silu_kernel_flags_len   = sizeof(ln_fwd_silu_kernel_flags) - 1;
 
 }  // namespace cudnn_frontend::experimental::generated
