@@ -24,3 +24,28 @@ The API to set a dynamic shape graph's kernel cache is:
 ```cpp
 graph.set_kernel_cache(kernel_cache)
 ```
+
+## Override Shape
+
+Override shape allows supplying **at execution time** tensor shapes that differ from the shapes used when building the graph. A single execution plan can thus support multiple dynamic shapes without rebuilding the graph for each shape.
+
+Typical usage: build the graph and execution plan once with a "cache shape", then on each `execute` call pass the actual shapes for that run via `override_uids`, `override_shapes`, and `override_strides`.
+
+API to enable override shape:
+```cpp
+graph.set_override_shape_enabled(true)
+```
+
+Call this before building the graph (together with other options such as `set_dynamic_shape_enabled` or `set_kernel_cache`). It supports chaining; when the return type is `Error`, use `.is_good()` to check success.
+
+Execution API with overrides:
+```cpp
+graph->execute(handle, variant_pack, workspace_ptr, override_uids, override_shapes, override_strides)
+```
+
+Where:
+- `override_uids`: list of tensor UIDs whose shapes are being overridden
+- `override_shapes`: new shape for each tensor in `override_uids` (each element is a `std::vector<int64_t>`)
+- `override_strides`: new stride for each tensor in `override_uids`
+
+The three vectors must have the same length. Tensors not listed in `override_uids` keep the shapes defined at graph build time.

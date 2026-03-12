@@ -1528,6 +1528,8 @@ class Graph : public ICudnn, public INode {
     Graph &
     set_dynamic_shape_enabled(bool is_enabled);
     Graph &
+    set_override_shape_enabled(bool is_enabled);
+    Graph &
     set_sm_count(int32_t type);
     Graph &
     set_sm_version(int32_t version);
@@ -1907,12 +1909,13 @@ class Graph : public ICudnn, public INode {
         // Go over each subnode and serialize them.
         json full_json;
 
-        full_json["context"]["name"]                     = context.get_name();
-        full_json["context"]["compute_data_type"]        = context.get_compute_data_type();
-        full_json["context"]["intermediate_data_type"]   = context.get_intermediate_data_type();
-        full_json["context"]["io_data_type"]             = context.get_io_data_type();
-        full_json["context"]["sm_count"]                 = context.get_target_sm_count();
-        full_json["context"]["is_dynamic_shape_enabled"] = context.get_dynamic_shape_enabled();
+        full_json["context"]["name"]                      = context.get_name();
+        full_json["context"]["compute_data_type"]         = context.get_compute_data_type();
+        full_json["context"]["intermediate_data_type"]    = context.get_intermediate_data_type();
+        full_json["context"]["io_data_type"]              = context.get_io_data_type();
+        full_json["context"]["sm_count"]                  = context.get_target_sm_count();
+        full_json["context"]["is_dynamic_shape_enabled"]  = context.get_dynamic_shape_enabled();
+        full_json["context"]["is_override_shape_enabled"] = context.get_override_shape_enabled();
 
         full_json.update(R"( {"tag": "GRAPH"})"_json);
         full_json["nodes"];
@@ -2058,6 +2061,9 @@ class Graph : public ICudnn, public INode {
             }
             if (j_context.contains("is_dynamic_shape_enabled") && !j_context["is_dynamic_shape_enabled"].is_null()) {
                 context.set_dynamic_shape_enabled(j_context["is_dynamic_shape_enabled"].get<bool>());
+            }
+            if (j_context.contains("is_override_shape_enabled") && !j_context["is_override_shape_enabled"].is_null()) {
+                context.set_override_shape_enabled(j_context["is_override_shape_enabled"].get<bool>());
             }
         }
 
@@ -2477,6 +2483,13 @@ inline Graph &
 Graph::set_dynamic_shape_enabled(bool is_enabled) {
     context.set_dynamic_shape_enabled(is_enabled);
     this->is_dynamic_shape_enabled = is_enabled;
+    return *this;
+}
+
+inline Graph &
+Graph::set_override_shape_enabled(bool is_enabled) {
+    context.set_override_shape_enabled(is_enabled);
+    this->is_override_shape_enabled = is_enabled;
     return *this;
 }
 
