@@ -389,7 +389,6 @@ class TensorInfo:
     tensor_type: nv_tensor_ir.TensorType
     dtype: ir.Type
     shape: list[int]
-    shape_div: list[int]
     stride: list[int]
     stride_div: list[int]
     alignment: Optional[int] = None  # alignment in bytes
@@ -433,24 +432,20 @@ def find_leading_dimension(stride, shape):
     return None
 
 
-def calculate_divisibility_from_alignment(
+def calculate_stride_div_from_alignment(
     stride_dynamic,
     stride,
-    shape,
-    alignment,
     dtype_width,
 ):
-    """Calculate shape and stride divisibility from pre-calculated alignment.
+    """Calculate stride divisibility from stride layout.
 
     Args:
         stride_dynamic: List of stride placeholders (0 for broadcast, 1 for leading, etc.)
         stride: List of actual stride values
-        alignment: Pre-calculated alignment in bytes
         dtype_width: Data type width in bits
-        shape: List of shape values for priority-based leading dimension selection
 
     Returns:
-        Tuple of (shape_div, stride_div) lists containing divisibility values
+        List of stride divisibility values
     """
 
     # Helper function for stride divisibility calculation (optimized with bit manipulation)
@@ -465,26 +460,17 @@ def calculate_divisibility_from_alignment(
             # Cap at 32 for practical limits
             return min(max(1, divisibility), 32)
 
-    shape_div = []
     stride_div = []
     tma_requirement_in_bits = 128
     stride_div_flag = True
     has_stride_zero = False
 
-    # Find the leading dimension
-    leading_dim_idx = find_leading_dimension(stride_dynamic, shape)
-
-    # Calculate divisibility from alignment for the leading dimension
-    leading_divisibility = alignment * 8 // dtype_width if leading_dim_idx is not None else 1
-
     for idx, s in enumerate(stride_dynamic):
         if s == 0:
-            shape_div.append(1)
             stride_div.append(1)
             has_stride_zero = True
         else:
             if s != 1:
-                shape_div.append(1)
                 if stride_div_flag and has_stride_zero:
                     actual_stride_div = calculate_actual_divisibility(stride[idx])
                     final_stride_div = gcd(actual_stride_div * dtype_width, tma_requirement_in_bits) // dtype_width
@@ -493,41 +479,29 @@ def calculate_divisibility_from_alignment(
                 else:
                     stride_div.append(1)
             else:
-                # Use the divisibility calculated from alignment
-                shape_div.append(leading_divisibility)
                 stride_div.append(1)
 
     if has_stride_zero:
         stride_div[0] = gcd(stride[0] * dtype_width, tma_requirement_in_bits) // dtype_width
 
-    return shape_div, stride_div
+    return stride_div
 
 
 class TensorIRNode(ABC):
     """Base class for all Tensor IR operation nodes."""
 
-    def __init__(
-        self,
-        node,
-        node_map,
-        ip,
-        tensor_ir_test,
-        keep_divisibility=False,
-        output_tensor_type=None,
-    ):
+    def __init__(self, node, node_map, ip, tensor_ir_test):
         self.node = node
         self.node_map = node_map
         self.ip = ip
         self.tensor_ir_test = tensor_ir_test
         self.children = [node_map[child] for child in node.producer_nodes]
+
         # Get output tensor info with compute data type from node kwargs or output data type
         self.output_tensor_info = self.tensor_ir_test.determine_tensor_ir_inout_tensor_type(
             node,
             (node.kwargs["compute_data_type"] if "compute_data_type" in node.kwargs else node.output[0].data_type),
-            keep_divisibility,
         )
-        if keep_divisibility:
-            self.output_tensor_info.tensor_type = output_tensor_type
 
     @abstractmethod
     def run(self):
@@ -575,29 +549,11 @@ class ReductionNode(TensorIRNode):
             input_datatype = nv_tensor_ir.get_tensor_datatype(self.children[0].type)
             output_datatype = nv_tensor_ir.get_tensor_datatype(self.output_tensor_info.tensor_type)
 
-            # Get original stride and shape from the node
-            original_stride = self.node.output[0].stride
-            original_shape = self.node.output[0].dim
-
-            # Use the pre-calculated alignment from output_tensor_info
-            alignment = self.output_tensor_info.alignment
-            dtype_width = output_datatype.width if hasattr(output_datatype, "width") else 16
-
-            # Calculate divisibility from stored alignment
-            shape_div, _ = calculate_divisibility_from_alignment(
-                self.output_tensor_info.stride,
-                original_stride,
-                self.output_tensor_info.shape,
-                alignment,
-                dtype_width,
-            )
-
             if input_datatype != output_datatype:
                 convert_value = nv_tensor_ir.convert(
                     nv_tensor_ir.TensorType.get(
                         shape=self.output_tensor_info.shape,
-                        datatype=output_datatype,
-                        shape_divisibility=shape_div,
+                        datatype=output_datatype
                     ),
                     self.children[0],
                 )
@@ -614,8 +570,7 @@ class ReductionNode(TensorIRNode):
             mlir_value = nv_tensor_ir.reduce(
                 nv_tensor_ir.TensorType.get(
                     shape=self.output_tensor_info.shape,
-                    datatype=output_datatype,
-                    shape_divisibility=shape_div,
+                    datatype=output_datatype
                 ),
                 convert_value,
                 reduction_dimensions,
@@ -1073,8 +1028,7 @@ class test_tensor_ir:
 
         self.compiler_with_kernel_cache = CompilerWithKernelCacheSingleton()
 
-    def determine_tensor_ir_inout_tensor_type(self, node, dtype=None, keep_divisibility=False):
-        # We only set the divisibility when keep_divisibility is True.
+    def determine_tensor_ir_inout_tensor_type(self, node, dtype=None):
         assert len(node.output) == 1
         test_tensor = node.output[0]
         if dtype is None:
@@ -1087,7 +1041,6 @@ class test_tensor_ir:
                 tensor_type=dtype,
                 dtype=dtype,
                 shape=[1],
-                shape_div=[],
                 stride=[1],
                 stride_div=[],
             )
@@ -1115,21 +1068,17 @@ class test_tensor_ir:
             # If tensor is scalar in json definition, convert to dense memref with shape to [-1] and stride to [0]
             scalar_dim = 1 if self.static_shapes_only else -1
             shape = [scalar_dim] * len(ori_shape)
-            shape_div = [1] * len(ori_shape)
             stride = [0] * len(ori_stride)
             stride_div = [1] * len(ori_stride)
             return TensorInfo(
                 tensor_type=nv_tensor_ir.TensorType.get(shape=shape, datatype=dtype),
                 dtype=dtype,
                 shape=shape,
-                shape_div=shape_div,
                 stride=stride,
                 stride_div=stride_div,
                 alignment=get_tma_alignment(dtype_width),
             )
 
-        # Keep track of divisibility constraints if needed
-        shape_div = []
         stride_div = []
 
         for s, d in zip(ori_stride, ori_shape):
@@ -1158,32 +1107,24 @@ class test_tensor_ir:
         else:
             alignment = get_tma_alignment(dtype_width)
 
-        # Calculate divisibility from alignment
-        shape_div, stride_div = calculate_divisibility_from_alignment(
+        # Calculate stride divisibility from stride layout
+        stride_div = calculate_stride_div_from_alignment(
             stride,
             ori_stride,
-            ori_shape,
-            alignment,
             dtype_width,
         )
 
         reorder_mode = self.get_reorder_mode(node)
 
-        if not keep_divisibility:
-            shape_div = [1] * len(shape)
-            stride_div = [1] * len(stride)
-
         ty = nv_tensor_ir.TensorType.get(
             shape=shape,
             datatype=dtype,
-            shape_divisibility=shape_div,
             reorder_mode=reorder_mode,
         )
         return TensorInfo(
             tensor_type=ty,
             dtype=dtype,
             shape=shape,
-            shape_div=shape_div,
             stride=stride,
             stride_div=stride_div,
             alignment=alignment,
@@ -1499,7 +1440,7 @@ class test_tensor_ir:
 
             input_tensor_infos = list(
                 map(
-                    lambda x: self.determine_tensor_ir_inout_tensor_type(x, keep_divisibility=True),
+                    lambda x: self.determine_tensor_ir_inout_tensor_type(x),
                     input_tensors,
                 )
             )
@@ -1522,7 +1463,7 @@ class test_tensor_ir:
 
             output_tensor_infos = list(
                 map(
-                    lambda x: self.determine_tensor_ir_inout_tensor_type(x, keep_divisibility=True),
+                    lambda x: self.determine_tensor_ir_inout_tensor_type(x),
                     output_tensors,
                 )
             )
@@ -1569,25 +1510,15 @@ class test_tensor_ir:
             with ir.InsertionPoint(graph.regions[0].blocks[0]) as ip:
                 for node in output_tensors:  # This should be built from output nodes no?
                     # Recursively lower ops
-                    keep_divisibility = True
-                    if "compute_data_type" in node.kwargs and node.output[0]._data_type != node.kwargs["compute_data_type"]:
-                        # If we will convert the data type, we don't need to keep the divisibility for
-                        # the producer nodes
-                        keep_divisibility = False
-
                     self.build_tensor_ir_recursive(
-                        node,
-                        node_map,
-                        ip,
-                        output_tensor_infos[0].tensor_type,
-                        keep_divisibility=keep_divisibility,
+                        node, node_map, ip
                     )  # This is passed the insertion point, which provides a mutable reference to the module. # Consider passing other things, as order in graph module is said to not matter.
 
                 # Generate return op
                 result = []
                 for node in output_tensors:
                     if "compute_data_type" in node.kwargs and node.output[0]._data_type != node.kwargs["compute_data_type"]:
-                        tensor_info = self.determine_tensor_ir_inout_tensor_type(node, node.output[0]._data_type, keep_divisibility=True)
+                        tensor_info = self.determine_tensor_ir_inout_tensor_type(node, node.output[0]._data_type)
                         node_map[node] = nv_tensor_ir.convert(
                             tensor_info.tensor_type,
                             node_map[node],
@@ -1595,6 +1526,7 @@ class test_tensor_ir:
                     result.append(node_map[node])
 
                 nv_tensor_ir.results_(result)
+        print(module)
         module.operation.verify()
 
         return module
@@ -1616,8 +1548,7 @@ class test_tensor_ir:
             convert_value0 = nv_tensor_ir.convert(
                 nv_tensor_ir.TensorType.get(
                     shape=tensor_info.shape,
-                    datatype=out_type_datatype,
-                    shape_divisibility=tensor_info.shape_div,
+                    datatype=out_type_datatype
                 ),
                 lsh,
             )
@@ -1627,8 +1558,7 @@ class test_tensor_ir:
             convert_value1 = nv_tensor_ir.convert(
                 nv_tensor_ir.TensorType.get(
                     shape=tensor_info.shape,
-                    datatype=out_type_datatype,
-                    shape_divisibility=tensor_info.shape_div,
+                    datatype=out_type_datatype
                 ),
                 rsh,
             )
@@ -1645,98 +1575,15 @@ class test_tensor_ir:
         else:
             return scalar_tensor
 
-    def build_tensor_ir_recursive(self, node, node_map, ip, output_tensor_type, keep_divisibility=False):
+    def build_tensor_ir_recursive(self, node, node_map, ip):
         """Build tensor IR representation recursively for the given node."""
-
-        # for node in input_tensors:
-        if (not self.static_shapes_only) and (len(node.producer_nodes) == 0):
-            input_tensor = node_map[node]
-            # Skip scalars / by-value arguments
-            if not isinstance(input_tensor.type, nv_tensor_ir.TensorType):
-                return
-
-            if keep_divisibility:
-                # Need to keep the same divisibility with the output tensor
-                # Broadcast the input tensor to make them same
-                if nv_tensor_ir.get_tensor_datatype(output_tensor_type) == nv_tensor_ir.get_tensor_datatype(input_tensor.type):
-                    broadcast_tensor_type = output_tensor_type
-                else:
-                    # If the data type is the different, we don't need to broadcast.
-                    # Because there will be a convert op after the node.
-                    broadcast_tensor_type = None
-
-            else:
-                # Don't need to keep the same divisibility with the output tensor
-                # Broadcast the input tensor to remove the divisibility
-                dim = node.output[0].dim
-                broad_cast_shape = [-1] * len(dim)
-
-                tensor_type = input_tensor.type
-
-                broadcast_tensor_type = nv_tensor_ir.TensorType.get(
-                    shape=broad_cast_shape,
-                    datatype=nv_tensor_ir.get_tensor_datatype(tensor_type),
-                )
-
-            if (broadcast_tensor_type is not None) and (broadcast_tensor_type != input_tensor.type):
-                broadcast_tensor = nv_tensor_ir.broadcast(
-                    broadcast_tensor_type,
-                    input_tensor,
-                )
-                node_map[node] = broadcast_tensor
-
         # Skip if node is already processed
         if node in node_map.keys():
             return
 
-        def get_result_type(node):
-            if "compute_data_type" in node.kwargs and node.op_name != "identity":
-                result_type = eval(convert_datatype(node.kwargs["compute_data_type"], "tensorir"))
-            else:
-                result_type = eval(convert_datatype(node.output[0].data_type, "tensorir"))
-            return result_type
-
-        # Check if there is implicit data type conversion between the node and the output tensor
-        if keep_divisibility:
-            final_output_data_type = nv_tensor_ir.get_tensor_datatype(output_tensor_type)
-            compute_data_type = get_result_type(node)
-            if compute_data_type != final_output_data_type:
-                keep_divisibility = False
-
-        if isinstance(node, tg.operation):
-            # These operations should keep the divisibility as the parent node
-            # Because they require the same divisibility for the input and output tensors
-            if (
-                node.op_name
-                in self.OPERATION_GROUPS[BinaryOperationNode]
-                + self.OPERATION_GROUPS[UnaryOperationNode]
-                + self.OPERATION_GROUPS[BinarySelectNode]
-                + self.OPERATION_GROUPS[ActivationForwardNode]
-                + self.OPERATION_GROUPS[ActivationBackwardNode]
-            ):
-                child_keep_divisibility = keep_divisibility
-            else:
-                if node.op_name == "identity":
-                    # If the result type of the parent node is the same as the output tensor type of the identity node,
-                    # this identity node will be skipped.
-                    pre_node = node.producer_nodes[0]
-                    pre_node_result_type = get_result_type(pre_node)
-                    if pre_node_result_type == get_result_type(node):
-                        child_keep_divisibility = keep_divisibility
-                    else:
-                        child_keep_divisibility = False
-                else:
-                    child_keep_divisibility = False
-
         # Process all children first
         for child in node.producer_nodes:
-            self.build_tensor_ir_recursive(
-                child,
-                node_map,
-                ip,
-                output_tensor_type,
-                keep_divisibility=child_keep_divisibility,
-            )
+            self.build_tensor_ir_recursive(child, node_map, ip)
 
         # Only process operation nodes
         if not isinstance(node, tg.operation):
@@ -1769,14 +1616,7 @@ class test_tensor_ir:
             self.node_overwrite_stride_func_map[sfB_node] = lambda tile_size: sfB_stride[:2] + [128 * 4 * ((sfB_shape[1] * 32) // tile_size[2])]
 
         # Create and run the node
-        ir_node = node_class(
-            node,
-            node_map,
-            ip,
-            self,
-            keep_divisibility=keep_divisibility,
-            output_tensor_type=output_tensor_type,
-        )
+        ir_node = node_class(node, node_map, ip, self)
         ir_node.run()
 
     def get_reorder_mode(self, node):
