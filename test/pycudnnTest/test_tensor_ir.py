@@ -551,10 +551,7 @@ class ReductionNode(TensorIRNode):
 
             if input_datatype != output_datatype:
                 convert_value = nv_tensor_ir.convert(
-                    nv_tensor_ir.TensorType.get(
-                        shape=self.output_tensor_info.shape,
-                        datatype=output_datatype
-                    ),
+                    nv_tensor_ir.TensorType.get(shape=self.output_tensor_info.shape, datatype=output_datatype),
                     self.children[0],
                 )
             else:
@@ -568,10 +565,7 @@ class ReductionNode(TensorIRNode):
                 reduction_dim += 1
 
             mlir_value = nv_tensor_ir.reduce(
-                nv_tensor_ir.TensorType.get(
-                    shape=self.output_tensor_info.shape,
-                    datatype=output_datatype
-                ),
+                nv_tensor_ir.TensorType.get(shape=self.output_tensor_info.shape, datatype=output_datatype),
                 convert_value,
                 reduction_dimensions,
                 reduction_mode,
@@ -1546,20 +1540,14 @@ class test_tensor_ir:
         out_type_datatype = nv_tensor_ir.get_tensor_datatype(tensor_info.tensor_type)
         if lsh is not None and out_type_datatype != nv_tensor_ir.get_tensor_datatype(lsh.type):
             convert_value0 = nv_tensor_ir.convert(
-                nv_tensor_ir.TensorType.get(
-                    shape=tensor_info.shape,
-                    datatype=out_type_datatype
-                ),
+                nv_tensor_ir.TensorType.get(shape=tensor_info.shape, datatype=out_type_datatype),
                 lsh,
             )
         else:
             convert_value0 = lsh
         if rsh is not None and out_type_datatype != nv_tensor_ir.get_tensor_datatype(rsh.type):
             convert_value1 = nv_tensor_ir.convert(
-                nv_tensor_ir.TensorType.get(
-                    shape=tensor_info.shape,
-                    datatype=out_type_datatype
-                ),
+                nv_tensor_ir.TensorType.get(shape=tensor_info.shape, datatype=out_type_datatype),
                 rsh,
             )
         else:

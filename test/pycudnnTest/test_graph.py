@@ -90,11 +90,7 @@ class PytorchReference:
         shape = tuple(test_tensor_out_list[0].dim)
         input_val = kwargs["input"]
         if isinstance(input_val, torch.Tensor) and input_val.numel() == 1:
-            return [
-                torch.full(
-                    shape, input_val.item(), dtype=dtype, device=input_val.device
-                )
-            ]
+            return [torch.full(shape, input_val.item(), dtype=dtype, device=input_val.device)]
         if not isinstance(input_val, torch.Tensor):
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             return [torch.full(shape, float(input_val), dtype=dtype, device=device)]
@@ -330,7 +326,13 @@ class PytorchReference:
 
         # Check if we need CPU fallback for integer matmul
         # PyTorch's torch.bmm doesn't support integer types on CUDA
-        is_integer_type = compute_type in [torch.int8, torch.int16, torch.int32, torch.int64, torch.uint8]
+        is_integer_type = compute_type in [
+            torch.int8,
+            torch.int16,
+            torch.int32,
+            torch.int64,
+            torch.uint8,
+        ]
 
         if is_integer_type and lhs.is_cuda:
             # Convert to compute type and move to CPU
