@@ -849,8 +849,8 @@ def test_sdpa_mxfp8_bwd_L0(env_info, test_no, request, cudnn_handle):
         head_count=RandomHeadGenerator(min=1, max=4, head_group_options=(1, 1, 0)),
         data_type=RandomChoice({torch.float8_e4m3fn: 2, torch.float8_e5m2: 0}),
         output_type=RandomChoice({torch.float16: 2, torch.bfloat16: 1}),
-        with_sliding_mask=SlidingWindowMaskGenerator(no_mask=10),
-        diag_align=RandomChoice({cudnn.diagonal_alignment.TOP_LEFT : 1}),
+        with_sliding_mask=SlidingWindowMaskGenerator(causal=10, left_window_only=5, right_window_only=5, band_around_diag=10, no_mask=10),
+        diag_align=RandomChoice({cudnn.diagonal_alignment.TOP_LEFT : 1, cudnn.diagonal_alignment.BOTTOM_RIGHT : 1}),
         is_ragged_or_padded_or_full=RandomChoice({"ragged": 0, "padded": 0, "full": 1}),
         is_deterministic=RandomChoice({True: 1, False: 0}),
     ) as randomization_ctx:

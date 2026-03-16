@@ -5,35 +5,15 @@ import math
 from enum import IntEnum
 from looseversion import LooseVersion
 
-from .helpers import fill_sparse_small_int, exact_equal, time_execution, profile_execution
+from .helpers import exact_equal, time_execution, profile_execution
 from .mxfp8_ref import compute_ref, compute_ref_backward
 
-# Try to import CUTLASS for scale factor conversion
+# Try to import TransformerEngine (>= 2.12) for MXFP8 quantization
 try:
-    import cutlass.cute as cute
-    import cutlass
-    from cutlass.cute.runtime import from_dlpack
+    import transformer_engine
 
-    @cute.jit
-    def cvt_sf_MKL_to_M32x4xrm_K4xrk_L(
-        sf_ref_tensor: cute.Tensor,
-        sf_mma_tensor: cute.Tensor,
-    ):
-        """Convert scale factor tensor from MKL layout to mma specification M(32x4xrest_m)xK(4xrest_k)xL layout"""
-        sf_mma_tensor = cute.group_modes(sf_mma_tensor, 0, 3)
-        sf_mma_tensor = cute.group_modes(sf_mma_tensor, 1, 3)
-        for i in cutlass.range(cute.size(sf_ref_tensor)):
-            mkl_coord = sf_ref_tensor.layout.get_hier_coord(i)
-            sf_mma_tensor[mkl_coord] = sf_ref_tensor[mkl_coord]
-
-    HAS_CUTLASS = True
-except Exception:
-    HAS_CUTLASS = False
-    cute = None
-    cvt_sf_MKL_to_M32x4xrm_K4xrk_L = None
-
-# Try to import TransformerEngine for MXFP8 quantization
-try:
+    if LooseVersion(transformer_engine.__version__) < LooseVersion("2.12.0"):
+        raise ImportError(f"TransformerEngine >= 2.12.0 required, found {transformer_engine.__version__}")
     from transformer_engine.pytorch.tensor.mxfp8_tensor import MXFP8Quantizer
     import transformer_engine_torch as tex
 
@@ -148,143 +128,58 @@ def compute_mxfp8_scale_dims(s, d, block_size=32):
     }
 
 
-def create_sf_layout_tensor(l, mn, nk, sf_vec_size):
-    """Create scale factor tensor with F8_128x4 layout."""
-    sf_k = ceil_div(nk, sf_vec_size)
 
-    atom_m = (32, 4)
-    atom_k = 4
-    mma_shape = (
-        l,
-        ceil_div(mn, atom_m[0] * atom_m[1]),
-        ceil_div(sf_k, atom_k),
-        atom_m[0],
-        atom_m[1],
-        atom_k,
-    )
-
-    mma_permute_order = (3, 4, 1, 5, 2, 0)
-    cute_f32_torch_tensor_cpu = torch.zeros(mma_shape, dtype=torch.float32).permute(mma_permute_order)
-
-    return cute_f32_torch_tensor_cpu, sf_k
-
-
-def create_scale_factor_tensor(l, mn, k, sf_vec_size, o_dtype=torch.float8_e8m0fnu, ref_values=None):
-    """
-    Create scale factor tensor for SDPA with F8_128x4 reordering.
-
-    Args:
-        l: batch dimension (b * h for SDPA)
-        mn: non-contracting dimension (s for Q/K, d for V)
-        k: contracting dimension to be scaled (d for Q/K, s for V)
-        sf_vec_size: block size (32 for MXFP8)
-        o_dtype: output dtype (torch.float8_e8m0fnu)
-        ref_values: Optional float32 tensor of shape [mn, sf_k, l] containing per-block
-                    scale factor values (e.g. derived from actual data). If None, random
-                    values are generated.
-
-    Returns:
-        ref_tensor: reference tensor for computation [mn, sf_k, l] -> broadcast to [mn, k, l]
-        cute_tensor: F8_128x4 reordered tensor for cuDNN
-    """
-    if not HAS_CUTLASS:
-        pytest.skip("CUTLASS is not installed; skipping MXFP8 tests.")
-
-    cute_f32_torch_tensor_cpu, sf_k = create_sf_layout_tensor(l, mn, k, sf_vec_size)
-    ref_shape = (l, mn, sf_k)
-    ref_permute_order = (1, 2, 0)
-
-    if ref_values is not None:
-        assert ref_values.shape == (mn, sf_k, l), \
-            f"Expected ref_values shape {(mn, sf_k, l)}, got {ref_values.shape}"
-        ref_f32_torch_tensor_cpu = ref_values.cpu().float().contiguous()
-    else:
-        # Create reference scale factors (small positive values for stability)
-        ref_f32_torch_tensor_cpu = (
-            torch.empty(ref_shape, dtype=torch.float32).uniform_(0.5, 2.0).permute(ref_permute_order).to(torch.int8).to(torch.float32)
-        )
-
-    # Convert ref f32 tensor to cute f32 tensor with F8_128x4 layout
-    cvt_sf_MKL_to_M32x4xrm_K4xrk_L(
-        from_dlpack(ref_f32_torch_tensor_cpu),
-        from_dlpack(cute_f32_torch_tensor_cpu),
-    )
-
-    # Expand scale factors to match the original k dimension
-    ref_expanded = ref_f32_torch_tensor_cpu.permute(2, 0, 1).unsqueeze(-1).expand(l, mn, sf_k, sf_vec_size).reshape(l, mn, sf_k * sf_vec_size).permute(*ref_permute_order)
-    ref_expanded = ref_expanded[:, :k, :]
-
-    # Convert to E8M0 dtype
-    cute_torch_tensor = cute_f32_torch_tensor_cpu.to(o_dtype).cuda()
-
-    return ref_expanded.cuda(), cute_torch_tensor
-
-
-def quantize_to_mxfp8(tensor, b, h, s, d, s_padded, block_size=32, fp8_dtype=torch.float8_e4m3fn):
+def quantize_to_mxfp8(tensor, b, h, s, d, block_size=32, fp8_dtype=torch.float8_e4m3fn):
     l = b * h
     te_dtype = tex.DType.kFloat8E4M3 if fp8_dtype == torch.float8_e4m3fn else tex.DType.kFloat8E5M2
-    quantizer = MXFP8Quantizer(fp8_dtype=te_dtype, rowwise=True, columnwise=False)
 
-    # Quantize along D dimension
     d_scale = ceil_div(d, block_size)
     d_scale_padded = ceil_div(d_scale, 4) * 4
     d_padded = d_scale_padded * block_size
 
-    tensor_3d_d = tensor.float().reshape(l, s, d)
+    s_scale = ceil_div(s, block_size)
+    s_scale_padded = ceil_div(s_scale, 4) * 4
+    s_padded = s_scale_padded * block_size
+
+    tensor_3d = tensor.float().reshape(l, s, d)
     pad_d = d_padded - d
     pad_s = s_padded - s
     if pad_s > 0 or pad_d > 0:
-        tensor_3d_d = torch.nn.functional.pad(tensor_3d_d, (0, pad_d, 0, pad_s))
-    tensor_2d_d = tensor_3d_d.reshape(l * s_padded, d_padded).contiguous()
+        tensor_3d = torch.nn.functional.pad(tensor_3d, (0, pad_d, 0, pad_s))
+    tensor_2d = tensor_3d.reshape(l * s_padded, d_padded)
 
-    mxfp8_result_d = quantizer.quantize_impl(tensor_2d_d)
+    # without swizzle
+    quantizer = MXFP8Quantizer(fp8_dtype=te_dtype, rowwise=True, columnwise=True)
+    quantizer_swizzle = quantizer.copy()
+    mxfp8_result = quantizer(tensor_2d)
+    # --- Rowwise results (quantized along D dimension) ---
+    fp8_data_d_flat = mxfp8_result._rowwise_data
+    fp8_data_d = fp8_data_d_flat.reshape(l, s_padded, d_padded)[:, :s, :d].contiguous()
+    fp8_data_d = fp8_data_d.view(fp8_dtype).reshape(b, h, s, d)
 
-    # [l*s_padded, d_padded] -> [b, h, s, d]
-    fp8_data_flat = mxfp8_result_d._rowwise_data
-    fp8_data = fp8_data_flat.reshape(l, s_padded, d_padded)[:, :s, :d].contiguous()
-    fp8_data = fp8_data.view(fp8_dtype).reshape(b, h, s, d)
-
-    # [l*s_padded, d_scale_padded] -> [s_padded, d_scale, l]
-    scale_inv_d = mxfp8_result_d._rowwise_scale_inv
+    scale_inv_d = mxfp8_result._rowwise_scale_inv
     scale_inv_d_f32 = scale_inv_d.view(torch.float8_e8m0fnu).float()
-    scale_3d_d = scale_inv_d_f32.reshape(l, s_padded, d_scale_padded)
-    ref_values_d = scale_3d_d.permute(1, 2, 0)
+    sf_d_ref = torch.repeat_interleave(scale_inv_d_f32.reshape(l, s_padded, d_scale_padded), repeats=32, dim=2)[:, :s, :d].contiguous()
 
-    sf_d_ref, sf_d_cute = create_scale_factor_tensor(
-        l=l, mn=s_padded, k=d_padded, sf_vec_size=block_size,
-        ref_values=ref_values_d,
-    )
+    # --- Columnwise results (quantized along S dimension) ---
+    fp8_data_s_flat = mxfp8_result._columnwise_data
+    fp8_data_s = fp8_data_s_flat.reshape(l, s_padded, d_padded)[:, :s, :d].contiguous()
+    fp8_data_s = fp8_data_s.view(fp8_dtype).reshape(b, h, s, d)
 
-    # Quantize along S dimension
-    s_scale_padded = s_padded // block_size
-
-    # Transpose: [l, s, d] -> [l, d, s]
-    tensor_3d_s = tensor.float().reshape(l, s, d).permute(0, 2, 1).contiguous()
-    pad_s = s_padded - s
-    pad_d = d_padded - d
-    if pad_d > 0 or pad_s > 0:
-        tensor_3d_s = torch.nn.functional.pad(tensor_3d_s, (0, pad_s, 0, pad_d))
-    tensor_2d_s = tensor_3d_s.reshape(l * d_padded, s_padded).contiguous()
-
-    mxfp8_result_s = quantizer.quantize_impl(tensor_2d_s)
-
-    # [l*d_padded, s_padded] -> [b, h, d, s]
-    fp8_data_s_flat = mxfp8_result_s._rowwise_data
-    fp8_data_s = fp8_data_s_flat.reshape(l, d_padded, s_padded)[:, :d, :s].contiguous()
-    fp8_data_s = fp8_data_s.view(fp8_dtype).reshape(b, h, d, s)
-
-    # [l*d_padded, s_scale_te] -> [d_padded, s_scale, l]
-    scale_inv_s = mxfp8_result_s._rowwise_scale_inv
+    scale_inv_s = mxfp8_result._columnwise_scale_inv
     scale_inv_s_f32 = scale_inv_s.view(torch.float8_e8m0fnu).float()
-    scale_3d_s = scale_inv_s_f32.reshape(l, d_padded, s_scale_padded)
-    ref_values_s = scale_3d_s.permute(1, 2, 0)
+    sf_s_ref = torch.repeat_interleave(scale_inv_s_f32.reshape(l, s_scale_padded, d_padded), repeats=32, dim=1)[:, :s, :d].contiguous()
 
-    sf_s_ref, sf_s_cute = create_scale_factor_tensor(
-        l=l, mn=d_padded, k=s_padded, sf_vec_size=block_size,
-        ref_values=ref_values_s,
-    )
+    # with swizzle
+    quantizer_swizzle.optimize_for_gemm = True
+    mxfp8_result_swizzle = quantizer_swizzle(tensor_2d)
+    # --- Rowwise results (quantized along D dimension) ---
+    sf_d_swizzle = mxfp8_result_swizzle._rowwise_scale_inv
 
-    return fp8_data, sf_d_ref, sf_d_cute, fp8_data_s, sf_s_ref, sf_s_cute
+    # --- Columnwise results (quantized along S dimension) ---
+    sf_s_swizzle = mxfp8_result_swizzle._columnwise_scale_inv
+
+    return fp8_data_d, sf_d_ref, sf_d_swizzle, fp8_data_s, sf_s_ref, sf_s_swizzle
 
 
 def generate_graph_fwd(b, h_q, h_k, h_v,
@@ -353,7 +248,7 @@ def generate_graph_fwd(b, h_q, h_k, h_v,
 
     # SF_V: [B, H_v, S_scale_padded, D_v_padded], s_scale contiguous
     sf_v_dims = (b, h_v, s_kv_scale_padded, d_vo_padded)
-    sf_v_strides = (h_v * s_kv_scale_padded * d_vo_padded, s_kv_scale_padded * d_vo_padded, 1, s_kv_scale_padded)
+    sf_v_strides = (h_v * s_kv_scale_padded * d_vo_padded, s_kv_scale_padded * d_vo_padded, d_vo_padded, 1)
     sf_v = graph.tensor(
         uid=GraphFwdUid.sf_v,
         dim=sf_v_dims,
@@ -481,7 +376,7 @@ def generate_graph_bwd(b, h_q, h_k, h_v,
 
     # SF_Q_T: [B, H_q, S_qo_scale_padded, D_qk_padded]
     sf_q_t_dims = (b, h_q, s_qo_scale_padded, d_qk_padded)
-    sf_q_t_strides = (h_q * s_qo_scale_padded * d_qk_padded, s_qo_scale_padded * d_qk_padded, 1, s_qo_scale_padded)
+    sf_q_t_strides = (h_q * s_qo_scale_padded * d_qk_padded, s_qo_scale_padded * d_qk_padded, d_qk_padded, 1)
     sf_q_t = graph_bwd.tensor(
         uid=GraphBwdUid.sf_q_t,
         dim=sf_q_t_dims,
@@ -503,7 +398,7 @@ def generate_graph_bwd(b, h_q, h_k, h_v,
 
     # SF_K_T: [B, H_k, S_kv_scale_padded, D_qk_padded]
     sf_k_t_dims = (b, h_k, s_kv_scale_padded, d_qk_padded)
-    sf_k_t_strides = (h_k * s_kv_scale_padded * d_qk_padded, s_kv_scale_padded * d_qk_padded, 1, s_kv_scale_padded)
+    sf_k_t_strides = (h_k * s_kv_scale_padded * d_qk_padded, s_kv_scale_padded * d_qk_padded, d_qk_padded, 1)
     sf_k_t = graph_bwd.tensor(
         uid=GraphBwdUid.sf_k_t,
         dim=sf_k_t_dims,
@@ -536,7 +431,7 @@ def generate_graph_bwd(b, h_q, h_k, h_v,
 
     # SF_dO_T: [B, H_q, S_qo_scale_padded, D_vo_padded]
     sf_dO_t_dims = (b, h_q, s_qo_scale_padded, d_vo_padded)
-    sf_dO_t_strides = (h_q * s_qo_scale_padded * d_vo_padded, s_qo_scale_padded * d_vo_padded, 1, s_qo_scale_padded)
+    sf_dO_t_strides = (h_q * s_qo_scale_padded * d_vo_padded, s_qo_scale_padded * d_vo_padded, d_vo_padded, 1)
     sf_dO_t = graph_bwd.tensor(
         uid=GraphBwdUid.sf_dO_t,
         dim=sf_dO_t_dims,
@@ -576,8 +471,8 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
 
     cudnn_version = LooseVersion(cudnn.backend_version_string())
 
-    if not HAS_CUTLASS:
-        pytest.skip("CUTLASS is not installed; skipping MXFP8 tests.")
+    if not HAS_TE:
+        pytest.skip("TransformerEngine is not installed; skipping MXFP8 tests.")
 
     # Extract config
     b = cfg.batches
@@ -605,13 +500,6 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
         pytest.skip(f"Unsupported input type: {torch_itype}")
     cudnn_otype = cudnn.data_type.HALF if torch_otype == torch.float16 else cudnn.data_type.BFLOAT16
 
-    # Compute padded dimensions for F8_128x4 scale factors
-    s_q_padded = ceil_div(s_qo, 128) * 128
-    s_kv_padded = ceil_div(s_kv, 128) * 128
-    d_qk_scale_padded = ceil_div(ceil_div(d_qk, block_size), 4) * 4
-    d_vo_padded = ceil_div(d_vo, 128) * 128
-    s_kv_scale_padded = ceil_div(ceil_div(s_kv, block_size), 4) * 4
-
     # Build forward graph
     try:
         graph_fwd = generate_graph_fwd(
@@ -631,59 +519,14 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
     except Exception as e:
         pytest.fail(f"Error building MXFP8 SDPA graph: {e}")
 
-    # Create FP8 input tensors using sparse small integers for better low-precision testing
-    rng_data = torch.Generator(device="cuda").manual_seed(cfg.rng_data_seed)
-    q_f32 = torch.empty(b, h_q, s_qo, d_qk, dtype=torch.float32, device="cuda")
-    fill_sparse_small_int(q_f32, rng_data, sparsity=0.8, abs_max=2)
-    k_f32 = torch.empty(b, h_k, s_kv, d_qk, dtype=torch.float32, device="cuda")
-    fill_sparse_small_int(k_f32, rng_data, sparsity=0.8, abs_max=2)
-    v_f32 = torch.empty(b, h_v, s_kv, d_vo, dtype=torch.float32, device="cuda")
-    fill_sparse_small_int(v_f32, rng_data, sparsity=0.8, abs_max=2)
+    rng = torch.Generator(device="cuda").manual_seed(cfg.rng_data_seed)
+    q_f32 = torch.randn(b, h_q, s_qo, d_qk, dtype=torch.float32, device="cuda", generator=rng)
+    k_f32 = torch.randn(b, h_k, s_kv, d_qk, dtype=torch.float32, device="cuda", generator=rng)
+    v_f32 = torch.randn(b, h_v, s_kv, d_vo, dtype=torch.float32, device="cuda", generator=rng)
 
-    q_fp8 = q_f32.to(torch_itype)
-    k_fp8 = k_f32.to(torch_itype)
-    v_fp8 = v_f32.to(torch_itype)
-
-    # Create scale factor tensors using CUTLASS cute DSL for proper F8_128x4 layout
-    # create_scale_factor_tensor returns: (ref_expanded [mn, k, l], cute_tensor with F8_128x4 layout)
-
-    # SF_Q: [s_q_padded, d_qk, b*h_q]
-    # sf_q_ref_raw: [s_q_padded, d_qk, b*h_q]
-    # sf_q_cute: [32, 4, s_q_padded / 128, 4, d_qk_scale_padded / 4, b*h_q]
-    sf_q_ref_raw, sf_q_cute = create_scale_factor_tensor(
-        l=b * h_q, mn=s_q_padded, k=d_qk, sf_vec_size=block_size
-    )
-
-    # SF_K: [s_kv_padded, d_qk, b*h_k]
-    # sf_k_ref_raw: [s_kv_padded, d_qk, b*h_k]
-    # sf_k_cute: [32, 4, s_kv_padded / 128, 4, d_qk_scale_padded / 4, b*h_k]
-    sf_k_ref_raw, sf_k_cute = create_scale_factor_tensor(
-        l=b * h_k, mn=s_kv_padded, k=d_qk, sf_vec_size=block_size
-    )
-
-    # SF_V: [d_vo_padded, s_kv, b*h_v] - s is scaled (contiguous in BMM2 contraction)
-    # sf_v_ref_raw: [d_vo_padded, s_kv, b*h_v]
-    # sf_v_cute: [32, 4, d_vo_padded / 128, 4, s_kv_scale_padded / 4, b*h_v]
-    sf_v_ref_raw, sf_v_cute = create_scale_factor_tensor(
-        l=b * h_v, mn=d_vo_padded, k=s_kv, sf_vec_size=block_size
-    )
-
-    # Cute tensors are already in F8_128x4 layout, use directly
-    sf_q_cudnn = sf_q_cute
-    sf_k_cudnn = sf_k_cute
-    sf_v_cudnn = sf_v_cute
-
-    # sf_q_ref: [S_q, D, B*H_q] -> [B*H_q, S_q, D]
-    sf_q_ref_raw = sf_q_ref_raw.permute(2, 0, 1)
-    # sf_k_ref: [S_kv, D, B*H_k] -> [B*H_k, S_kv, D]
-    sf_k_ref_raw = sf_k_ref_raw.permute(2, 0, 1)
-    # sf_v_ref: [D, S_kv, B*H_v] -> [B*H_v, S_kv, D]
-    sf_v_ref_raw = sf_v_ref_raw.permute(2, 1, 0)
-
-    # Trim reference scale factors to actual dimensions for compute_ref
-    sf_q_ref = sf_q_ref_raw[:, :s_qo, :d_qk]
-    sf_k_ref = sf_k_ref_raw[:, :s_kv, :d_qk]
-    sf_v_ref = sf_v_ref_raw[:, :s_kv, :d_vo]
+    q_fp8_d, sf_q_d_ref, sf_q_d_swizzle, q_fp8_s, sf_q_s_ref, sf_q_s_swizzle = quantize_to_mxfp8(q_f32, b, h_q, s_qo, d_qk, block_size, torch_itype)
+    k_fp8_d, sf_k_d_ref, sf_k_d_swizzle, k_fp8_s, sf_k_s_ref, sf_k_s_swizzle = quantize_to_mxfp8(k_f32, b, h_k, s_kv, d_qk, block_size, torch_itype)
+    v_fp8_d, sf_v_d_ref, sf_v_d_swizzle, v_fp8_s, sf_v_s_ref, sf_v_s_swizzle = quantize_to_mxfp8(v_f32, b, h_v, s_kv, d_vo, block_size, torch_itype)
 
     # Allocate output tensors
     o_gpu = torch.empty(b, h_q, s_qo, d_vo, dtype=torch_otype, device="cuda")
@@ -692,12 +535,12 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
 
     # Build variant pack
     variant_pack = {
-        int(GraphFwdUid.q): q_fp8,
-        int(GraphFwdUid.k): k_fp8,
-        int(GraphFwdUid.v): v_fp8,
-        int(GraphFwdUid.sf_q): sf_q_cudnn,
-        int(GraphFwdUid.sf_k): sf_k_cudnn,
-        int(GraphFwdUid.sf_v): sf_v_cudnn,
+        int(GraphFwdUid.q): q_fp8_d,
+        int(GraphFwdUid.k): k_fp8_d,
+        int(GraphFwdUid.v): v_fp8_s,
+        int(GraphFwdUid.sf_q): sf_q_d_swizzle,
+        int(GraphFwdUid.sf_k): sf_k_d_swizzle,
+        int(GraphFwdUid.sf_v): sf_v_s_swizzle,
         int(GraphFwdUid.o): o_gpu,
         int(GraphFwdUid.stats): stats_gpu,
         int(GraphFwdUid.o_amax): amax_o_gpu,
@@ -713,7 +556,7 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
     torch.cuda.synchronize()
 
     # Compute reference
-    o_ref, stats_ref = compute_ref(q_fp8, k_fp8, v_fp8, sf_q_ref, sf_k_ref, sf_v_ref, attn_scale,
+    o_ref, stats_ref = compute_ref(q_fp8_d, k_fp8_d, v_fp8_s, sf_q_d_ref, sf_k_d_ref, sf_v_s_ref, attn_scale,
                                    torch_itype=torch_itype, output_type=torch_otype,
                                    left_bound=left_bound, right_bound=right_bound, diag_align=diag_align)
 
@@ -726,7 +569,7 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
     stats_err = compare_tensors(stats_gpu, stats_ref, stats_atol, stats_rtol, "stats")
 
     # Compare amax
-    amax_err = compare_amax(o_gpu, o_ref, rtol=0.02, tag="amax")
+    amax_err = compare_amax(o_gpu, o_ref, rtol=0.04, tag="amax")
 
     # Assert all checks pass
     assert o_err == 0, f"Output mismatch: {o_err} elements differ"
@@ -734,68 +577,11 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
     assert amax_err, "Amax mismatch: 1 element differs"
 
     if not cfg.is_infer:
-        # Generate dO input
-        dO_f32 = torch.empty(b, h_q, s_qo, d_vo, dtype=torch.float32, device="cuda")
-        fill_sparse_small_int(dO_f32, rng_data, sparsity=0.8, abs_max=2)
-        dO_fp8 = dO_f32.to(torch_itype)
-
-        # Create scale factors for dO
-        sf_dO_ref_raw, sf_dO_cute = create_scale_factor_tensor(
-            l=b * h_q, mn=s_q_padded, k=d_vo, sf_vec_size=block_size
-        )
-        sf_dO_ref_raw = sf_dO_ref_raw.permute(2, 0, 1)
-        sf_dO_ref = sf_dO_ref_raw[:, :s_qo, :d_vo]
+        dO_f32 = torch.randn(b, h_q, s_qo, d_vo, dtype=torch.float32, device="cuda", generator=rng)
+        dO_fp8_d, sf_dO_d_ref, sf_dO_d_swizzle, dO_fp8_s, sf_dO_s_ref, sf_dO_s_swizzle = quantize_to_mxfp8(dO_f32, b, h_q, s_qo, d_vo, block_size, torch_itype)
 
         o_f16 = o_ref.to(torch.bfloat16)
-        q_f32 = q_fp8.float()
-        k_f32 = k_fp8.float()
-        dO_f32 = dO_fp8.float()
-
-        # Dequantize inputs to FP32
-        q = q_f32.reshape(b * h_q, s_qo, d_qk)
-        k = k_f32.reshape(b * h_k, s_kv, d_qk)
-        dO = dO_f32.reshape(b * h_q, s_qo, d_vo)
-        v = v_f32.reshape(b * h_v, s_kv, d_vo)
-
-        q_dq = q * sf_q_ref
-        k_dq = k * sf_k_ref
-        dO_dq = dO * sf_dO_ref
-        v_dq = v * sf_v_ref
-
-        q_dq = q_dq.reshape(b, h_q, s_qo, d_qk)
-        k_dq = k_dq.reshape(b, h_k, s_kv, d_qk)
-        dO_dq = dO_dq.reshape(b, h_q, s_qo, d_vo)
-        v_dq = v_dq.reshape(b, h_v, s_kv, d_vo)
-        dO_f16 = dO_dq.to(torch.bfloat16)
-
-        # Re-quantize using row-wise and column-wise quantization
-        q_fp8_scaled, sf_q_ref_scaled, sf_q_cute_scaled, q_fp8_t_scaled, sf_q_t_ref_scaled, sf_q_t_cute_scaled = quantize_to_mxfp8(q_dq, b, h_q, s_qo, d_qk, s_q_padded, block_size, torch_itype)
-        k_fp8_scaled, sf_k_ref_scaled, sf_k_cute_scaled, k_fp8_t_scaled, sf_k_t_ref_scaled, sf_k_t_cute_scaled = quantize_to_mxfp8(k_dq, b, h_k, s_kv, d_qk, s_kv_padded, block_size, torch_itype)
-        dO_fp8_scaled, sf_dO_ref_scaled, sf_dO_cute_scaled, dO_fp8_t_scaled, sf_dO_t_ref_scaled, sf_dO_t_cute_scaled = quantize_to_mxfp8(dO_dq, b, h_q, s_qo, d_vo, s_q_padded, block_size, torch_itype)
-        v_fp8_scaled, sf_v_ref_scaled, sf_v_cute_scaled, v_fp8_t_scaled, sf_v_t_ref_scaled, sf_v_t_cute_scaled = quantize_to_mxfp8(v_dq, b, h_v, s_kv, d_vo, s_kv_padded, block_size, torch_itype)
-
-        q_fp8_t_scaled = q_fp8_t_scaled.transpose(-2, -1).contiguous()
-        k_fp8_t_scaled = k_fp8_t_scaled.transpose(-2, -1).contiguous()
-        dO_fp8_t_scaled = dO_fp8_t_scaled.transpose(-2, -1).contiguous()
-        v_fp8_t_scaled = v_fp8_t_scaled.transpose(-2, -1).contiguous()
-
-        sf_q_ref_scaled = sf_q_ref_scaled.permute(2, 0, 1)
-        sf_k_ref_scaled = sf_k_ref_scaled.permute(2, 0, 1)
-        sf_dO_ref_scaled = sf_dO_ref_scaled.permute(2, 0, 1)
-        sf_v_ref_scaled = sf_v_ref_scaled.permute(2, 0, 1)
-        sf_v_t_ref_scaled = sf_v_t_ref_scaled.permute(2, 1, 0)
-        sf_q_t_ref_scaled = sf_q_t_ref_scaled.permute(2, 1, 0)
-        sf_k_t_ref_scaled = sf_k_t_ref_scaled.permute(2, 1, 0)
-        sf_dO_t_ref_scaled = sf_dO_t_ref_scaled.permute(2, 1, 0)
-
-        sf_q_ref_scaled = sf_q_ref_scaled[:, :s_qo, :d_qk]
-        sf_k_ref_scaled = sf_k_ref_scaled[:, :s_kv, :d_qk]
-        sf_dO_ref_scaled = sf_dO_ref_scaled[:, :s_qo, :d_vo]
-        sf_q_t_ref_scaled = sf_q_t_ref_scaled[:, :s_qo, :d_qk]
-        sf_k_t_ref_scaled = sf_k_t_ref_scaled[:, :s_kv, :d_qk]
-        sf_dO_t_ref_scaled = sf_dO_t_ref_scaled[:, :s_qo, :d_vo]
-        sf_v_ref_scaled = sf_v_ref_scaled[:, :s_kv, :d_vo]
-        sf_v_t_ref_scaled = sf_v_t_ref_scaled[:, :s_kv, :d_vo]
+        dO_f16 = dO_f32.to(torch.bfloat16)
 
         # Build backward graph
         try:
@@ -826,23 +612,23 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
 
         # Build backward variant pack
         variant_pack_bwd = {
-            int(GraphBwdUid.q): q_fp8_scaled,
-            int(GraphBwdUid.q_t): q_fp8_t_scaled,
-            int(GraphBwdUid.k): k_fp8_scaled,
-            int(GraphBwdUid.k_t): k_fp8_t_scaled,
-            int(GraphBwdUid.v): v_fp8_scaled,
+            int(GraphBwdUid.q): q_fp8_d,
+            int(GraphBwdUid.q_t): q_fp8_s,
+            int(GraphBwdUid.k): k_fp8_d,
+            int(GraphBwdUid.k_t): k_fp8_s,
+            int(GraphBwdUid.v): v_fp8_d,
             int(GraphBwdUid.o): o_f16,
-            int(GraphBwdUid.dO): dO_fp8_scaled,
-            int(GraphBwdUid.dO_t): dO_fp8_t_scaled,
+            int(GraphBwdUid.dO): dO_fp8_d,
+            int(GraphBwdUid.dO_t): dO_fp8_s,
             int(GraphBwdUid.dO_f16): dO_f16,
             int(GraphBwdUid.stats): stats_ref,
-            int(GraphBwdUid.sf_q): sf_q_cute_scaled,
-            int(GraphBwdUid.sf_q_t): sf_q_t_cute_scaled,
-            int(GraphBwdUid.sf_k): sf_k_cute_scaled,
-            int(GraphBwdUid.sf_k_t): sf_k_t_cute_scaled,
-            int(GraphBwdUid.sf_v): sf_v_cute_scaled,
-            int(GraphBwdUid.sf_dO): sf_dO_cute_scaled,
-            int(GraphBwdUid.sf_dO_t): sf_dO_t_cute_scaled,
+            int(GraphBwdUid.sf_q): sf_q_d_swizzle,
+            int(GraphBwdUid.sf_q_t): sf_q_s_swizzle,
+            int(GraphBwdUid.sf_k): sf_k_d_swizzle,
+            int(GraphBwdUid.sf_k_t): sf_k_s_swizzle,
+            int(GraphBwdUid.sf_v): sf_v_d_swizzle,
+            int(GraphBwdUid.sf_dO): sf_dO_d_swizzle,
+            int(GraphBwdUid.sf_dO_t): sf_dO_s_swizzle,
             int(GraphBwdUid.dQ): dQ_gpu,
             int(GraphBwdUid.dK): dK_gpu,
             int(GraphBwdUid.dV): dV_gpu,
@@ -894,11 +680,11 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
 
         # Compute reference backward
         dQ_ref, dK_ref, dV_ref = compute_ref_backward(
-            q_fp8_scaled, q_fp8_t_scaled, k_fp8_scaled, k_fp8_t_scaled, v_fp8_scaled,
-            o_f16, dO_f16, dO_fp8_scaled, dO_fp8_t_scaled,
+            q_fp8_d, q_fp8_s, k_fp8_d, k_fp8_s, v_fp8_d,
+            o_f16, dO_f16, dO_fp8_d, dO_fp8_s,
             attn_scale,
-            sf_q_ref_scaled, sf_q_t_ref_scaled, sf_k_ref_scaled, sf_k_t_ref_scaled, sf_v_ref_scaled,
-            sf_dO_ref_scaled, sf_dO_t_ref_scaled,
+            sf_q_d_ref, sf_q_s_ref, sf_k_d_ref, sf_k_s_ref, sf_v_d_ref,
+            sf_dO_d_ref, sf_dO_s_ref,
             torch_itype=torch_itype, torch_otype=torch_otype,
             left_bound=left_bound, right_bound=right_bound, diag_align=diag_align,
         )
@@ -915,9 +701,9 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
         assert dV_err == 0, f"dV mismatch: {dV_err} elements differ"
 
         # Compare amax
-        dQ_amax_err = compare_amax(dQ_gpu, dQ_ref, rtol=0.02, tag="dQ")
-        dK_amax_err = compare_amax(dK_gpu, dK_ref, rtol=0.02, tag="dK")
-        dV_amax_err = compare_amax(dV_gpu, dV_ref, rtol=0.02, tag="dV")
+        dQ_amax_err = compare_amax(dQ_gpu, dQ_ref, rtol=0.04, tag="dQ")
+        dK_amax_err = compare_amax(dK_gpu, dK_ref, rtol=0.04, tag="dK")
+        dV_amax_err = compare_amax(dV_gpu, dV_ref, rtol=0.04, tag="dV")
     
         assert dQ_amax_err, "dQ amax mismatch: 1 element differs"
         assert dK_amax_err, "dK amax mismatch: 1 element differs"

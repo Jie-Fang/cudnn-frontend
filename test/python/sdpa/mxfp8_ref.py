@@ -195,16 +195,14 @@ def compute_ref_backward(q_fp8, q_t_fp8, k_fp8, k_t_fp8, v_fp8, o_f16, dO_f16, d
     s_q_padded = ((s_q + 127) // 128) * 128
     dS_4d = dS.reshape(b, h_q, s_q, s_kv)
     dS_fp8, sf_dS_ref, _, dS_fp8_t, sf_dS_t_ref, _ = quantize_to_mxfp8(
-        dS_4d, b, h_q, s_q, s_kv, s_q_padded, block_size=32, fp8_dtype=torch_itype
+        dS_4d, b, h_q, s_q, s_kv, block_size=32, fp8_dtype=torch_itype
     )
 
-    # D-quantized dS (along s_kv): permute sf [s_q_padded, s_kv, B*H_q] -> [B*H_q, s_q, s_kv]
-    sf_dS_ref = sf_dS_ref.permute(2, 0, 1)[:, :s_q, :s_kv]
+    # D-quantized dS (along s_kv)
     dS_fp32 = dS_fp8.float().reshape(b * h_q, s_q, s_kv) * sf_dS_ref
 
-    # S-quantized dS (along s_q): permute sf [s_kv_padded, s_q, B*H_q] -> [B*H_q, s_q, s_kv]
-    sf_dS_t_ref = sf_dS_t_ref.permute(2, 1, 0)[:, :s_q, :s_kv]
-    dS_fp32_t = dS_fp8_t.transpose(-2, -1).contiguous().float().reshape(b * h_q, s_q, s_kv) * sf_dS_t_ref
+    # S-quantized dS (along s_q)
+    dS_fp32_t = dS_fp8_t.float().reshape(b * h_q, s_q, s_kv) * sf_dS_t_ref
 
     # P @ dO -> dV
     dV = torch.einsum("bqk,bqd->bkd", p_fp8, dO_t_dq)

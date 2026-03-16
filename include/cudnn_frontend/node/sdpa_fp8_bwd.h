@@ -1016,6 +1016,11 @@ class SDPAFP8BackwardNode : public NodeCRTP<SDPAFP8BackwardNode> {
             K_seq_dequant->set_is_virtual(true);
             K_seq_dequant->set_dim(attributes.inputs[input_names::K_T]->get_dim());
             K_seq_dequant->set_stride(attributes.inputs[input_names::K_T]->get_stride());
+
+            int64_t s_kv_scale_padded = ((s_kv + 127) / 128) * 4;
+            auto& sf_k_T = attributes.inputs[input_names::Descale_K_T];
+            sf_k_T->set_stride({h_k * s_kv_scale_padded * 128, s_kv_scale_padded * 128, b * h_k * s_kv_scale_padded * 128, 1});
+
             block_scale_dequantize(attributes.inputs[input_names::K_T],
                                    attributes.inputs[input_names::Descale_K_T],
                                    dequant_K_seq_attrs,
@@ -1070,6 +1075,11 @@ class SDPAFP8BackwardNode : public NodeCRTP<SDPAFP8BackwardNode> {
             Q_seq_dequant->set_is_virtual(true);
             Q_seq_dequant->set_dim(attributes.inputs[input_names::Q_T]->get_dim());
             Q_seq_dequant->set_stride(attributes.inputs[input_names::Q_T]->get_stride());
+
+            int64_t s_q_scale_padded = ((s_q + 127) / 128) * 4;
+            auto& sf_q_T = attributes.inputs[input_names::Descale_Q_T];
+            sf_q_T->set_stride({h_q * s_q_scale_padded * 128, s_q_scale_padded * 128, b * h_q * s_q_scale_padded * 128, 1});
+
             block_scale_dequantize(attributes.inputs[input_names::Q_T],
                                    attributes.inputs[input_names::Descale_Q_T],
                                    dequant_Q_seq_attrs,
