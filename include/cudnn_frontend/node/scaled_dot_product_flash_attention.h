@@ -1271,7 +1271,11 @@ class CompositeSDPABackwardNode : public NodeCRTP<CompositeSDPABackwardNode> {
             RETURN_CUDNN_FRONTEND_ERROR_IF(is_ragged && (8 == prop_major || 12 == prop_major) && attributes.is_deterministic_algorithm,
                                         error_code_t::GRAPH_NOT_SUPPORTED,
                                         "Deterministic algorithm is not supported for bprop thd on SM8X and SM12X GPUs");
-        }
+
+	    RETURN_CUDNN_FRONTEND_ERROR_IF(is_ragged && (8 == prop_major || 12 == prop_major) && attributes.inputs[input_names::Stats]->get_ragged_offset(),
+                                        error_code_t::GRAPH_NOT_SUPPORTED,
+                                        "Packed/ragged LSE is not supported for bprop thd on SM8X and SM12X GPUs");
+	}
 
         // version specific validation
         RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 90500 && is_dbias && attributes.padding_mask,
@@ -1330,10 +1334,14 @@ class CompositeSDPABackwardNode : public NodeCRTP<CompositeSDPABackwardNode> {
 
         if(detail::get_backend_version() >= 91801) {
             int32_t const prop_major = context.get_sm_version() / 10;
-            if((8 == prop_major || 12 == prop_major) && (attributes.max_total_seq_len_q.has_value() || attributes.max_total_seq_len_kv.has_value())) {
-                attributes.max_total_seq_len_q.reset();
-                attributes.max_total_seq_len_kv.reset();
-            }
+            if(8 == prop_major || 12 == prop_major) {
+		if(attributes.max_total_seq_len_q.has_value() || attributes.max_total_seq_len_kv.has_value()) {
+                    attributes.max_total_seq_len_q.reset();
+                    attributes.max_total_seq_len_kv.reset();
+		    CUDNN_FE_LOG_LABEL_ENDL("WARNING: sdpa_backward.attributes.max_total_seq_len has been set, but ampere style kernels have a known functional issue. The workspace memory size required to execute this graph may be unexpectedly large");
+            
+		}
+	    }
         }
         // clang-format on
 
