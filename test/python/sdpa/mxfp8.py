@@ -5,7 +5,7 @@ import math
 from enum import IntEnum
 from looseversion import LooseVersion
 
-from .helpers import exact_equal, time_execution, profile_execution
+from .helpers import exact_equal, fill_sparse_small_int, time_execution, profile_execution
 from .mxfp8_ref import compute_ref, compute_ref_backward
 
 # Try to import TransformerEngine (>= 2.12) for MXFP8 quantization
@@ -519,10 +519,13 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
     except Exception as e:
         pytest.fail(f"Error building MXFP8 SDPA graph: {e}")
 
-    rng = torch.Generator(device="cuda").manual_seed(cfg.rng_data_seed)
-    q_f32 = torch.randn(b, h_q, s_qo, d_qk, dtype=torch.float32, device="cuda", generator=rng)
-    k_f32 = torch.randn(b, h_k, s_kv, d_qk, dtype=torch.float32, device="cuda", generator=rng)
-    v_f32 = torch.randn(b, h_v, s_kv, d_vo, dtype=torch.float32, device="cuda", generator=rng)
+    rng_data = torch.Generator(device="cuda").manual_seed(cfg.rng_data_seed)
+    q_f32 = torch.empty(b, h_q, s_qo, d_qk, dtype=torch.float32, device="cuda")
+    fill_sparse_small_int(q_f32, rng_data, sparsity=0.8, abs_max=2)
+    k_f32 = torch.empty(b, h_k, s_kv, d_qk, dtype=torch.float32, device="cuda")
+    fill_sparse_small_int(k_f32, rng_data, sparsity=0.8, abs_max=2)
+    v_f32 = torch.empty(b, h_v, s_kv, d_vo, dtype=torch.float32, device="cuda")
+    fill_sparse_small_int(v_f32, rng_data, sparsity=0.8, abs_max=2)
 
     q_fp8_d, sf_q_d_ref, sf_q_d_swizzle, q_fp8_s, sf_q_s_ref, sf_q_s_swizzle = quantize_to_mxfp8(q_f32, b, h_q, s_qo, d_qk, block_size, torch_itype)
     k_fp8_d, sf_k_d_ref, sf_k_d_swizzle, k_fp8_s, sf_k_s_ref, sf_k_s_swizzle = quantize_to_mxfp8(k_f32, b, h_k, s_kv, d_qk, block_size, torch_itype)
@@ -577,7 +580,8 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
     assert amax_err, "Amax mismatch: 1 element differs"
 
     if not cfg.is_infer:
-        dO_f32 = torch.randn(b, h_q, s_qo, d_vo, dtype=torch.float32, device="cuda", generator=rng)
+        dO_f32 = torch.empty(b, h_q, s_qo, d_vo, dtype=torch.float32, device="cuda")
+        fill_sparse_small_int(dO_f32, rng_data, sparsity=0.8, abs_max=2)
         dO_fp8_d, sf_dO_d_ref, sf_dO_d_swizzle, dO_fp8_s, sf_dO_s_ref, sf_dO_s_swizzle = quantize_to_mxfp8(dO_f32, b, h_q, s_qo, d_vo, block_size, torch_itype)
 
         o_f16 = o_ref.to(torch.bfloat16)
