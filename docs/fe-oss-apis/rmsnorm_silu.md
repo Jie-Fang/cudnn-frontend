@@ -10,7 +10,7 @@ The engine uses a persistent RMSNorm kernel compiled at runtime via NVRTC. For S
 
 ### Fusion Pattern
 
-```
+```text
 Input (X) ──→ RMSNorm(X, scale, ε) ──→ SiLU(Y) ──→ Output (Z)
 ```
 
@@ -92,7 +92,7 @@ For problem sizes not in the LUT (including all non-SM100 GPUs), the engine uses
 
 The WAN VAE uses L2 normalization, which is equivalent to RMSNorm with an adjusted epsilon:
 
-```
+```text
 ε_cudnn = ε_l2norm / C
 ```
 
