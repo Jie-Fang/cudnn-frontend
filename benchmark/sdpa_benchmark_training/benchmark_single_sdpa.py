@@ -600,8 +600,6 @@ else:
                 descale_k=sf_k_fwd,
                 descale_v=sf_v_fwd,
                 attn_scale=attn_scale,
-                use_causal_mask=(args.attn_mask == "top_left"),
-                use_causal_mask_bottom_right=(args.attn_mask == "bottom_right"),
                 diagonal_alignment=diagonal_align,
                 diagonal_band_left_bound=left_bound,
                 diagonal_band_right_bound=right_bound,
