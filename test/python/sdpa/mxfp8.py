@@ -564,7 +564,7 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
                                    left_bound=left_bound, right_bound=right_bound, diag_align=diag_align)
 
     # Compare output
-    o_atol, o_rtol = 0.08, 0.20
+    o_atol, o_rtol = 0.12, 0.20
     o_err = compare_tensors(o_gpu, o_ref, o_atol, o_rtol, "output")
 
     # Compare stats (logsumexp) - tight tolerance

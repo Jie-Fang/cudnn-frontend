@@ -81,6 +81,7 @@ class ExecConfig:
     is_ragged: bool = None
     is_dropout: bool = None
     is_determin: bool = None
+    is_mxfp8: bool = False
 
     with_score_max: bool = False
     with_score_sum_exp: bool = False

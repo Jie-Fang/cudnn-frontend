@@ -790,7 +790,12 @@ def test_repro(env_info, request, cudnn_handle):
     cfg = SDPATestConfig(**env_info, implementation=cudnn.attention_implementation.AUTO)
     cfg.cfg = ExecConfig.deserialize(ast.literal_eval(repro_str))
     cfg.showConfig((1,1), request)
-    exec_sdpa(cfg.cfg, request, cudnn_handle)
+    if cfg.cfg.is_mxfp8:
+        exec_sdpa_mxfp8(cfg.cfg, request, cudnn_handle)
+    elif cfg.cfg.data_type in (torch.float8_e4m3fn, torch.float8_e5m2):
+        exec_sdpa_fp8(cfg.cfg, request, cudnn_handle)
+    else:
+        exec_sdpa(cfg.cfg, request, cudnn_handle)
 
 
 # # ==================================
@@ -821,6 +826,7 @@ def test_sdpa_mxfp8_fwd_L0(env_info, test_no, request, cudnn_handle):
     ) as randomization_ctx:
         test.cfg = randomization_ctx(rng, data_seed, geom_seed)
 
+    test.cfg.is_mxfp8 = True
     test.showConfig(test_no, request)
 
     if request.node.name in test.blocked_tests:
@@ -857,6 +863,7 @@ def test_sdpa_mxfp8_bwd_L0(env_info, test_no, request, cudnn_handle):
         test.cfg = randomization_ctx(rng, data_seed, geom_seed)
         test.cfg.use_causal_mask = test.cfg.left_bound is None and test.cfg.right_bound == 0
 
+    test.cfg.is_mxfp8 = True
     test.cfg.is_infer = False
     test.showConfig(test_no, request)
 
