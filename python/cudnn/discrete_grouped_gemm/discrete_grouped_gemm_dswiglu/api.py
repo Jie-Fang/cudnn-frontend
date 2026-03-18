@@ -103,9 +103,9 @@ class DiscreteGroupedGemmDswigluSm100(APIBase):
         :param num_experts: Number of experts
         :param b_shape: Shape of a single expert B tensor, e.g. (n, k)
         :param b_dtype: Data type of B tensors
-        :param sample_c: Sample C tensor (valid_m, n/2, 1) -- forward activations input
-        :param sample_d_row: Sample D row output tensor (valid_m, 2*n_out, 1)
-        :param sample_d_col: Sample D column output tensor (valid_m, 2*n_out, 1)
+        :param sample_c: Sample C tensor (valid_m, 2n, 1) -- forward activations input
+        :param sample_d_row: Sample D row output tensor (valid_m, 2n, 1)
+        :param sample_d_col: Sample D column output tensor (valid_m, 2n, 1)
         :param sample_sfa: Sample scale factor A tensor
         :param sample_padded_offsets: End offset for each expert after padding
         :param sample_alpha: Per-group alpha scaling factors
@@ -214,19 +214,19 @@ class DiscreteGroupedGemmDswigluSm100(APIBase):
             n, b_k, _ = self.b_shape
         self._value_error_if(b_k != k, f"B K dimension ({b_k}) must match A K dimension ({k})")
 
-        n_out = n // 2
+        n_out = 2 * n
 
         self._check_tensor_shape(self.a_desc, (tensor_m, k, 1), "A")
         self._check_tensor_shape(self.c_desc, (tensor_m, n_out, 1), "C")
-        self._check_tensor_shape(self.d_row_desc, (tensor_m, n, 1), "D_row")
-        self._check_tensor_shape(self.d_col_desc, (tensor_m, n, 1), "D_col")
+        self._check_tensor_shape(self.d_row_desc, (tensor_m, n_out, 1), "D_row")
+        self._check_tensor_shape(self.d_col_desc, (tensor_m, n_out, 1), "D_col")
 
         rest_k = ceil_div(ceil_div(k, self.sf_vec_size), 4)
         self._check_tensor_shape(self.sfa_desc, (32, 4, ceil_div(tensor_m, 128), 4, rest_k, 1), "SFA")
-        rest_n = ceil_div(ceil_div(n, self.sf_vec_size), 4)
-        self._check_tensor_shape(self.sfd_row_desc, (32, 4, ceil_div(tensor_m, 128), 4, rest_n, 1), "SFD_row")
+        rest_n_out = ceil_div(ceil_div(n_out, self.sf_vec_size), 4)
+        self._check_tensor_shape(self.sfd_row_desc, (32, 4, ceil_div(tensor_m, 128), 4, rest_n_out, 1), "SFD_row")
         rest_m = ceil_div(ceil_div(tensor_m, self.sf_vec_size), 4)
-        self._check_tensor_shape(self.sfd_col_desc, (32, 4, ceil_div(n, 128), 4, rest_m, 1), "SFD_col")
+        self._check_tensor_shape(self.sfd_col_desc, (32, 4, ceil_div(n_out, 128), 4, rest_m, 1), "SFD_col")
 
         self._check_tensor_shape(self.alpha_desc, (self.expert_cnt,), "alpha")
         self._check_tensor_shape(self.beta_desc, (self.expert_cnt,), "beta")
@@ -249,12 +249,12 @@ class DiscreteGroupedGemmDswigluSm100(APIBase):
         )
         _ = self._check_tensor_stride(
             self.d_row_desc,
-            stride=[(n, 1, tensor_m * n)],
+            stride=[(n_out, 1, tensor_m * n_out)],
             extra_error_msg="D_row must have n-major layout",
         )
         _ = self._check_tensor_stride(
             self.d_col_desc,
-            stride=[(n, 1, tensor_m * n)],
+            stride=[(n_out, 1, tensor_m * n_out)],
             extra_error_msg="D_col must have n-major layout",
         )
 
@@ -467,7 +467,7 @@ class DiscreteGroupedGemmDswigluSm100(APIBase):
             n, k, _ = self.b_shape
 
         b_major_mode = OperandMajorMode.K if self.b_major == "k" else OperandMajorMode.MN
-        b_stride_size = n if self.b_major == "k" else k
+        b_stride_size = k if self.b_major == "k" else n
 
         gemm_dglu = self._kernel(
             sf_vec_size=self.sf_vec_size,
@@ -764,8 +764,9 @@ def discrete_grouped_gemm_dswiglu_wrapper_sm100(
     if cd_major != "n":
         raise ValueError(f"cd_major must be 'n', got {cd_major}")
 
-    d_row_tensor = torch.empty_strided((valid_m, n, 1), (n, 1, valid_m * n), dtype=d_dtype, device=a_tensor.device)
-    d_col_tensor = torch.empty_strided((valid_m, n, 1), (n, 1, valid_m * n), dtype=d_dtype, device=a_tensor.device)
+    n_out = 2 * n
+    d_row_tensor = torch.empty_strided((valid_m, n_out, 1), (n_out, 1, valid_m * n_out), dtype=d_dtype, device=a_tensor.device)
+    d_col_tensor = torch.empty_strided((valid_m, n_out, 1), (n_out, 1, valid_m * n_out), dtype=d_dtype, device=a_tensor.device)
 
     sfd_row_tensor = None
     sfd_col_tensor = None
@@ -778,12 +779,12 @@ def discrete_grouped_gemm_dswiglu_wrapper_sm100(
         sf_dtype = sfa_tensor.dtype
         mma_permute_order = (3, 4, 1, 5, 2, 0)
 
-        sf_k_row = ceil_div(n, sf_vec_size)
+        sf_k_row = ceil_div(n_out, sf_vec_size)
         mma_shape_row = (1, ceil_div(valid_m, 128), ceil_div(sf_k_row, 4), 32, 4, 4)
         sfd_row_tensor = torch.empty(mma_shape_row, dtype=sf_dtype, device=a_tensor.device).permute(mma_permute_order)
 
         sf_k_col = ceil_div(valid_m, sf_vec_size)
-        mma_shape_col = (1, ceil_div(n, 128), ceil_div(sf_k_col, 4), 32, 4, 4)
+        mma_shape_col = (1, ceil_div(n_out, 128), ceil_div(sf_k_col, 4), 32, 4, 4)
         sfd_col_tensor = torch.empty(mma_shape_col, dtype=sf_dtype, device=a_tensor.device).permute(mma_permute_order)
 
     if d_dtype in [torch.bfloat16, torch.float16]:

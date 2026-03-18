@@ -239,11 +239,18 @@ class GroupedGemmQuantSm100(APIBase):
             stride=[(k, 1, tensor_m * k)],
             extra_error_msg="A must have k-major layout",
         )
-        _ = self._check_tensor_stride(
-            self.b_desc,
-            stride=[(k, 1, n * k)],
-            extra_error_msg="B must have k-major layout",
-        )
+        if self._is_fp8(self.a_desc):
+            _ = self._check_tensor_stride(
+                self.b_desc,
+                stride=[(k, 1, n * k), (1, n, n * k)],
+                extra_error_msg="For fp8 ab_dtype, B must have k- or n-major layout",
+            )
+        else:
+            _ = self._check_tensor_stride(
+                self.b_desc,
+                stride=[(k, 1, n * k)],
+                extra_error_msg="For fp4 ab_dtype, B must have k-major layout",
+            )
         _ = self._check_tensor_stride(
             self.c_desc,
             stride=[(n, 1, tensor_m * n)],
@@ -729,15 +736,23 @@ def grouped_gemm_quant_wrapper_sm100(
         torch.float8_e8m0fnu,
         torch.float8_e4m3fn,
     ]
+    is_fp8_output_config = d_dtype in [
+        torch.float8_e4m3fn,
+        torch.float8_e5m2,
+        torch.float4_e2m1fn_x2,
+    ]
 
-    if is_fp8_input_config and norm_const_tensor is None:
+    if is_fp8_input_config and is_fp8_output_config and norm_const_tensor is None:
         raise ValueError(
-            "norm_const_tensor is required when FP8 inputs are used "
-            "(a_tensor is FP8 and sfa_tensor is FP8). "
+            "norm_const_tensor is required when FP8 inputs are used with FP8 output "
+            "(a_tensor is FP8 and sfa_tensor is FP8 and d_dtype is FP8). "
             "Pass a tensor with shape (1,), e.g. torch.tensor([0.01], dtype=torch.float32, device=a_tensor.device)."
         )
 
-    if is_fp8_input_config:
+    if not is_fp8_output_config:
+        norm_const_tensor = None
+
+    if is_fp8_input_config and is_fp8_output_config:
         _logger.debug("grouped_gemm_quant_wrapper_sm100: Detected fp8 a_dtype and sfa_dtype, constructing sfd_row_tensor and sfd_col_tensor")
 
         sf_dtype = sfa_tensor.dtype

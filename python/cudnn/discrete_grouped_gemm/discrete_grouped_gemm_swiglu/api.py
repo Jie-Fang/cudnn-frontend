@@ -484,9 +484,9 @@ class DiscreteGroupedGemmSwigluSm100(APIBase):
 
         b_major_mode = OperandMajorMode.K if self.b_major == "k" else OperandMajorMode.MN
         if self.b_major == "k":
-            b_stride_size = n
-        else:
             b_stride_size = k
+        else:
+            b_stride_size = n
 
         gemm_glu = self._kernel(
             sf_vec_size=self.sf_vec_size,
