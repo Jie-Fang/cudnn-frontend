@@ -34,6 +34,7 @@ with output quantization for MoE (Mixture of Experts) workloads.
 Used for FC2 (forward down-projection) and dFC1 (backward FC1 GEMMs).
 """
 
+import os
 from typing import Optional, Tuple
 
 import cutlass
@@ -180,6 +181,8 @@ class GroupedGemmQuantSm100(APIBase):
         self._interpret_uint8_as_fp4x2 = True
         self._kernel = BlockScaledContiguousGroupedGemmKernel
 
+        self.num_cluster_overlap_margin = int(os.getenv("CUDNNFE_CLUSTER_OVERLAP_MARGIN", "0"))
+        print(f"setting num_cluster_overlap_margin: {self.num_cluster_overlap_margin}")
         self._logger.debug("__init__ completed")
 
     def check_support(self) -> bool:
@@ -475,6 +478,11 @@ class GroupedGemmQuantSm100(APIBase):
 
         hardware_info = cutlass.utils.HardwareInfo()
         max_active_clusters = hardware_info.get_max_active_clusters(self.cluster_shape_mn[0] * self.cluster_shape_mn[1])
+        max_active_clusters -= self.num_cluster_overlap_margin
+        self._value_error_if(
+            max_active_clusters <= 0,
+            "max_active_clusters must be > 0 after applying overlap margin; reduce CUDNNFE_CLUSTER_OVERLAP_MARGIN",
+        )
         fake_stream = make_fake_stream(use_tvm_ffi_env_stream=False)
 
         self._logger.debug("Compiling grouped_gemm_quant kernel")

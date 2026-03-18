@@ -38,6 +38,7 @@ from .discrete_B_blockscaled_grouped_gemm_dglu import (
 )
 from cuda.bindings import driver as cuda
 import logging
+import os
 import torch
 from typing import Tuple, Optional
 
@@ -187,6 +188,9 @@ class DiscreteGroupedGemmDswigluSm100(APIBase):
 
         self._interpret_uint8_as_fp4x2 = True
         self._kernel = BlockScaledDiscreteWeightDgluGroupedGemmKernel
+
+        self.num_cluster_overlap_margin = int(os.getenv("CUDNNFE_CLUSTER_OVERLAP_MARGIN", "0"))
+        print(f"setting num_cluster_overlap_margin: {self.num_cluster_overlap_margin}")
         self._workspace = None
 
         self._logger.debug("__init__ completed")
@@ -479,6 +483,11 @@ class DiscreteGroupedGemmDswigluSm100(APIBase):
 
         hardware_info = cutlass.utils.HardwareInfo()
         max_active_clusters = hardware_info.get_max_active_clusters(self.cluster_shape_mn[0] * self.cluster_shape_mn[1])
+        max_active_clusters -= self.num_cluster_overlap_margin
+        self._value_error_if(
+            max_active_clusters <= 0,
+            "max_active_clusters must be > 0 after applying overlap margin; reduce CUDNNFE_CLUSTER_OVERLAP_MARGIN",
+        )
         fake_stream = make_fake_stream(use_tvm_ffi_env_stream=False)
 
         workspace_bytes = gemm_dglu.get_workspace_bytes()
