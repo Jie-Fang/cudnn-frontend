@@ -162,11 +162,12 @@ def allocate_discrete_dswiglu_input_tensors(
 ) -> Dict[str, Any]:
     """Allocate input tensors for discrete backward.
 
-    In the backward, C is an INPUT (forward activations with shape (valid_m, n/2, 1)).
+    In the backward, C is an INPUT containing the full interleaved forward activations
+    with shape `(valid_m, 2n, 1)`.
     """
     valid_m, aligned_group_m_list, padded_offsets_tensor = create_mask(group_m_list, m_aligned)
     tensor_m = valid_m
-    n_out = n // 2
+    n_out = n * 2
 
     a_ref, a_tensor = create_and_permute_tensor(1, tensor_m, k, False, ab_dtype)
 
@@ -185,7 +186,7 @@ def allocate_discrete_dswiglu_input_tensors(
 
     sfa_ref, sfa_tensor = create_scale_factor_tensor(1, tensor_m, k, sf_vec_size, sf_dtype)
 
-    # C is an input in the backward (forward activations)
+    # C is an input in the backward. It carries the full interleaved activation tensor.
     _, c_tensor = create_and_permute_tensor(1, tensor_m, n_out, False, c_dtype)
 
     alpha_tensor = torch.randint(-2, 2, (num_experts,), dtype=torch.float32, device=device).float()
@@ -241,10 +242,12 @@ def allocate_discrete_dswiglu_output_tensors(
 ) -> Dict[str, Any]:
     """Allocate output tensors for discrete backward.
 
-    D_row and D_col have shape (valid_m, n, 1) -- backward outputs are full width (not halved).
+    D_row and D_col have shape `(valid_m, 2n, 1)` and match the full interleaved width.
     """
-    _, d_row_tensor = create_and_permute_tensor(1, tensor_m, n, cd_major == "m", d_dtype)
-    _, d_col_tensor = create_and_permute_tensor(1, tensor_m, n, cd_major == "m", d_dtype)
+    n_out = n * 2
+
+    _, d_row_tensor = create_and_permute_tensor(1, tensor_m, n_out, cd_major == "m", d_dtype)
+    _, d_col_tensor = create_and_permute_tensor(1, tensor_m, n_out, cd_major == "m", d_dtype)
 
     result = {
         "d_row_tensor": d_row_tensor,
@@ -260,10 +263,10 @@ def allocate_discrete_dswiglu_output_tensors(
         torch.float8_e8m0fnu,
         torch.float8_e4m3fn,
     ]:
-        sfd_row_ref, sfd_row_tensor = create_scale_factor_tensor(1, tensor_m, n, sf_vec_size, sf_dtype)
+        sfd_row_ref, sfd_row_tensor = create_scale_factor_tensor(1, tensor_m, n_out, sf_vec_size, sf_dtype)
         result["sfd_row_tensor"] = sfd_row_tensor
 
-        sfd_col_ref, sfd_col_tensor = create_scale_factor_tensor(1, n, tensor_m, sf_vec_size, sf_dtype)
+        sfd_col_ref, sfd_col_tensor = create_scale_factor_tensor(1, n_out, tensor_m, sf_vec_size, sf_dtype)
         result["sfd_col_tensor"] = sfd_col_tensor
 
     return result
