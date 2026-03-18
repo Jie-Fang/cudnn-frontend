@@ -15,6 +15,7 @@ from .helpers import (
     convert_uniform_to_packed,
     create_container_and_page_table,
     time_execution,
+    time_execution_cupti,
     profile_execution,
     print_tensor_stats,
 )
@@ -104,15 +105,19 @@ def validate_config(cfg):
         pytest.skip("certain combinations of softmax outputs require cuDNN 9.20.0 or higher")
 
 
-def allocate_tensors(cfg, rng_data_gen):
+def allocate_tensors(cfg, rng_data_gen, perf=False):
     allocs = {}
     max_t_q = max(64, ((sum(cfg.seq_len_q) + 63) // 64) * 64) if cfg.is_ragged else None
     max_t_kv = max(64, ((sum(cfg.seq_len_kv) + 63) // 64) * 64) if cfg.is_ragged else None
 
+    # When perf mode is enabled, use normal distribution instead of sparse small integers
+    # to avoid artificially fast timings from GPU memory compression of sparse data.
+    si = not perf
+
     if cfg.is_ragged:
-        allocs[TensorUid.q] = alloc_tensor((max_t_q, cfg.h_q, cfg.d_qk), cfg.data_type, rng=rng_data_gen, mean=-0.5, std=1.0)
-        allocs[TensorUid.k] = alloc_tensor((max_t_kv, cfg.h_k, cfg.d_qk), cfg.data_type, rng=rng_data_gen, mean=-0.5, std=1.0)
-        allocs[TensorUid.v] = alloc_tensor((max_t_kv, cfg.h_v, cfg.d_v), cfg.data_type, rng=rng_data_gen, mean=-0.5, std=1.0)
+        allocs[TensorUid.q] = alloc_tensor((max_t_q, cfg.h_q, cfg.d_qk), cfg.data_type, rng=rng_data_gen, mean=-0.5, std=1.0, sparse_int=si)
+        allocs[TensorUid.k] = alloc_tensor((max_t_kv, cfg.h_k, cfg.d_qk), cfg.data_type, rng=rng_data_gen, mean=-0.5, std=1.0, sparse_int=si)
+        allocs[TensorUid.v] = alloc_tensor((max_t_kv, cfg.h_v, cfg.d_v), cfg.data_type, rng=rng_data_gen, mean=-0.5, std=1.0, sparse_int=si)
         allocs[TensorUid.o] = alloc_tensor((max_t_q, cfg.h_q, cfg.d_v), cfg.data_type)
         allocs[TensorUid.stats] = alloc_tensor((max_t_q, cfg.h_q, 1), torch.float32) if cfg.is_train else (None, None, None)
         allocs[TensorUid.score_max] = alloc_tensor((max_t_q, cfg.h_q, 1), torch.float32) if cfg.with_score_max else (None, None, None)
@@ -121,11 +126,11 @@ def allocate_tensors(cfg, rng_data_gen):
             allocs[TensorUid.dQ] = alloc_tensor((max_t_q, cfg.h_q, cfg.d_qk), cfg.data_type)
             allocs[TensorUid.dK] = alloc_tensor((max_t_kv, cfg.h_k, cfg.d_qk), cfg.data_type)
             allocs[TensorUid.dV] = alloc_tensor((max_t_kv, cfg.h_v, cfg.d_v), cfg.data_type)
-            allocs[TensorUid.dO] = alloc_tensor((max_t_q, cfg.h_q, cfg.d_v), cfg.data_type, rng=rng_data_gen, mean=0.0, std=0.1)
+            allocs[TensorUid.dO] = alloc_tensor((max_t_q, cfg.h_q, cfg.d_v), cfg.data_type, rng=rng_data_gen, mean=0.0, std=0.1, sparse_int=si)
     else:
-        allocs[TensorUid.q] = alloc_tensor(cfg.shape_q, cfg.data_type, strides=cfg.stride_q, rng=rng_data_gen, mean=-0.5, std=1.0)
-        allocs[TensorUid.k] = alloc_tensor(cfg.shape_k, cfg.data_type, strides=cfg.stride_k, rng=rng_data_gen, mean=-0.5, std=1.0)
-        allocs[TensorUid.v] = alloc_tensor(cfg.shape_v, cfg.data_type, strides=cfg.stride_v, rng=rng_data_gen, mean=-0.5, std=1.0)
+        allocs[TensorUid.q] = alloc_tensor(cfg.shape_q, cfg.data_type, strides=cfg.stride_q, rng=rng_data_gen, mean=-0.5, std=1.0, sparse_int=si)
+        allocs[TensorUid.k] = alloc_tensor(cfg.shape_k, cfg.data_type, strides=cfg.stride_k, rng=rng_data_gen, mean=-0.5, std=1.0, sparse_int=si)
+        allocs[TensorUid.v] = alloc_tensor(cfg.shape_v, cfg.data_type, strides=cfg.stride_v, rng=rng_data_gen, mean=-0.5, std=1.0, sparse_int=si)
         allocs[TensorUid.o] = alloc_tensor(cfg.shape_o, cfg.data_type, strides=cfg.stride_o)
         allocs[TensorUid.stats] = alloc_tensor(cfg.shape_stats, torch.float32, strides=cfg.stride_stats_workaround) if cfg.is_train else (None, None, None)
         allocs[TensorUid.score_max] = alloc_tensor(cfg.shape_stats, torch.float32, strides=cfg.stride_stats) if cfg.with_score_max else (None, None, None)
@@ -134,7 +139,7 @@ def allocate_tensors(cfg, rng_data_gen):
             allocs[TensorUid.dQ] = alloc_tensor(cfg.shape_q, cfg.data_type, strides=cfg.stride_q)
             allocs[TensorUid.dK] = alloc_tensor(cfg.shape_k, cfg.data_type, strides=cfg.stride_k)
             allocs[TensorUid.dV] = alloc_tensor(cfg.shape_v, cfg.data_type, strides=cfg.stride_v)
-            allocs[TensorUid.dO] = alloc_tensor(cfg.shape_o, cfg.data_type, strides=cfg.stride_o, rng=rng_data_gen, mean=0.0, std=0.1)
+            allocs[TensorUid.dO] = alloc_tensor(cfg.shape_o, cfg.data_type, strides=cfg.stride_o, rng=rng_data_gen, mean=0.0, std=0.1, sparse_int=si)
 
     seq_len_q_gpu = torch.tensor(cfg.seq_len_q, dtype=torch.int32, device="cuda").view(-1, 1, 1, 1) if len(cfg.seq_len_q) > 0 else None
     seq_len_kv_gpu = torch.tensor(cfg.seq_len_kv, dtype=torch.int32, device="cuda").view(-1, 1, 1, 1) if len(cfg.seq_len_kv) > 0 else None
@@ -149,7 +154,7 @@ def allocate_tensors(cfg, rng_data_gen):
         allocs[TensorUid.stats_ragged_offset] = ((prefix_sum(seq_len_q_gpu) * cfg.h_q * 1).to(torch.int64), None, None)
 
     if cfg.is_bias:
-        allocs[TensorUid.bias] = alloc_tensor((1, cfg.h_q, cfg.s_q, cfg.s_kv), cfg.data_type, rng=rng_data_gen, mean=0.0, std=1.0)
+        allocs[TensorUid.bias] = alloc_tensor((1, cfg.h_q, cfg.s_q, cfg.s_kv), cfg.data_type, rng=rng_data_gen, mean=0.0, std=1.0, sparse_int=si)
     if cfg.is_train and cfg.is_bias:
         allocs[TensorUid.dBias] = alloc_tensor((1, cfg.h_q, cfg.s_q, cfg.s_kv), cfg.data_type)
 
@@ -163,7 +168,7 @@ def allocate_tensors(cfg, rng_data_gen):
         allocs[TensorUid.offset] = (torch.full((1, 1, 1, 1), 789, dtype=torch.int64, device="cuda"), None, None)
         allocs[TensorUid.rng_dump] = (torch.zeros((cfg.batches, cfg.h_q, cfg.s_q, cfg.s_kv), dtype=torch.float32, device="cuda"), None, None)
     if cfg.with_sink_token:
-        allocs[TensorUid.sink_token] = alloc_tensor((1, cfg.h_q, 1, 1), torch.float32, rng=rng_data_gen, mean=0.0, std=0.5)
+        allocs[TensorUid.sink_token] = alloc_tensor((1, cfg.h_q, 1, 1), torch.float32, rng=rng_data_gen, mean=0.0, std=0.5, sparse_int=si)
     if cfg.is_train and cfg.with_sink_token:
         allocs[TensorUid.dSink_token] = alloc_tensor((1, cfg.h_q, 1, 1), torch.float32)
 
@@ -498,9 +503,12 @@ def execute_graph(graph, variant_pack, allocs, tensors, cudnn_handle, request, l
     tensors[TensorUid.workspace] = workspace[0]
 
     if request.config.getoption("--perf"):
-        times_ms = time_execution(graph.execute, variant_pack, workspace[0], cudnn_handle)
-        print(f"@@@@ {label} graph.execute avg_time_ms={times_ms.mean().item():.3f}")
-        profile_execution(graph.execute, variant_pack, workspace[0], cudnn_handle)
+        timing_method = request.config.getoption("--timing_method")
+        if timing_method == "cupti":
+            times_ms = time_execution_cupti(graph.execute, variant_pack, workspace[0], cudnn_handle)
+        else:
+            times_ms = time_execution(graph.execute, variant_pack, workspace[0], cudnn_handle)
+        print(f"@@@@ {label} graph.execute median_time_ms={times_ms.median().item():.3f} ({timing_method})")
 
     graph.execute(variant_pack, workspace[0], cudnn_handle)
     torch.cuda.synchronize()
@@ -692,8 +700,9 @@ def exec_sdpa(cfg, request, cudnn_handle):
 
     validate_config(cfg)
 
+    perf = request.config.getoption("--perf")
     rng_data_gen = torch.Generator(device="cuda").manual_seed(cfg.rng_data_seed)
-    allocs, tensors, max_t_q, max_t_kv = allocate_tensors(cfg, rng_data_gen)
+    allocs, tensors, max_t_q, max_t_kv = allocate_tensors(cfg, rng_data_gen, perf=perf)
 
     fwd_graph, fwd_pack = create_forward_graph(cfg, tensors, cudnn_handle)
     bwd_graph, bwd_pack = create_backward_graph(cfg, tensors, cudnn_handle, max_t_q, max_t_kv) if cfg.is_train else (None, None)
@@ -704,5 +713,6 @@ def exec_sdpa(cfg, request, cudnn_handle):
         execute_graph(bwd_graph, bwd_pack, allocs, tensors, cudnn_handle, request, label="Backward")
         check_deterministic(cfg, tensors, allocs, bwd_graph, bwd_pack, cudnn_handle, request)
 
-    compute_and_compare_reference(cfg, allocs, tensors, request.config.getoption("--diffs"))
+    if not perf:
+        compute_and_compare_reference(cfg, allocs, tensors, request.config.getoption("--diffs"))
     cleanup_tensors(allocs)

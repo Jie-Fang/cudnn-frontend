@@ -20,7 +20,6 @@ from torch.nn.attention import SDPBackend, sdpa_kernel
 import os
 import numpy as np
 import functools
-import time
 import math
 from typing import Optional, Dict, Any
 
@@ -516,7 +515,7 @@ else:
             dKey = torch.empty_like(key)
             dValue = torch.empty_like(value)
         dOutput = torch.randn(output.shape, dtype=randn_dtype, device=device).to(target_dtype)
-        stats = torch.randn(batch_size, q_seqlen, num_q_heads, 1, dtype=torch.float32, device=device).transpose(1, 2)
+        stats = torch.empty(batch_size, q_seqlen, num_q_heads, 1, dtype=torch.float32, device=device).transpose(1, 2)
         if is_dropout:
             dropout_seed = torch.full((1, 1, 1, 1), 123456, dtype=torch.int64, device="cuda")
             dropout_offset = torch.full((1, 1, 1, 1), 789, dtype=torch.int64, device="cuda")
@@ -1293,7 +1292,7 @@ else:
                 dQuery = torch.empty_like(query)
                 dKey = torch.empty_like(key)
                 dValue = torch.empty_like(value)
-            stats = torch.randn(batch_size, q_seqlen, num_q_heads, 1, dtype=torch.float32, device=device).transpose(1, 2)
+                stats = torch.empty(batch_size, num_q_heads, q_seqlen, 1, dtype=torch.float32, device=device)
             if is_dropout:
                 dropout_seed = torch.full((1, 1, 1, 1), 123456, dtype=torch.int64, device="cuda")
                 dropout_offset = torch.full((1, 1, 1, 1), 789, dtype=torch.int64, device="cuda")
@@ -1492,10 +1491,6 @@ else:
                 output = sdpa_function(query, key, value)
             torch.cuda.synchronize()
 
-        # Sleep for some time proportional to fwd_time for stable measurements
-        sleep_time = np.min([fwd_time / 100, 1.0]) if run_fwd and len(matched_kernels) >= 1 else 0.0
-        time.sleep(sleep_time)
-
         if run_bwd:
             # Run backward pass
 
@@ -1537,9 +1532,6 @@ else:
                 if i >= dry_run_iters:
                     backward_times.append(bwd_time)
 
-            sleep_time = np.min([bwd_time / 100, 1.0]) if run_bwd and len(matched_kernels) >= 1 else 0.0
-            time.sleep(sleep_time)
-
             dQuery, dKey, dValue, dOutput = postprocess_dqdkdvdo(dQuery, dKey, dValue, dOutput, args.sdpa_backend)
 
         (
@@ -1573,8 +1565,6 @@ else:
                 forward_diffs.append(0.0)
         else:
             forward_diffs.append(0.0)
-
-        time.sleep(sleep_time)
 
         if args.sdpa_backend == "cudnn":
             del query, key, value, output, dQuery, dKey, dValue, dOutput, stats
