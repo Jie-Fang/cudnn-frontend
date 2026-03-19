@@ -45,6 +45,7 @@ from cudnn.datatypes import _convert_to_cutlass_data_type
 from cudnn.api_base import APIBase, TupleDict, ceil_div, is_power_of_2
 import os
 
+
 class GemmSwigluSm100(APIBase):
     def __init__(
         self,
