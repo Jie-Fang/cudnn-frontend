@@ -647,8 +647,8 @@ def test_sdpa_fp8_bwd_L0(env_info, test_no, request, cudnn_handle):
 
     with RandomizationContext(
         batches=RandomBatchSize(min=1, max=4, with_high_probability=[1, 2]),
-        s_q_s_kv=RandomSequenceLength(s_q_min=64, s_q_max=256, s_kv_min=64, s_kv_max=256, s_q_distribution={"s_q=1": 0, "s_q=s_kv": 5, "s_q=random": 5}),
-        d_qk_d_v=RandomHiddenDimSize(d_qk_min=64, d_qk_max=128, d_v_min=64, d_v_max=128, head_dim_distribution={"d_qk=d_v": 1, "d_qk=random": 0}, with_high_probability=[(64, 64), (128, 128)]),
+        s_q_s_kv=RandomSequenceLength(s_q_min=64, s_q_max=1024, s_kv_min=64, s_kv_max=1024, s_q_distribution={"s_q=1": 0, "s_q=s_kv": 5, "s_q=random": 5}),
+        d_qk_d_v=RandomHiddenDimSize(d_qk_min=64, d_qk_max=192, d_v_min=64, d_v_max=128, head_dim_distribution={"d_qk=d_v": 1, "d_qk=random": 0}, with_high_probability=[(64, 64), (128, 128), (192, 128)]),
         head_count=RandomHeadGenerator(min=1, max=8, head_group_options=(1, 4, 1)),
         data_type=RandomChoice({torch.float8_e4m3fn: 1}),
         output_type=RandomChoice({torch.float8_e4m3fn: 1, torch.float16: 1}),
@@ -852,7 +852,7 @@ def test_sdpa_mxfp8_bwd_L0(env_info, test_no, request, cudnn_handle):
         batches=RandomBatchSize(min=1, max=4),
         s_q_s_kv=RandomSequenceLength(s_q_min=256, s_q_max=1024, s_kv_min=256, s_kv_max=1024, s_q_distribution={"s_q=1": 0, "s_q=s_kv": 1, "s_q=random": 1}),
         d_qk_d_v=RandomHiddenDimSize(d_qk_min=64, d_qk_max=192, d_v_min=64, d_v_max=128, head_dim_distribution={"d_qk=d_v": 1, "d_qk=random": 0}, with_high_probability=[(64, 64), (128, 128), (192, 128)]),
-        head_count=RandomHeadGenerator(min=1, max=4, head_group_options=(1, 1, 0)),
+        head_count=RandomHeadGenerator(min=1, max=8, head_group_options=(1, 4, 1)),
         data_type=RandomChoice({torch.float8_e4m3fn: 2, torch.float8_e5m2: 0}),
         output_type=RandomChoice({torch.float16: 2, torch.bfloat16: 1}),
         with_sliding_mask=SlidingWindowMaskGenerator(causal=10, left_window_only=5, right_window_only=5, band_around_diag=10, no_mask=10),

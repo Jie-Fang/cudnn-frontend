@@ -6,8 +6,6 @@ from enum import IntEnum
 from looseversion import LooseVersion
 
 from .fp8_ref import (
-    compute_amax,
-    compute_backward_amax,
     compute_ref,
     compute_ref_backward,
 )
@@ -314,20 +312,18 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
         o_ragged_offset_gpu = (prefix_sum(seq_len_q_gpu) * h_q * d_vo).to(torch.int64)
         stats_ragged_offset_gpu = (prefix_sum(seq_len_q_gpu) * h_q * 1).to(torch.int64)
 
+    # Build forward graph (always needed)
     try:
-        if cfg.is_infer:
-            graph = generate_graph_fwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, block_size, is_ragged=is_ragged, left_bound=left_bound, right_bound=right_bound, diag_align=diag_align)
-        else:
-            graph = generate_graph_bwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, deterministic, is_ragged=is_ragged, left_bound=left_bound, right_bound=right_bound, diag_align=diag_align)
-        graph.validate()
-        graph.build_operation_graph()
-        graph.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
-        graph.check_support()
-        graph.build_plans()
+        graph_fwd = generate_graph_fwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, block_size, is_ragged=is_ragged, left_bound=left_bound, right_bound=right_bound, diag_align=diag_align)
+        graph_fwd.validate()
+        graph_fwd.build_operation_graph()
+        graph_fwd.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
+        graph_fwd.check_support()
+        graph_fwd.build_plans()
     except cudnn.cudnnGraphNotSupportedError as e:
-        pytest.skip(f"unsupported graph: {e}")
+        pytest.skip(f"unsupported forward graph: {e}")
     except Exception as e:
-        pytest.fail(f"Error building graph: {e}")
+        pytest.fail(f"Error building forward graph: {e}")
 
     rng_data = torch.Generator(device="cuda").manual_seed(cfg.rng_data_seed)
 
@@ -340,205 +336,173 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
     k_amax = k_gen.abs().max().item()
     v_amax = v_gen.abs().max().item()
     s_amax = 1.0
-    o_amax = compute_amax(q_gen, k_gen, v_gen, attn_scale,
-                          left_bound=left_bound, right_bound=right_bound, diag_align=diag_align)
 
-    q_gpu = (q_gen * get_fp8_scale_factor(q_amax, torch_itype)).to(torch_itype)
-    k_gpu = (k_gen * get_fp8_scale_factor(k_amax, torch_itype)).to(torch_itype)
-    v_gpu = (v_gen * get_fp8_scale_factor(v_amax, torch_itype)).to(torch_itype)
+    q_fp8 = (q_gen * get_fp8_scale_factor(q_amax, torch_itype)).to(torch_itype)
+    k_fp8 = (k_gen * get_fp8_scale_factor(k_amax, torch_itype)).to(torch_itype)
+    v_fp8 = (v_gen * get_fp8_scale_factor(v_amax, torch_itype)).to(torch_itype)
+
+    q_descale_gpu = torch.tensor([get_fp8_descale_factor(q_amax, torch_itype)], dtype=torch.float, device="cuda")
+    k_descale_gpu = torch.tensor([get_fp8_descale_factor(k_amax, torch_itype)], dtype=torch.float, device="cuda")
+    v_descale_gpu = torch.tensor([get_fp8_descale_factor(v_amax, torch_itype)], dtype=torch.float, device="cuda")
+    s_scale_gpu = torch.tensor([get_fp8_scale_factor(s_amax, torch_itype)], dtype=torch.float, device="cuda")
+    s_descale_gpu = torch.tensor([get_fp8_descale_factor(s_amax, torch_itype)], dtype=torch.float, device="cuda")
+
+    # Compute forward reference (also computes o_amax internally)
+    if is_ragged:
+        seq_len_q_ref = torch.tensor(seq_len_q_list, dtype=torch.int32, device="cuda")
+        seq_len_kv_ref = torch.tensor(seq_len_kv_list, dtype=torch.int32, device="cuda")
+        padding = (seq_len_q_ref, seq_len_kv_ref)
+    else:
+        padding = None
+
+    o_ref, stats_ref, o_amax = compute_ref(q_fp8, k_fp8, v_fp8, attn_scale=attn_scale,
+                                            q_descale=q_descale_gpu, k_descale=k_descale_gpu, v_descale=v_descale_gpu,
+                                            s_scale=s_scale_gpu, s_descale=s_descale_gpu, torch_itype=torch_itype,
+                                            torch_otype=torch_otype, padding=padding,
+                                            left_bound=left_bound, right_bound=right_bound, diag_align=diag_align)
+
+    o_scale_gpu = torch.tensor([get_fp8_scale_factor(o_amax, torch_otype)], dtype=torch.float, device="cuda")
+
+    # Prepare GPU input tensors (pack for ragged, page for paged)
+    q_gpu = q_fp8
+    k_gpu = k_fp8
+    v_gpu = v_fp8
 
     if is_ragged:
-        # q/k/v_gpu are BSHD, convert_uniform_to_packed expects BHSD
-        q_gpu = convert_uniform_to_packed(torch.einsum("bshd->bhsd", q_gpu), torch.tensor(seq_len_q_list, dtype=torch.int32, device="cuda"), max_t_q)
-        k_gpu = convert_uniform_to_packed(torch.einsum("bshd->bhsd", k_gpu), torch.tensor(seq_len_kv_list, dtype=torch.int32, device="cuda"), max_t_kv)
-        v_gpu = convert_uniform_to_packed(torch.einsum("bshd->bhsd", v_gpu), torch.tensor(seq_len_kv_list, dtype=torch.int32, device="cuda"), max_t_kv)
+        q_gpu = convert_uniform_to_packed(torch.einsum("bshd->bhsd", q_fp8), torch.tensor(seq_len_q_list, dtype=torch.int32, device="cuda"), max_t_q)
+        k_gpu = convert_uniform_to_packed(torch.einsum("bshd->bhsd", k_fp8), torch.tensor(seq_len_kv_list, dtype=torch.int32, device="cuda"), max_t_kv)
+        v_gpu = convert_uniform_to_packed(torch.einsum("bshd->bhsd", v_fp8), torch.tensor(seq_len_kv_list, dtype=torch.int32, device="cuda"), max_t_kv)
 
-    if cfg.is_infer:
-        if is_paged:
-            k_gpu_bhsd = torch.einsum('bshd->bhsd', k_gpu).contiguous()
-            v_gpu_bhsd = torch.einsum('bshd->bhsd', v_gpu).contiguous()
-            container_k_gpu, k_block_table_gpu = create_paged_container_and_block_table(k_gpu_bhsd, block_size)
-            container_v_gpu, v_block_table_gpu = create_paged_container_and_block_table(v_gpu_bhsd, block_size)
+    if is_paged:
+        k_gpu_bhsd = torch.einsum('bshd->bhsd', k_fp8).contiguous()
+        v_gpu_bhsd = torch.einsum('bshd->bhsd', v_fp8).contiguous()
+        container_k_gpu, k_block_table_gpu = create_paged_container_and_block_table(k_gpu_bhsd, block_size)
+        container_v_gpu, v_block_table_gpu = create_paged_container_and_block_table(v_gpu_bhsd, block_size)
 
-        kv_seq_len_gpu_fwd = torch.tensor(seq_len_kv_list, dtype=torch.int32, device="cuda").view(-1, 1, 1, 1) if is_ragged else torch.full((b, 1, 1, 1), s_kv, device="cuda", dtype=torch.int32)
-        q_seq_len_gpu_fwd = torch.tensor(seq_len_q_list, dtype=torch.int32, device="cuda").view(-1, 1, 1, 1) if is_ragged else torch.full((b, 1, 1, 1), s_qo, device="cuda", dtype=torch.int32)
-
-        if is_ragged:
-            o_gpu = torch.full((max_t_q, h_q, d_vo), float('nan'), dtype=torch_otype, device="cuda")
-            stats_gpu = torch.full((max_t_q, h_q, 1), float('nan'), dtype=torch.float, device="cuda")
-        else:
-            o_gpu = torch.full((b, s_qo, h_q, d_vo), float('nan'), dtype=torch_otype, device="cuda")
-            stats_gpu = torch.full((b, h_q, s_qo, 1), float('nan'), dtype=torch.float, device="cuda")
-
-        q_descale_gpu = torch.tensor([get_fp8_descale_factor(q_amax, torch_itype)], dtype=torch.float, device="cuda")
-        k_descale_gpu = torch.tensor([get_fp8_descale_factor(k_amax, torch_itype)], dtype=torch.float, device="cuda")
-        v_descale_gpu = torch.tensor([get_fp8_descale_factor(v_amax, torch_itype)], dtype=torch.float, device="cuda")
-        s_scale_gpu = torch.tensor([get_fp8_scale_factor(s_amax, torch_itype)], dtype=torch.float, device="cuda")
-        s_descale_gpu = torch.tensor([get_fp8_descale_factor(s_amax, torch_itype)], dtype=torch.float, device="cuda")
-        o_scale_gpu = torch.tensor([get_fp8_scale_factor(o_amax, torch_otype)], dtype=torch.float, device="cuda")
-
-        s_amax_gpu = torch.tensor([float('nan')], dtype=torch.float, device="cuda")
-        o_amax_gpu = torch.tensor([float('nan')], dtype=torch.float, device="cuda")
-
-        variant_pack = {
-            int(GraphFwdUid.q): q_gpu,
-            int(GraphFwdUid.k): k_gpu,
-            int(GraphFwdUid.v): v_gpu,
-            int(GraphFwdUid.q_descale): q_descale_gpu,
-            int(GraphFwdUid.k_descale): k_descale_gpu,
-            int(GraphFwdUid.v_descale): v_descale_gpu,
-            int(GraphFwdUid.s_descale): s_descale_gpu,
-            int(GraphFwdUid.s_scale): s_scale_gpu,
-            int(GraphFwdUid.o_scale): o_scale_gpu,
-            int(GraphFwdUid.o): o_gpu,
-            int(GraphFwdUid.stats): stats_gpu,
-            int(GraphFwdUid.s_amax): s_amax_gpu,
-            int(GraphFwdUid.o_amax): o_amax_gpu,
-        }
-
-        if is_paged:
-            variant_pack[int(GraphFwdUid.k)] = container_k_gpu
-            variant_pack[int(GraphFwdUid.v)] = container_v_gpu
-            variant_pack[int(GraphFwdUid.kv_seq_len)] = kv_seq_len_gpu_fwd
-            variant_pack[int(GraphFwdUid.q_seq_len)] = q_seq_len_gpu_fwd
-            variant_pack[int(GraphFwdUid.k_block_table)] = k_block_table_gpu
-            variant_pack[int(GraphFwdUid.v_block_table)] = v_block_table_gpu
-
-        if is_ragged:
-            variant_pack[int(GraphFwdUid.q_seq_len)] = q_seq_len_gpu_fwd
-            variant_pack[int(GraphFwdUid.kv_seq_len)] = kv_seq_len_gpu_fwd
-            variant_pack[int(GraphFwdUid.q_ragged_offset)] = q_ragged_offset_gpu
-            variant_pack[int(GraphFwdUid.k_ragged_offset)] = k_ragged_offset_gpu
-            variant_pack[int(GraphFwdUid.v_ragged_offset)] = v_ragged_offset_gpu
-            variant_pack[int(GraphFwdUid.o_ragged_offset)] = o_ragged_offset_gpu
-            variant_pack[int(GraphFwdUid.stats_ragged_offset)] = stats_ragged_offset_gpu
-
-        workspace = torch.empty(graph.get_workspace_size(), dtype=torch.uint8, device="cuda")
-        if request.config.getoption("--perf"):
-            times_ms = time_execution(graph.execute, variant_pack, workspace, cudnn_handle)
-            print(f"@@@@ FP8 Fwd graph.execute avg_time_ms={times_ms.mean().item():.3f}")
-            profile_execution(graph.execute, variant_pack, workspace, cudnn_handle)
-        graph.execute(variant_pack, workspace, handle=cudnn_handle)
-        torch.cuda.synchronize()
-
-        if is_ragged:
-            seq_len_q_ref = torch.tensor(seq_len_q_list, dtype=torch.int32, device="cuda")
-            seq_len_kv_ref = torch.tensor(seq_len_kv_list, dtype=torch.int32, device="cuda")
-            q_ref = torch.einsum("bhsd->bshd", convert_packed_to_uniform(q_gpu, seq_len_q_ref, s_qo))
-            k_ref = torch.einsum("bhsd->bshd", convert_packed_to_uniform(k_gpu, seq_len_kv_ref, s_kv))
-            v_ref = torch.einsum("bhsd->bshd", convert_packed_to_uniform(v_gpu, seq_len_kv_ref, s_kv))
-        else:
-            q_ref = q_gpu
-            k_ref = k_gpu
-            v_ref = v_gpu
-
-        padding = (seq_len_q_ref, seq_len_kv_ref) if is_ragged else None
-        o_ref = compute_ref(q_ref, k_ref, v_ref, attn_scale=attn_scale,
-                            q_descale=q_descale_gpu, k_descale=k_descale_gpu, v_descale=v_descale_gpu,
-                            s_scale=s_scale_gpu, s_descale=s_descale_gpu, torch_itype=torch_itype,
-                            o_scale=o_scale_gpu, torch_otype=torch_otype,
-                            padding=padding,
-                            left_bound=left_bound, right_bound=right_bound, diag_align=diag_align)
-
-        if is_ragged:
-            # compute_ref returns BSHD, transpose to BHSD for convert_uniform_to_packed
-            o_ref = convert_uniform_to_packed(torch.einsum("bshd->bhsd", o_ref), seq_len_q_ref, max_t_q)
-
-        o_gpu_comp = o_gpu.detach().float() * get_fp8_descale_factor(o_amax, torch_otype)
-        o_ref_comp = o_ref.detach().float() * get_fp8_descale_factor(o_amax, torch_otype)
-
-        if is_ragged:
-            # Zero out padding tokens beyond valid sequence lengths
-            t_idx = 0
-            for s in seq_len_q_list:
-                t_idx += s
-            o_gpu_comp[t_idx:] = 0
-            o_ref_comp[t_idx:] = 0
-
-        atol, rtol = 0.08, 0.2
-        torch.testing.assert_close(o_gpu_comp, o_ref_comp, atol=atol, rtol=rtol)
-
+    # Allocate forward output tensors
+    if is_ragged:
+        o_gpu = torch.full((max_t_q, h_q, d_vo), float('nan'), dtype=torch_otype, device="cuda")
+        stats_gpu = torch.full((max_t_q, h_q, 1), float('nan'), dtype=torch.float, device="cuda")
     else:
+        o_gpu = torch.full((b, s_qo, h_q, d_vo), float('nan'), dtype=torch_otype, device="cuda")
+        stats_gpu = torch.full((b, h_q, s_qo, 1), float('nan'), dtype=torch.float, device="cuda")
+
+    s_amax_gpu = torch.tensor([float('nan')], dtype=torch.float, device="cuda")
+    o_amax_gpu = torch.tensor([float('nan')], dtype=torch.float, device="cuda")
+
+    variant_pack = {
+        int(GraphFwdUid.q): q_gpu,
+        int(GraphFwdUid.k): k_gpu,
+        int(GraphFwdUid.v): v_gpu,
+        int(GraphFwdUid.q_descale): q_descale_gpu,
+        int(GraphFwdUid.k_descale): k_descale_gpu,
+        int(GraphFwdUid.v_descale): v_descale_gpu,
+        int(GraphFwdUid.s_descale): s_descale_gpu,
+        int(GraphFwdUid.s_scale): s_scale_gpu,
+        int(GraphFwdUid.o_scale): o_scale_gpu,
+        int(GraphFwdUid.o): o_gpu,
+        int(GraphFwdUid.stats): stats_gpu,
+        int(GraphFwdUid.s_amax): s_amax_gpu,
+        int(GraphFwdUid.o_amax): o_amax_gpu,
+    }
+
+    if is_paged:
+        variant_pack[int(GraphFwdUid.k)] = container_k_gpu
+        variant_pack[int(GraphFwdUid.v)] = container_v_gpu
+        variant_pack[int(GraphFwdUid.kv_seq_len)] = torch.full((b, 1, 1, 1), s_kv, device="cuda", dtype=torch.int32)
+        variant_pack[int(GraphFwdUid.q_seq_len)] = torch.full((b, 1, 1, 1), s_qo, device="cuda", dtype=torch.int32)
+        variant_pack[int(GraphFwdUid.k_block_table)] = k_block_table_gpu
+        variant_pack[int(GraphFwdUid.v_block_table)] = v_block_table_gpu
+
+    if is_ragged:
+        variant_pack[int(GraphFwdUid.q_seq_len)] = torch.tensor(seq_len_q_list, dtype=torch.int32, device="cuda").view(-1, 1, 1, 1)
+        variant_pack[int(GraphFwdUid.kv_seq_len)] = torch.tensor(seq_len_kv_list, dtype=torch.int32, device="cuda").view(-1, 1, 1, 1)
+        variant_pack[int(GraphFwdUid.q_ragged_offset)] = q_ragged_offset_gpu
+        variant_pack[int(GraphFwdUid.k_ragged_offset)] = k_ragged_offset_gpu
+        variant_pack[int(GraphFwdUid.v_ragged_offset)] = v_ragged_offset_gpu
+        variant_pack[int(GraphFwdUid.o_ragged_offset)] = o_ragged_offset_gpu
+        variant_pack[int(GraphFwdUid.stats_ragged_offset)] = stats_ragged_offset_gpu
+
+    workspace = torch.empty(graph_fwd.get_workspace_size(), dtype=torch.uint8, device="cuda")
+    if request.config.getoption("--perf"):
+        times_ms = time_execution(graph_fwd.execute, variant_pack, workspace, cudnn_handle)
+        print(f"@@@@ FP8 Fwd graph_fwd.execute avg_time_ms={times_ms.mean().item():.3f}")
+        profile_execution(graph_fwd.execute, variant_pack, workspace, cudnn_handle)
+    graph_fwd.execute(variant_pack, workspace, handle=cudnn_handle)
+    torch.cuda.synchronize()
+
+    # Compare forward output
+    if is_ragged:
+        o_ref_comp = convert_uniform_to_packed(torch.einsum("bshd->bhsd", o_ref), seq_len_q_ref, max_t_q)
+    else:
+        o_ref_comp = o_ref
+
+    o_gpu_float = o_gpu.detach().float() * get_fp8_descale_factor(o_amax, torch_otype)
+    o_ref_float = o_ref_comp.detach().float() * get_fp8_descale_factor(o_amax, torch_otype)
+
+    if is_ragged:
+        t_idx = sum(seq_len_q_list)
+        o_gpu_float[t_idx:] = 0
+        o_ref_float[t_idx:] = 0
+
+    atol, rtol = 0.08, 0.2
+    torch.testing.assert_close(o_gpu_float, o_ref_float, atol=atol, rtol=rtol)
+
+    # Backward pass
+    if not cfg.is_infer:
         dO_gen = create_sparse_int_tensor((b, s_qo, h_q, d_vo), torch.float, rng_data)
         dO_amax = dO_gen.abs().max().item()
-        dO_gpu = (dO_gen * get_fp8_scale_factor(dO_amax, torch_itype)).to(torch_itype)
-
-        q_gpu = q_gen.to(torch_itype)
-        k_gpu = k_gen.to(torch_itype)
-        v_gpu = v_gen.to(torch_itype)
-
-        if is_ragged:
-            # BSHD -> BHSD for convert_uniform_to_packed
-            q_gpu = convert_uniform_to_packed(torch.einsum("bshd->bhsd", q_gpu), torch.tensor(seq_len_q_list, dtype=torch.int32, device="cuda"), max_t_q)
-            k_gpu = convert_uniform_to_packed(torch.einsum("bshd->bhsd", k_gpu), torch.tensor(seq_len_kv_list, dtype=torch.int32, device="cuda"), max_t_kv)
-            v_gpu = convert_uniform_to_packed(torch.einsum("bshd->bhsd", v_gpu), torch.tensor(seq_len_kv_list, dtype=torch.int32, device="cuda"), max_t_kv)
-            dO_gpu = convert_uniform_to_packed(torch.einsum("bshd->bhsd", dO_gpu), torch.tensor(seq_len_q_list, dtype=torch.int32, device="cuda"), max_t_q)
-
-        graph_fwd = generate_graph_fwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, 0, is_ragged=is_ragged, left_bound=left_bound, right_bound=right_bound, diag_align=diag_align)
-        try:
-            graph_fwd.validate()
-        except cudnn.cudnnGraphNotSupportedError as e:
-            pytest.skip(f"unsupported forward graph for backward: {e}")
-        try:
-            graph_fwd.build_operation_graph()
-            graph_fwd.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
-            graph_fwd.check_support()
-            graph_fwd.build_plans()
-        except cudnn.cudnnGraphNotSupportedError as e:
-            pytest.skip(f"unsupported forward graph for backward after validate: {e}")
-
-        if is_ragged:
-            o_gpu = torch.full((max_t_q, h_q, d_vo), float('nan'), dtype=torch_otype, device="cuda")
-            stats_gpu = torch.full((max_t_q, h_q, 1), float('nan'), dtype=torch.float, device="cuda")
-        else:
-            o_gpu = torch.full((b, s_qo, h_q, d_vo), float('nan'), dtype=torch_otype, device="cuda")
-            stats_gpu = torch.full((b, h_q, s_qo, 1), float('nan'), dtype=torch.float, device="cuda")
-
-        q_descale_gpu = torch.tensor([1.0], dtype=torch.float, device="cuda")
-        k_descale_gpu = torch.tensor([1.0], dtype=torch.float, device="cuda")
-        v_descale_gpu = torch.tensor([1.0], dtype=torch.float, device="cuda")
-        s_scale_gpu = torch.tensor([1.0], dtype=torch.float, device="cuda")
-        s_descale_gpu = torch.tensor([1.0], dtype=torch.float, device="cuda")
-        o_scale_gpu = torch.tensor([1.0], dtype=torch.float, device="cuda")
-        s_amax_gpu = torch.tensor([float('nan')], dtype=torch.float, device="cuda")
-        o_amax_gpu = torch.tensor([float('nan')], dtype=torch.float, device="cuda")
-
-        variant_pack_fwd = {
-            int(GraphFwdUid.q): q_gpu, int(GraphFwdUid.k): k_gpu, int(GraphFwdUid.v): v_gpu,
-            int(GraphFwdUid.q_descale): q_descale_gpu, int(GraphFwdUid.k_descale): k_descale_gpu,
-            int(GraphFwdUid.v_descale): v_descale_gpu, int(GraphFwdUid.s_descale): s_descale_gpu,
-            int(GraphFwdUid.s_scale): s_scale_gpu, int(GraphFwdUid.o_scale): o_scale_gpu,
-            int(GraphFwdUid.o): o_gpu, int(GraphFwdUid.stats): stats_gpu,
-            int(GraphFwdUid.s_amax): s_amax_gpu, int(GraphFwdUid.o_amax): o_amax_gpu,
-        }
-
-        if is_ragged:
-            variant_pack_fwd[int(GraphFwdUid.q_seq_len)] = seq_len_q_gpu
-            variant_pack_fwd[int(GraphFwdUid.kv_seq_len)] = seq_len_kv_gpu
-            variant_pack_fwd[int(GraphFwdUid.q_ragged_offset)] = q_ragged_offset_gpu
-            variant_pack_fwd[int(GraphFwdUid.k_ragged_offset)] = k_ragged_offset_gpu
-            variant_pack_fwd[int(GraphFwdUid.v_ragged_offset)] = v_ragged_offset_gpu
-            variant_pack_fwd[int(GraphFwdUid.o_ragged_offset)] = o_ragged_offset_gpu
-            variant_pack_fwd[int(GraphFwdUid.stats_ragged_offset)] = stats_ragged_offset_gpu
-
-        workspace_fwd = torch.empty(graph_fwd.get_workspace_size(), dtype=torch.uint8, device="cuda")
-        if request.config.getoption("--perf"):
-            times_ms = time_execution(graph_fwd.execute, variant_pack_fwd, workspace_fwd, cudnn_handle)
-            print(f"@@@@ FP8 Bwd-Fwd graph_fwd.execute avg_time_ms={times_ms.mean().item():.3f}")
-            profile_execution(graph_fwd.execute, variant_pack_fwd, workspace_fwd, cudnn_handle)
-        graph_fwd.execute(variant_pack_fwd, workspace_fwd, handle=cudnn_handle)
-        torch.cuda.synchronize()
-
-        o_gen = o_gpu.float()
-        dP_amax, dQ_amax, dK_amax, dV_amax = compute_backward_amax(q_gen, k_gen, v_gen, o_gen if not is_ragged else torch.einsum("bhsd->bshd", convert_packed_to_uniform(o_gen, torch.tensor(seq_len_q_list, dtype=torch.int32, device="cuda"), s_qo)), dO_gen, attn_scale, left_bound=left_bound, right_bound=right_bound, diag_align=diag_align)
+        dO_fp8 = (dO_gen * get_fp8_scale_factor(dO_amax, torch_itype)).to(torch_itype)
 
         o_descale_gpu = torch.tensor([get_fp8_descale_factor(o_amax, torch_otype)], dtype=torch.float, device="cuda")
         dO_descale_gpu = torch.tensor([get_fp8_descale_factor(dO_amax, torch_itype)], dtype=torch.float, device="cuda")
+
+        # Get unpacked BSHD references for backward
+        if is_ragged:
+            q_ref_bwd = torch.einsum("bhsd->bshd", convert_packed_to_uniform(q_gpu, seq_len_q_ref, s_qo))
+            k_ref_bwd = torch.einsum("bhsd->bshd", convert_packed_to_uniform(k_gpu, seq_len_kv_ref, s_kv))
+            v_ref_bwd = torch.einsum("bhsd->bshd", convert_packed_to_uniform(v_gpu, seq_len_kv_ref, s_kv))
+            o_ref_bwd = torch.einsum("bhsd->bshd", convert_packed_to_uniform(o_gpu, seq_len_q_ref, s_qo))
+            dO_ref_bwd = dO_fp8
+        else:
+            q_ref_bwd = q_gpu
+            k_ref_bwd = k_gpu
+            v_ref_bwd = v_gpu
+            o_ref_bwd = o_gpu
+            dO_ref_bwd = dO_fp8
+
+        padding_bwd = (seq_len_q_ref, seq_len_kv_ref) if is_ragged else None
+        dQ_ref, dK_ref, dV_ref, dP_amax, dQ_amax, dK_amax, dV_amax = compute_ref_backward(
+            q_ref_bwd, k_ref_bwd, v_ref_bwd, o_ref_bwd, dO_ref_bwd, attn_scale=attn_scale,
+            q_descale=q_descale_gpu, k_descale=k_descale_gpu, v_descale=v_descale_gpu,
+            s_scale=s_scale_gpu, s_descale=s_descale_gpu, torch_itype=torch_itype,
+            o_descale=o_descale_gpu, dO_descale=dO_descale_gpu,
+            torch_otype=torch_otype, padding=padding_bwd,
+            left_bound=left_bound, right_bound=right_bound, diag_align=diag_align
+        )
+
         dP_descale_gpu = torch.tensor([get_fp8_descale_factor(dP_amax, torch_itype)], dtype=torch.float, device="cuda")
         dQ_scale_gpu = torch.tensor([get_fp8_scale_factor(dQ_amax, torch_otype)], dtype=torch.float, device="cuda")
         dK_scale_gpu = torch.tensor([get_fp8_scale_factor(dK_amax, torch_otype)], dtype=torch.float, device="cuda")
         dV_scale_gpu = torch.tensor([get_fp8_scale_factor(dV_amax, torch_otype)], dtype=torch.float, device="cuda")
         dP_scale_gpu = torch.tensor([get_fp8_scale_factor(dP_amax, torch_otype)], dtype=torch.float, device="cuda")
+
+        try:
+            graph_bwd = generate_graph_bwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, deterministic, is_ragged=is_ragged, left_bound=left_bound, right_bound=right_bound, diag_align=diag_align)
+            graph_bwd.validate()
+            graph_bwd.build_operation_graph()
+            graph_bwd.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
+            graph_bwd.check_support()
+            graph_bwd.build_plans()
+        except cudnn.cudnnGraphNotSupportedError as e:
+            pytest.skip(f"unsupported backward graph: {e}")
+        except Exception as e:
+            pytest.fail(f"Error building backward graph: {e}")
+
+        if is_ragged:
+            dO_gpu = convert_uniform_to_packed(torch.einsum("bshd->bhsd", dO_fp8), torch.tensor(seq_len_q_list, dtype=torch.int32, device="cuda"), max_t_q)
+        else:
+            dO_gpu = dO_fp8
 
         if is_ragged:
             dQ_gpu = torch.full((max_t_q, h_q, d_qk), float('nan'), dtype=torch_otype, device="cuda")
@@ -577,12 +541,12 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
             variant_pack_bwd[int(GraphBwdUid.stats_ragged_offset)] = stats_ragged_offset_gpu
             variant_pack_bwd[int(GraphBwdUid.dO_ragged_offset)] = o_ragged_offset_gpu
 
-        workspace_bwd = torch.empty(graph.get_workspace_size(), dtype=torch.uint8, device="cuda")
+        workspace_bwd = torch.empty(graph_bwd.get_workspace_size(), dtype=torch.uint8, device="cuda")
         if request.config.getoption("--perf"):
-            times_ms = time_execution(graph.execute, variant_pack_bwd, workspace_bwd, cudnn_handle)
+            times_ms = time_execution(graph_bwd.execute, variant_pack_bwd, workspace_bwd, cudnn_handle)
             print(f"@@@@ FP8 Bwd graph.execute avg_time_ms={times_ms.mean().item():.3f}")
-            profile_execution(graph.execute, variant_pack_bwd, workspace_bwd, cudnn_handle)
-        graph.execute(variant_pack_bwd, workspace_bwd, handle=cudnn_handle)
+            profile_execution(graph_bwd.execute, variant_pack_bwd, workspace_bwd, cudnn_handle)
+        graph_bwd.execute(variant_pack_bwd, workspace_bwd, handle=cudnn_handle)
         torch.cuda.synchronize()
 
         if deterministic:
@@ -593,7 +557,8 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
             dQ_gpu = torch.fill_(dQ_gpu, float("nan"))
             dK_gpu = torch.fill_(dK_gpu, float("nan"))
             dV_gpu = torch.fill_(dV_gpu, float("nan"))
-            graph.execute(variant_pack_bwd, workspace_bwd, handle=cudnn_handle)
+            torch.cuda.synchronize()
+            graph_bwd.execute(variant_pack_bwd, workspace_bwd, handle=cudnn_handle)
             torch.cuda.synchronize()
 
             determin_err_count = 0
@@ -607,35 +572,6 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
             print("@@@@ Determinism check: PASSED, dQ, dK, dV bitwise match between runs.")
 
         if is_ragged:
-            seq_len_q_ref = torch.tensor(seq_len_q_list, dtype=torch.int32, device="cuda")
-            seq_len_kv_ref = torch.tensor(seq_len_kv_list, dtype=torch.int32, device="cuda")
-            # convert_packed_to_uniform returns BHSD, transpose to BSHD for fp8_ref
-            q_ref_bwd = torch.einsum("bhsd->bshd", convert_packed_to_uniform(q_gpu, seq_len_q_ref, s_qo))
-            k_ref_bwd = torch.einsum("bhsd->bshd", convert_packed_to_uniform(k_gpu, seq_len_kv_ref, s_kv))
-            v_ref_bwd = torch.einsum("bhsd->bshd", convert_packed_to_uniform(v_gpu, seq_len_kv_ref, s_kv))
-            o_ref_bwd = torch.einsum("bhsd->bshd", convert_packed_to_uniform(o_gpu, seq_len_q_ref, s_qo))
-            dO_ref_bwd = torch.einsum("bhsd->bshd", convert_packed_to_uniform(dO_gpu, seq_len_q_ref, s_qo))
-        else:
-            q_ref_bwd = q_gpu
-            k_ref_bwd = k_gpu
-            v_ref_bwd = v_gpu
-            o_ref_bwd = o_gpu
-            dO_ref_bwd = dO_gpu
-
-        padding_bwd = (seq_len_q_ref, seq_len_kv_ref) if is_ragged else None
-        dQ_ref, dK_ref, dV_ref = compute_ref_backward(
-            q_ref_bwd, k_ref_bwd, v_ref_bwd, o_ref_bwd, dO_ref_bwd, attn_scale=attn_scale,
-            q_descale=q_descale_gpu, k_descale=k_descale_gpu, v_descale=v_descale_gpu,
-            s_scale=s_scale_gpu, s_descale=s_descale_gpu, torch_itype=torch_itype,
-            o_descale=o_descale_gpu, dO_descale=dO_descale_gpu,
-            dP_scale=dP_scale_gpu, dP_descale=dP_descale_gpu,
-            dQ_scale=dQ_scale_gpu, dK_scale=dK_scale_gpu, dV_scale=dV_scale_gpu, torch_otype=torch_otype,
-            padding=padding_bwd,
-            left_bound=left_bound, right_bound=right_bound, diag_align=diag_align
-        )
-
-        if is_ragged:
-            # compute_ref_backward returns BSHD, transpose to BHSD for convert_uniform_to_packed
             dQ_ref = convert_uniform_to_packed(torch.einsum("bshd->bhsd", dQ_ref), seq_len_q_ref, max_t_q)
             dK_ref = convert_uniform_to_packed(torch.einsum("bshd->bhsd", dK_ref), seq_len_kv_ref, max_t_kv)
             dV_ref = convert_uniform_to_packed(torch.einsum("bshd->bhsd", dV_ref), seq_len_kv_ref, max_t_kv)

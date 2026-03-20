@@ -29,6 +29,7 @@ BLOCKED_TESTS = {
     "test_sdpa_fp8_bwd_L0[test51]": {"sms": ["SM_90"]},
     "test_sdpa_fp8_bwd_L0[test56]": {"sms": ["SM_90"]},
     "test_sdpa_fp8_bwd_L0[test57]": {"sms": ["SM_90"]},
+    "test_sdpa_fp8_bwd_L0[test62]": {"sms": ["SM_90"]},
 
     # Hopper-only blocks for bug 5732676 illegal-instruction failures in fp8 ragged tests.
     "test_sdpa_fp8_fwd_ragged_L0[test1]": {"sms": ["SM_90"]},
