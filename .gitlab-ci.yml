@@ -48,7 +48,7 @@ before_script:
     before_script:
         - mkdir -p downloads
         - ls -1 downloads/
-        - python3 ci/fetch_cudnn.py --base-url https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.21 --cuda-version 13.2
+        - python3 ci/fetch_cudnn.py --base-url https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.22 --cuda-version 13.2
         - find /debug_cudnn
         - export CUDNN_PATH=/debug_cudnn # This is required for source building FE
         - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/debug_cudnn/lib64 # This is required for dlopening BE
@@ -61,7 +61,7 @@ before_script:
     before_script:
         - mkdir -p downloads
         - ls -1 downloads
-        - python3 ci/fetch_cudnn.py --base-url https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.20 --cuda-version 13.2
+        - python3 ci/fetch_cudnn.py --base-url https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.21 --cuda-version 13.2
         - find /debug_cudnn
         - export CUDNN_PATH=/debug_cudnn # This is required for source building FE
         - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/debug_cudnn/lib64 # This is required for dlopening BE
@@ -343,7 +343,7 @@ python_samples:cudnn_ga_latest:
 cudnn_backend_rel_latest:
     trigger:
         project:  cudnn/cudnn
-        branch:   release/9.20.0
+        branch:   release/9.21.0
         strategy: depend
     inherit:
         variables: false
