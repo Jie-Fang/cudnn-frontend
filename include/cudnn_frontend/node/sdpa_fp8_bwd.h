@@ -406,6 +406,16 @@ class SDPAFP8BackwardNode : public NodeCRTP<SDPAFP8BackwardNode> {
                         << "  Expected d_qk_scale: " << d_qk_scale << ", d_v_scale: " << d_v_scale
                         << ", s_q_scale: " << s_q_scale << ", s_kv_scale: " << s_kv_scale << std::endl;
         }
+
+        // validate options for sink token
+        auto const& sink_token     = attributes.inputs.find(input_names::SINK_TOKEN);
+        bool const has_sink_token  = (sink_token != attributes.inputs.end()) && (sink_token->second != nullptr);
+        auto const& dsink_token    = attributes.outputs.find(output_names::DSINK_TOKEN);
+        bool const has_dsink_token = (dsink_token != attributes.outputs.end()) && (dsink_token->second != nullptr);
+        RETURN_CUDNN_FRONTEND_ERROR_IF(has_dsink_token && !has_sink_token,
+                                       error_code_t::ATTRIBUTE_NOT_SET,
+                                       "If dSink_token output is requested, sink_token input must also be set.");
+
         return {error_code_t::OK, ""};
     }
 
@@ -616,11 +626,51 @@ class SDPAFP8BackwardNode : public NodeCRTP<SDPAFP8BackwardNode> {
             last_output = pointwise(last_output, attributes.inputs.at(input_names::Descale_O), mul_attributes);
         }
 
+        // dSink_token computation: dSink = sum(exp(sink - stats) * D) over batch and sequence
+        // Note: The backend kernel applies the negative sign internally.
+        auto const& sink_token_it  = attributes.inputs.find(input_names::SINK_TOKEN);
+        auto const& dsink_token_it = attributes.outputs.find(output_names::DSINK_TOKEN);
+        if (dsink_token_it != attributes.outputs.end() && dsink_token_it->second != nullptr &&
+            sink_token_it != attributes.inputs.end() && sink_token_it->second != nullptr) {
+            // sub_sink = sink - stats
+            auto sub_sink = pointwise(sink_token_it->second,
+                                      attributes.inputs[input_names::Stats],
+                                      Pointwise_attributes().set_name("sub_sink_stats").set_mode(PointwiseMode_t::SUB));
+            sub_sink->set_dim({b, h_q, s_q, 1}).set_stride({h_q * s_q, s_q, 1, 1});
+
+            // exp_sink = exp(sub_sink)
+            auto exp_sink =
+                pointwise(sub_sink, Pointwise_attributes().set_name("exp_sink").set_mode(PointwiseMode_t::EXP));
+            exp_sink->set_dim({b, h_q, s_q, 1}).set_stride({h_q * s_q, s_q, 1, 1});
+
+            // per_token_grad = exp_sink * last_output (D)
+            auto per_token_grad = pointwise(
+                exp_sink, last_output, Pointwise_attributes().set_name("mul_exp_sink_D").set_mode(PointwiseMode_t::MUL));
+            per_token_grad->set_dim({b, h_q, s_q, 1}).set_stride({h_q * s_q, s_q, 1, 1});
+
+            // dSink = reduce(per_token_grad) over batch and sequence dimensions
+            reduction(per_token_grad,
+                      Reduction_attributes().set_name("reduce_dSink").set_mode(ReductionMode_t::ADD),
+                      dsink_token_it->second);
+        }
+
         // softmax_sum = last_output * dropout_scale
-        if(attributes.inputs[input_names::Dropout_scale_inv]) {
+        // Note: When sink_token is enabled and dropout is NOT present, we still need a MUL operation
+        // in the softmax path so the backend pattern matcher (fortAttentionBackwardRuntimeFusionEngine)
+        // can correctly distinguish between the dSink chain (MUL→REDUCE) and the softmax path (MUL→SUB).
+        // Without this, the fallback at lines 3786-3796 incorrectly identifies dSink MUL as the softmax path.
+        bool const has_sink_token = (sink_token_it != attributes.inputs.end() && sink_token_it->second != nullptr);
+        if (attributes.inputs[input_names::Dropout_scale_inv]) {
             last_output = pointwise(last_output,
                                     attributes.inputs[input_names::Dropout_scale_inv],
                                     Pointwise_attributes().set_name("scale_dropout_inv").set_mode(PointwiseMode_t::MUL));
+        } else if (has_sink_token) {
+            // Add identity MUL (multiply by 1) to create MUL→SUB pattern for pattern matcher
+            auto one_tensor = std::make_shared<Tensor_attributes>(1.0f);
+            last_output     = pointwise(last_output,
+                                    one_tensor,
+                                    Pointwise_attributes().set_name("identity_for_sink").set_mode(PointwiseMode_t::MUL));
+            last_output->set_dim({b, h_q, s_q, 1}).set_stride({h_q * s_q, s_q, 1, 1});
         }
         auto softmax_sum = last_output;
 

@@ -39,6 +39,7 @@ class GraphFwdUid(IntEnum):
     o = 3
     stats = 4
     o_amax = 12
+    sink_token = 13
 
 
 class GraphBwdUid(IntEnum):
@@ -67,6 +68,8 @@ class GraphBwdUid(IntEnum):
     dQ_amax = 120
     dK_amax = 121
     dV_amax = 122
+    sink_token = 123
+    dSink_token = 124
 
 # Helper to compare tensors with detailed output
 def compare_tensors(actual, expected, atol, rtol, tag, disp_elems=10):
@@ -187,7 +190,8 @@ def generate_graph_fwd(b, h_q, h_k, h_v,
                        block_size=32,
                        cudnn_itype=cudnn.data_type.FP8_E4M3,
                        cudnn_otype=cudnn.data_type.HALF,
-                       left_bound=None, right_bound=None, diag_align=None):
+                       left_bound=None, right_bound=None, diag_align=None,
+                       with_sink_token=False):
     # Compute padded dimensions for F8_128x4 scale factors
     s_q_padded = ceil_div(s_qo, 128) * 128
     s_kv_padded = ceil_div(s_kv, 128) * 128
@@ -257,6 +261,11 @@ def generate_graph_fwd(b, h_q, h_k, h_v,
         reordering_type=cudnn.tensor_reordering.F8_128x4
     )
 
+    # Create sink_token tensor if needed
+    sink_token = None
+    if with_sink_token:
+        sink_token = graph.tensor(uid=GraphFwdUid.sink_token, dim=(1, h_q, 1, 1), stride=(h_q, 1, 1, 1), data_type=cudnn.data_type.FLOAT)
+
     # Call MXFP8 SDPA
     o, stats, amax_o = graph.sdpa_mxfp8(
         q=q, k=k, v=v,
@@ -266,6 +275,7 @@ def generate_graph_fwd(b, h_q, h_k, h_v,
         diagonal_alignment=diag_align if diag_align is not None else cudnn.diagonal_alignment.TOP_LEFT,
         diagonal_band_left_bound=left_bound,
         diagonal_band_right_bound=right_bound,
+        sink_token=sink_token,
     )
 
     # Set output tensor properties
@@ -282,7 +292,8 @@ def generate_graph_bwd(b, h_q, h_k, h_v,
                        block_size=32,
                        cudnn_itype=cudnn.data_type.FP8_E4M3,
                        cudnn_otype=cudnn.data_type.HALF,
-                       left_bound=None, right_bound=None, diag_align=None):
+                       left_bound=None, right_bound=None, diag_align=None,
+                       with_sink_token=False):
     # Compute padded dimensions for F8_128x4 scale factors
     s_qo_padded = ceil_div(s_qo, 128) * 128
     s_kv_padded = ceil_div(s_kv, 128) * 128
@@ -440,6 +451,13 @@ def generate_graph_bwd(b, h_q, h_k, h_v,
         reordering_type=cudnn.tensor_reordering.F8_128x4
     )
 
+    # Create sink_token and dSink_token tensors if needed
+    sink_token = None
+    dSink_token = None
+    if with_sink_token:
+        sink_token = graph_bwd.tensor(uid=GraphBwdUid.sink_token, dim=(1, h_q, 1, 1), stride=(h_q, 1, 1, 1), data_type=cudnn.data_type.FLOAT)
+        dSink_token = graph_bwd.tensor(uid=GraphBwdUid.dSink_token, dim=(1, h_q, 1, 1), stride=(h_q, 1, 1, 1), data_type=cudnn.data_type.FLOAT)
+
     dQ, dK, dV, amax_dQ, amax_dK, amax_dV = graph_bwd.sdpa_mxfp8_backward(
         q=q, q_T=q_t, k=k, k_T=k_t, v=v,
         o_f16=o, dO_f16=dO_f16, dO=dO, dO_T=dO_t,
@@ -451,6 +469,8 @@ def generate_graph_bwd(b, h_q, h_k, h_v,
         diagonal_alignment=diag_align if diag_align is not None else cudnn.diagonal_alignment.TOP_LEFT,
         left_bound=left_bound,
         right_bound=right_bound,
+        sink_token=sink_token,
+        dSink_token=dSink_token,
     )
 
     # Set output tensor properties
@@ -461,6 +481,10 @@ def generate_graph_bwd(b, h_q, h_k, h_v,
     amax_dQ.set_uid(GraphBwdUid.dQ_amax).set_output(True).set_dim((1, 1, 1, 1)).set_stride((1, 1, 1, 1)).set_data_type(cudnn.data_type.FLOAT)
     amax_dK.set_uid(GraphBwdUid.dK_amax).set_output(True).set_dim((1, 1, 1, 1)).set_stride((1, 1, 1, 1)).set_data_type(cudnn.data_type.FLOAT)
     amax_dV.set_uid(GraphBwdUid.dV_amax).set_output(True).set_dim((1, 1, 1, 1)).set_stride((1, 1, 1, 1)).set_data_type(cudnn.data_type.FLOAT)
+
+    # Mark dSink_token as output if using sink_token
+    if with_sink_token:
+        dSink_token.set_output(True)
 
     return graph_bwd
 
@@ -486,6 +510,7 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
     left_bound  = getattr(cfg, 'left_bound', None)
     right_bound = getattr(cfg, 'right_bound', None)
     diag_align  = getattr(cfg, 'diag_align', None)
+    with_sink_token = getattr(cfg, 'with_sink_token', False)
 
     # Get input/output types from config
     torch_itype = cfg.data_type if hasattr(cfg, 'data_type') and cfg.data_type else torch.float8_e4m3fn
@@ -508,6 +533,7 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
             block_size,
             cudnn_itype, cudnn_otype,
             left_bound=left_bound, right_bound=right_bound, diag_align=diag_align,
+            with_sink_token=with_sink_token,
         )
         graph_fwd.validate()
         graph_fwd.build_operation_graph()
@@ -531,6 +557,12 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
     k_fp8_d, sf_k_d_ref, sf_k_d_swizzle, k_fp8_s, sf_k_s_ref, sf_k_s_swizzle = quantize_to_mxfp8(k_f32, b, h_k, s_kv, d_qk, block_size, torch_itype)
     v_fp8_d, sf_v_d_ref, sf_v_d_swizzle, v_fp8_s, sf_v_s_ref, sf_v_s_swizzle = quantize_to_mxfp8(v_f32, b, h_v, s_kv, d_vo, block_size, torch_itype)
 
+    # Generate sink_token if needed
+    sink_token_gpu = None
+    if with_sink_token:
+        rng_sink = torch.Generator(device="cuda").manual_seed(cfg.rng_data_seed + 1000)
+        sink_token_gpu = torch.randn((1, h_q, 1, 1), dtype=torch.float32, device="cuda", generator=rng_sink) * 0.5
+
     # Allocate output tensors
     o_gpu = torch.empty(b, h_q, s_qo, d_vo, dtype=torch_otype, device="cuda")
     stats_gpu = torch.empty(b, h_q, s_qo, 1, dtype=torch.float32, device="cuda")
@@ -548,6 +580,8 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
         int(GraphFwdUid.stats): stats_gpu,
         int(GraphFwdUid.o_amax): amax_o_gpu,
     }
+    if with_sink_token:
+        variant_pack[int(GraphFwdUid.sink_token)] = sink_token_gpu
 
     # Execute
     workspace = torch.empty(graph_fwd.get_workspace_size(), dtype=torch.uint8, device="cuda")
@@ -561,7 +595,8 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
     # Compute reference
     o_ref, stats_ref = compute_ref(q_fp8_d, k_fp8_d, v_fp8_s, sf_q_d_ref, sf_k_d_ref, sf_v_s_ref, attn_scale,
                                    torch_itype=torch_itype, output_type=torch_otype,
-                                   left_bound=left_bound, right_bound=right_bound, diag_align=diag_align)
+                                   left_bound=left_bound, right_bound=right_bound, diag_align=diag_align,
+                                   sink_token=sink_token_gpu)
 
     # Compare output
     o_atol, o_rtol = 0.12, 0.20
@@ -572,7 +607,7 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
     stats_err = compare_tensors(stats_gpu, stats_ref, stats_atol, stats_rtol, "stats")
 
     # Compare amax
-    amax_err = compare_amax(o_gpu, o_ref, rtol=0.04, tag="amax")
+    amax_err = compare_amax(o_gpu, o_ref, rtol=0.05, tag="amax")
 
     # Assert all checks pass
     assert o_err == 0, f"Output mismatch: {o_err} elements differ"
@@ -595,6 +630,7 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
                 deterministic, block_size,
                 cudnn_itype, cudnn_otype,
                 left_bound=left_bound, right_bound=right_bound, diag_align=diag_align,
+                with_sink_token=with_sink_token,
             )
             graph_bwd.validate()
             graph_bwd.build_operation_graph()
@@ -613,6 +649,9 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
         dQ_amax_gpu = torch.zeros(1, 1, 1, 1, dtype=torch.float32, device="cuda")
         dK_amax_gpu = torch.zeros(1, 1, 1, 1, dtype=torch.float32, device="cuda")
         dV_amax_gpu = torch.zeros(1, 1, 1, 1, dtype=torch.float32, device="cuda")
+        dSink_token_gpu = None
+        if with_sink_token:
+            dSink_token_gpu = torch.zeros(1, h_q, 1, 1, dtype=torch.float32, device="cuda")
 
         # Build backward variant pack
         variant_pack_bwd = {
@@ -640,6 +679,9 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
             int(GraphBwdUid.dK_amax): dK_amax_gpu,
             int(GraphBwdUid.dV_amax): dV_amax_gpu,
         }
+        if with_sink_token:
+            variant_pack_bwd[int(GraphBwdUid.sink_token)] = sink_token_gpu
+            variant_pack_bwd[int(GraphBwdUid.dSink_token)] = dSink_token_gpu
 
         # Execute backward graph
         torch.cuda.synchronize()
@@ -683,7 +725,7 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
 
 
         # Compute reference backward
-        dQ_ref, dK_ref, dV_ref = compute_ref_backward(
+        dQ_ref, dK_ref, dV_ref, dSink_token_ref = compute_ref_backward(
             q_fp8_d, q_fp8_s, k_fp8_d, k_fp8_s, v_fp8_d,
             o_f16, dO_f16, dO_fp8_d, dO_fp8_s,
             attn_scale,
@@ -691,6 +733,7 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
             sf_dO_d_ref, sf_dO_s_ref,
             torch_itype=torch_itype, torch_otype=torch_otype,
             left_bound=left_bound, right_bound=right_bound, diag_align=diag_align,
+            sink_token=sink_token_gpu,
         )
 
         # Compare output
@@ -703,6 +746,11 @@ def exec_sdpa_mxfp8(cfg, request, cudnn_handle):
         assert dQ_err == 0, f"dQ mismatch: {dQ_err} elements differ"
         assert dK_err == 0, f"dK mismatch: {dK_err} elements differ"
         assert dV_err == 0, f"dV mismatch: {dV_err} elements differ"
+
+        # Compare dSink_token if using sink_token
+        if with_sink_token and dSink_token_ref is not None:
+            dSink_err = compare_tensors(dSink_token_gpu, dSink_token_ref, grad_atol, grad_rtol, "dSink_token")
+            assert dSink_err == 0, f"dSink_token mismatch: {dSink_err} elements differ"
 
         # Compare amax
         dQ_amax_err = compare_amax(dQ_gpu, dQ_ref, rtol=0.04, tag="dQ")

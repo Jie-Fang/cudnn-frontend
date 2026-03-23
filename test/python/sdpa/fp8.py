@@ -48,6 +48,7 @@ class GraphFwdUid(IntEnum):
     v_ragged_offset = 19
     o_ragged_offset = 20
     stats_ragged_offset = 21
+    sink_token = 22
 
 class GraphBwdUid(IntEnum):
     q = 100
@@ -83,8 +84,10 @@ class GraphBwdUid(IntEnum):
     dO_ragged_offset = 130
     kv_seq_len = 131
     q_seq_len = 132
+    sink_token = 133
+    dSink_token = 134
 
-def generate_graph_fwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, block_size, is_ragged=False, generate_stats=True, left_bound=None, right_bound=None, diag_align=None):
+def generate_graph_fwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, block_size, is_ragged=False, generate_stats=True, left_bound=None, right_bound=None, diag_align=None, with_sink_token=False):
     graph_fwd = cudnn.pygraph(io_data_type=cudnn_itype, intermediate_data_type=cudnn.data_type.FLOAT, compute_data_type=cudnn.data_type.FLOAT)
 
     use_padding_mask = None
@@ -137,6 +140,10 @@ def generate_graph_fwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d
     s_descale = graph_fwd.tensor(uid=GraphFwdUid.s_descale, dim=(1, 1, 1, 1), stride=(1, 1, 1, 1), data_type=cudnn.data_type.FLOAT)
     o_scale = graph_fwd.tensor(uid=GraphFwdUid.o_scale, dim=(1, 1, 1, 1), stride=(1, 1, 1, 1), data_type=cudnn.data_type.FLOAT)
 
+    sink_token = None
+    if with_sink_token:
+        sink_token = graph_fwd.tensor(uid=GraphFwdUid.sink_token, dim=(1, h_q, 1, 1), stride=(h_q, 1, 1, 1), data_type=cudnn.data_type.FLOAT)
+
     o, stats, amax_s, amax_o = graph_fwd.sdpa_fp8(
         q=q, k=k, v=v,
         descale_q=q_descale, descale_k=k_descale, descale_v=v_descale,
@@ -146,6 +153,7 @@ def generate_graph_fwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d
         paged_attention_k_table=k_block_table, paged_attention_v_table=v_block_table,
         paged_attention_max_seq_len_kv=s_kv,
         left_bound=left_bound, right_bound=right_bound, diagonal_alignment=diag_align,
+        sink_token=sink_token,
     )
 
     stride_o = (s_qo * h_q * d_vo, d_vo, h_q * d_vo, 1)
@@ -164,7 +172,7 @@ def generate_graph_fwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d
 
     return graph_fwd
 
-def generate_graph_bwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, deterministic, is_ragged=False, left_bound=None, right_bound=None, diag_align=None):
+def generate_graph_bwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, deterministic, is_ragged=False, left_bound=None, right_bound=None, diag_align=None, with_sink_token=False):
     graph_bwd = cudnn.pygraph(io_data_type=cudnn_itype, intermediate_data_type=cudnn.data_type.FLOAT, compute_data_type=cudnn.data_type.FLOAT)
 
     stride_q = (s_qo * h_q * d_qk, d_qk, h_q * d_qk, 1)
@@ -216,6 +224,12 @@ def generate_graph_bwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d
     dV_scale = graph_bwd.tensor(uid=GraphBwdUid.dV_scale, dim=(1, 1, 1, 1), stride=(1, 1, 1, 1), data_type=cudnn.data_type.FLOAT)
     dP_scale = graph_bwd.tensor(uid=GraphBwdUid.dP_scale, dim=(1, 1, 1, 1), stride=(1, 1, 1, 1), data_type=cudnn.data_type.FLOAT)
 
+    sink_token = None
+    dSink_token = None
+    if with_sink_token:
+        sink_token = graph_bwd.tensor(uid=GraphBwdUid.sink_token, dim=(1, h_q, 1, 1), stride=(h_q, 1, 1, 1), data_type=cudnn.data_type.FLOAT)
+        dSink_token = graph_bwd.tensor(uid=GraphBwdUid.dSink_token, dim=(1, h_q, 1, 1), stride=(h_q, 1, 1, 1), data_type=cudnn.data_type.FLOAT)
+
     dQ, dK, dV, amax_dQ, amax_dK, amax_dV, amax_dP = graph_bwd.sdpa_fp8_backward(
         q=q, k=k, v=v, o=o, dO=dO, stats=stats,
         descale_q=q_descale, descale_k=k_descale, descale_v=v_descale,
@@ -227,6 +241,8 @@ def generate_graph_bwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d
         right_bound=right_bound,
         use_deterministic_algorithm=deterministic,
         seq_len_q=seq_len_q, seq_len_kv=seq_len_kv,
+        sink_token=sink_token,
+        dSink_token=dSink_token,
     )
 
     dQ.set_uid(GraphBwdUid.dQ).set_output(True).set_dim((b, h_q, s_qo, d_qk)).set_stride(stride_q).set_data_type(cudnn_otype)
@@ -242,6 +258,9 @@ def generate_graph_bwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d
     amax_dK.set_uid(GraphBwdUid.dK_amax).set_output(True).set_dim((1, 1, 1, 1)).set_stride((1, 1, 1, 1)).set_data_type(cudnn.data_type.FLOAT)
     amax_dV.set_uid(GraphBwdUid.dV_amax).set_output(True).set_dim((1, 1, 1, 1)).set_stride((1, 1, 1, 1)).set_data_type(cudnn.data_type.FLOAT)
     amax_dP.set_uid(GraphBwdUid.dP_amax).set_output(True).set_dim((1, 1, 1, 1)).set_stride((1, 1, 1, 1)).set_data_type(cudnn.data_type.FLOAT)
+
+    if with_sink_token:
+        dSink_token.set_uid(GraphBwdUid.dSink_token).set_output(True).set_dim((1, h_q, 1, 1)).set_stride((h_q, 1, 1, 1)).set_data_type(cudnn.data_type.FLOAT)
 
     return graph_bwd
 
@@ -292,6 +311,7 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
     left_bound = cfg.left_bound if hasattr(cfg, 'left_bound') else None
     right_bound = cfg.right_bound if hasattr(cfg, 'right_bound') else None
     diag_align = cfg.diag_align if hasattr(cfg, 'diag_align') else None
+    with_sink_token = cfg.with_sink_token if hasattr(cfg, 'with_sink_token') else False
 
     attn_scale = 0.125
 
@@ -314,7 +334,7 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
 
     # Build forward graph (always needed)
     try:
-        graph_fwd = generate_graph_fwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, block_size, is_ragged=is_ragged, left_bound=left_bound, right_bound=right_bound, diag_align=diag_align)
+        graph_fwd = generate_graph_fwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, block_size, is_ragged=is_ragged, left_bound=left_bound, right_bound=right_bound, diag_align=diag_align, with_sink_token=with_sink_token)
         graph_fwd.validate()
         graph_fwd.build_operation_graph()
         graph_fwd.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
@@ -347,6 +367,11 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
     s_scale_gpu = torch.tensor([get_fp8_scale_factor(s_amax, torch_itype)], dtype=torch.float, device="cuda")
     s_descale_gpu = torch.tensor([get_fp8_descale_factor(s_amax, torch_itype)], dtype=torch.float, device="cuda")
 
+    # Create sink_token tensor if needed
+    sink_token_gpu = None
+    if with_sink_token:
+        sink_token_gpu = torch.randn((1, h_q, 1, 1), dtype=torch.float, device="cuda", generator=rng_data) * 0.5
+
     # Compute forward reference (also computes o_amax internally)
     if is_ragged:
         seq_len_q_ref = torch.tensor(seq_len_q_list, dtype=torch.int32, device="cuda")
@@ -359,7 +384,8 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
                                             q_descale=q_descale_gpu, k_descale=k_descale_gpu, v_descale=v_descale_gpu,
                                             s_scale=s_scale_gpu, s_descale=s_descale_gpu, torch_itype=torch_itype,
                                             torch_otype=torch_otype, padding=padding,
-                                            left_bound=left_bound, right_bound=right_bound, diag_align=diag_align)
+                                            left_bound=left_bound, right_bound=right_bound, diag_align=diag_align,
+                                            sink_token=sink_token_gpu)
 
     o_scale_gpu = torch.tensor([get_fp8_scale_factor(o_amax, torch_otype)], dtype=torch.float, device="cuda")
 
@@ -423,6 +449,9 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
         variant_pack[int(GraphFwdUid.o_ragged_offset)] = o_ragged_offset_gpu
         variant_pack[int(GraphFwdUid.stats_ragged_offset)] = stats_ragged_offset_gpu
 
+    if with_sink_token:
+        variant_pack[int(GraphFwdUid.sink_token)] = sink_token_gpu
+
     workspace = torch.empty(graph_fwd.get_workspace_size(), dtype=torch.uint8, device="cuda")
     if request.config.getoption("--perf"):
         times_ms = time_execution(graph_fwd.execute, variant_pack, workspace, cudnn_handle)
@@ -472,13 +501,14 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
             dO_ref_bwd = dO_fp8
 
         padding_bwd = (seq_len_q_ref, seq_len_kv_ref) if is_ragged else None
-        dQ_ref, dK_ref, dV_ref, dP_amax, dQ_amax, dK_amax, dV_amax = compute_ref_backward(
+        dQ_ref, dK_ref, dV_ref, dSink_token_ref, dP_amax, dQ_amax, dK_amax, dV_amax = compute_ref_backward(
             q_ref_bwd, k_ref_bwd, v_ref_bwd, o_ref_bwd, dO_ref_bwd, attn_scale=attn_scale,
             q_descale=q_descale_gpu, k_descale=k_descale_gpu, v_descale=v_descale_gpu,
             s_scale=s_scale_gpu, s_descale=s_descale_gpu, torch_itype=torch_itype,
             o_descale=o_descale_gpu, dO_descale=dO_descale_gpu,
             torch_otype=torch_otype, padding=padding_bwd,
-            left_bound=left_bound, right_bound=right_bound, diag_align=diag_align
+            left_bound=left_bound, right_bound=right_bound, diag_align=diag_align,
+            sink_token=sink_token_gpu
         )
 
         dP_descale_gpu = torch.tensor([get_fp8_descale_factor(dP_amax, torch_itype)], dtype=torch.float, device="cuda")
@@ -488,7 +518,7 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
         dP_scale_gpu = torch.tensor([get_fp8_scale_factor(dP_amax, torch_otype)], dtype=torch.float, device="cuda")
 
         try:
-            graph_bwd = generate_graph_bwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, deterministic, is_ragged=is_ragged, left_bound=left_bound, right_bound=right_bound, diag_align=diag_align)
+            graph_bwd = generate_graph_bwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, deterministic, is_ragged=is_ragged, left_bound=left_bound, right_bound=right_bound, diag_align=diag_align, with_sink_token=with_sink_token)
             graph_bwd.validate()
             graph_bwd.build_operation_graph()
             graph_bwd.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
@@ -516,6 +546,9 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
         dK_amax_gpu = torch.tensor([float('nan')], dtype=torch.float, device="cuda")
         dV_amax_gpu = torch.tensor([float('nan')], dtype=torch.float, device="cuda")
         dP_amax_gpu = torch.tensor([float('nan')], dtype=torch.float, device="cuda")
+        dSink_token_gpu = None
+        if with_sink_token:
+            dSink_token_gpu = torch.full((1, h_q, 1, 1), float('nan'), dtype=torch.float, device="cuda")
 
         variant_pack_bwd = {
             int(GraphBwdUid.q): q_gpu, int(GraphBwdUid.k): k_gpu, int(GraphBwdUid.v): v_gpu,
@@ -540,6 +573,10 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
             variant_pack_bwd[int(GraphBwdUid.o_ragged_offset)] = o_ragged_offset_gpu
             variant_pack_bwd[int(GraphBwdUid.stats_ragged_offset)] = stats_ragged_offset_gpu
             variant_pack_bwd[int(GraphBwdUid.dO_ragged_offset)] = o_ragged_offset_gpu
+
+        if with_sink_token:
+            variant_pack_bwd[int(GraphBwdUid.sink_token)] = sink_token_gpu
+            variant_pack_bwd[int(GraphBwdUid.dSink_token)] = dSink_token_gpu
 
         workspace_bwd = torch.empty(graph_bwd.get_workspace_size(), dtype=torch.uint8, device="cuda")
         if request.config.getoption("--perf"):
@@ -599,6 +636,9 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
         torch.testing.assert_close(dK_out, dK_ref_float, atol=atol, rtol=rtol)
         torch.testing.assert_close(dV_out, dV_ref_float, atol=atol, rtol=rtol)
 
+        if with_sink_token:
+            torch.testing.assert_close(dSink_token_gpu, dSink_token_ref, atol=0.02, rtol=0.2)
+
     # Print hash and stats for determinism verification
     print_tensor_stats(o_gpu, tag="o_gpu")
     print_tensor_stats(s_amax_gpu, tag="s_amax_gpu")
@@ -612,3 +652,5 @@ def exec_sdpa_fp8(cfg, request, cudnn_handle):
         print_tensor_stats(dK_amax_gpu, tag="dK_amax_gpu")
         print_tensor_stats(dV_amax_gpu, tag="dV_amax_gpu")
         print_tensor_stats(dP_amax_gpu, tag="dP_amax_gpu")
+        if with_sink_token:
+            print_tensor_stats(dSink_token_gpu, tag="dSink_token_gpu")

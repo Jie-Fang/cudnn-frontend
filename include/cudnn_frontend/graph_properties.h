@@ -2228,10 +2228,11 @@ class SDPA_fp8_backward_attributes : public Attributes<SDPA_fp8_backward_attribu
         Scale_dV,
         Scale_S,
         Scale_dP,
+        SINK_TOKEN,
     };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
 
-    enum class output_names { dQ, dK, dV, Amax_dQ, Amax_dK, Amax_dV, Amax_dP };
+    enum class output_names { dQ, dK, dV, Amax_dQ, Amax_dK, Amax_dV, Amax_dP, DSINK_TOKEN };
     std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(SDPA_fp8_backward_attributes,
@@ -2358,6 +2359,24 @@ class SDPA_fp8_backward_attributes : public Attributes<SDPA_fp8_backward_attribu
     set_deterministic_algorithm(bool const value) {
         is_deterministic_algorithm = value;
         return *this;
+    }
+
+    SDPA_fp8_backward_attributes&
+    set_sink_token(std::shared_ptr<Tensor_attributes> value) {
+        inputs[SDPA_fp8_backward_attributes::input_names::SINK_TOKEN] = std::move(value);
+        return *this;
+    }
+
+    SDPA_fp8_backward_attributes&
+    set_dsink_token(std::shared_ptr<Tensor_attributes> value) {
+        outputs[SDPA_fp8_backward_attributes::output_names::DSINK_TOKEN] = std::move(value);
+        return *this;
+    }
+
+    bool
+    has_sink_token() const {
+        return inputs.find(input_names::SINK_TOKEN) != inputs.end() &&
+               inputs.at(input_names::SINK_TOKEN) != nullptr;
     }
 };
 

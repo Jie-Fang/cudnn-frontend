@@ -11,7 +11,7 @@ def compute_ref(q, k, v, attn_scale,
                 s_scale, s_descale, torch_itype,
                 torch_otype,
                 padding=None, bias=None,
-                left_bound=None, right_bound=None, diag_align=None):
+                left_bound=None, right_bound=None, diag_align=None, sink_token=None):
     """Compute forward pass reference with online softmax tiling.
     Returns (o_quant, stats, o_amax)."""
     b, s_q, h_q, d_qk = q.shape
@@ -50,8 +50,14 @@ def compute_ref(q, k, v, attn_scale,
     block_size = 128
     num_blocks = (s_kv + block_size - 1) // block_size
 
-    m_old = torch.full((b, h_q, s_q, 1), float('-inf'), dtype=torch.float32, device=q.device)
-    l_old = torch.zeros((b, h_q, s_q, 1), dtype=torch.float32, device=q.device)
+    # Initialize online softmax state. If sink_token is present, use it as the
+    # initial m_old with l_old=1, effectively adding a virtual attention score.
+    if sink_token is not None:
+        m_old = sink_token.float().expand(b, h_q, s_q, 1).clone()
+        l_old = torch.ones((b, h_q, s_q, 1), dtype=torch.float32, device=q.device)
+    else:
+        m_old = torch.full((b, h_q, s_q, 1), float('-inf'), dtype=torch.float32, device=q.device)
+        l_old = torch.zeros((b, h_q, s_q, 1), dtype=torch.float32, device=q.device)
     o = torch.zeros((b, h_q, s_q, d_v), dtype=torch.float32, device=q.device)
 
     for j in range(num_blocks):
@@ -103,9 +109,9 @@ def compute_ref_backward(q, k, v, o, dO, attn_scale,
                          o_descale, dO_descale,
                          torch_otype,
                          padding=None, bias=None,
-                         left_bound=None, right_bound=None, diag_align=None):
+                         left_bound=None, right_bound=None, diag_align=None, sink_token=None):
     """Compute backward pass reference.
-    Returns (dQ, dK, dV, dP_amax, dQ_amax, dK_amax, dV_amax)."""
+    Returns (dQ, dK, dV, dSink_token, dP_amax, dQ_amax, dK_amax, dV_amax)."""
     b, s_q, h_q, d_qk = q.shape
     _, s_kv, h_k, _ = k.shape
     _, _, h_v, _ = v.shape
@@ -143,7 +149,16 @@ def compute_ref_backward(q, k, v, o, dO, attn_scale,
             swa_mask.tril_(diagonal=-1 * left_bound + (s_kv - s_q))
         s = s.masked_fill(swa_mask, float('-inf'))
 
-    p = s.softmax(dim=-1).nan_to_num()
+    # If sink_token is present, prepend it as a virtual attention score
+    p_sink = None
+    if sink_token is not None:
+        sink_expanded = sink_token.float().expand(b, h_q, s_q, 1)
+        s_extended = torch.cat([sink_expanded, s], dim=-1)
+        p_extended = s_extended.softmax(dim=-1).nan_to_num()
+        p_sink = p_extended[:, :, :, 0:1]
+        p = p_extended[:, :, :, 1:]
+    else:
+        p = s.softmax(dim=-1).nan_to_num()
 
     # P (FP32) -> P (FP8)
     p_quant = (p * s_scale).to(torch_itype)
@@ -159,6 +174,15 @@ def compute_ref_backward(q, k, v, o, dO, attn_scale,
     dO_float = dO.float()
     D = (o_float * dO_float).sum(dim=-1, keepdim=True).transpose(1, 2) * o_descale * dO_descale
     dS = p * (dP - D) * attn_scale
+
+    # Compute dSink_token if sink_token was provided
+    # Formula: dSink = -exp(sink - logsumexp) * D summed over batch and sequence
+    # Note: attn_scale is NOT applied here because sink_token is added directly to scores,
+    # not multiplied by attn_scale like Q @ K.T
+    dSink_token = None
+    if sink_token is not None:
+        dS_sink = -p_sink * D
+        dSink_token = dS_sink.sum(dim=(0, 2), keepdim=True)
 
     dP_amax = dP.abs().max().item()
     dP_scale = get_fp8_scale_factor(dP_amax, torch_otype)
@@ -190,4 +214,4 @@ def compute_ref_backward(q, k, v, o, dO, attn_scale,
     # dV (FP32) -> dV (FP8)
     dV = (dV * get_fp8_scale_factor(dV_amax, torch_otype)).to(torch_otype)
 
-    return dQ, dK, dV, dP_amax, dQ_amax, dK_amax, dV_amax
+    return dQ, dK, dV, dSink_token, dP_amax, dQ_amax, dK_amax, dV_amax
