@@ -127,8 +127,8 @@ def run_tensor_ir_from_legacy_args(parent_args, unknown_args):
         "-compiler_backend",
         action="store",
         default="Collective",
-        choices=["Tile", "Collective"],
-        help="Compiler backend type (Tile or Collective)",
+        choices=["Tile", "Collective", "CudaTile"],
+        help="Compiler backend type (Tile, Collective, or CudaTile)",
     )
     tensorir_parser.add_argument(
         "--staticShapesOnly",
@@ -150,9 +150,16 @@ def run_tensor_ir_from_legacy_args(parent_args, unknown_args):
     isUTCIMMA = False
     isBlockScaled = False
 
-    if compiler_backend == "Tile":
+    if compiler_backend in ("Tile", "CudaTile"):
         m, n, k = 256, 256, 256
         matmul_element_bits = get_element_bits(get_input_dataTypes(concrete_test_dict)[0])
+        cudatile_matmul_output_rank = None
+        if compiler_backend == "CudaTile":
+            for node in testGraph.nodes:
+                if isinstance(node, operation) and node.op_name in ("matmul", "scaled_matmul"):
+                    cudatile_matmul_output_rank = len(node.output[0].dim)
+                    matmul_element_bits = get_element_bits(node.producer_nodes[0].output[0].data_type)
+                    break
     elif compiler_backend == "Collective":
         flag_matmul = False
         for node in testGraph.nodes:
@@ -194,9 +201,17 @@ def run_tensor_ir_from_legacy_args(parent_args, unknown_args):
             isUTCHMMA,
             isUTCIMMA,
             isBlockScaled,
+            compiler_backend=compiler_backend,
         )
     else:
         kernel_config = [get_tensorir_compilation_config(m, n, k, matmul_element_bits, tensorir_args)]
+
+    # For CudaTile batched (rank > 2) matmul, the iteration space is [B..., M, N, K].
+    # Tile sizes are specified as [M, N], so prepend batch dims of 1.
+    if compiler_backend == "CudaTile" and cudatile_matmul_output_rank is not None and cudatile_matmul_output_rank > 2:
+        num_batch_dims = cudatile_matmul_output_rank - 2
+        for cfg in kernel_config:
+            cfg[0] = [1] * num_batch_dims + list(cfg[0])[:2]
 
     status = run_tensor_ir_test_from_json_definition(
         testGraph,
@@ -957,7 +972,7 @@ def run_tensor_ir_test_from_json_definition(testGraph, kernel_config, tensorir_a
 
     from test_tensor_ir import test_tensor_ir
 
-    tensor_ir_tester = test_tensor_ir(testGraph, static_shapes_only)
+    tensor_ir_tester = test_tensor_ir(testGraph, static_shapes_only, compiler_backend)
     tensor_ir_module = tensor_ir_tester.build_tensor_ir_module(legacy_args.jsonTestName)
     print(str(tensor_ir_module))
     # Read in rtol/atol from json

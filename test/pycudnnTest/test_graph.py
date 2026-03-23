@@ -784,8 +784,8 @@ class random_tensor_generator(test_node):
             )
         elif torch_dtype == torch.int32:
             self.output[0].ref_data = torch.randint(
-                -2 if self.dist_mean is None else self.dist_mean,
-                3 if self.dist_sd is None else self.dist_sd,
+                -2 if self.dist_mean is None else int(self.dist_mean),
+                3 if self.dist_sd is None else int(self.dist_sd),
                 self.kwargs["dim"],
                 requires_grad=False,
                 device=device,
@@ -793,16 +793,16 @@ class random_tensor_generator(test_node):
             )
         elif torch_dtype == torch.float8_e4m3fn:
             self.output[0].ref_data = torch.randint(
-                -2 if self.dist_mean is None else self.dist_mean,
-                3 if self.dist_sd is None else self.dist_sd,
+                -2 if self.dist_mean is None else int(self.dist_mean),
+                3 if self.dist_sd is None else int(self.dist_sd),
                 self.kwargs["dim"],
                 requires_grad=False,
                 device=device,
             ).to(dtype=torch.float8_e4m3fn)
         elif torch_dtype == torch.float8_e5m2:
             self.output[0].ref_data = torch.randint(
-                -2 if self.dist_mean is None else self.dist_mean,
-                3 if self.dist_sd is None else self.dist_sd,
+                -2 if self.dist_mean is None else int(self.dist_mean),
+                3 if self.dist_sd is None else int(self.dist_sd),
                 self.kwargs["dim"],
                 requires_grad=False,
                 device=device,

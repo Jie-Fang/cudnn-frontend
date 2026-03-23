@@ -50,6 +50,48 @@ def is_float_dtype(data_type):
     ]
 
 
+# Maximum shared memory per SM (bytes) by architecture, used to pre-filter
+# CudaTile tile configs before invoking ptxas.  Values are the hard limits
+# reported by ptxas ("uses too much shared data … max").
+_SM_MAX_SMEM_BYTES = {
+    "sm_80":  163_840,  # A100  160 KB
+    "sm_86":   99_328,  # RTX 30xx  97 KB
+    "sm_87":   99_328,
+    "sm_89":   99_328,  # RTX 40xx  97 KB
+    "sm_90":  231_424,  # H100  226 KB  (0x38c00)
+    "sm_90a": 231_424,
+    "sm_100": 232_448,  # B100  0x38c00 (from ptxas)
+    "sm_100a": 232_448,  # 0x38c00 (from ptxas)
+}
+# Fall-back limit used for unknown chips.
+_SM_MAX_SMEM_BYTES_DEFAULT = 231_424
+
+
+# Operations that have no lowering pattern in TensorToCudaTile.cpp and will
+# therefore produce kErrorCompilation when compiled with the CudaTile backend.
+# Tests using these ops are waived for CudaTile until lowering support is added.
+_CUDA_TILE_UNSUPPORTED_OPS = frozenset([
+    # ActivationForwardNode ops (no EluFwd/SwishFwd/SoftplusFwd conversion)
+    "elu", "swish", "softplus",
+    # ActivationBackwardNode ops
+    "elu_backward", "swish_backward", "softplus_backward",
+    # BinaryOperationNode backward ops
+    "relu_backward", "tanh_backward", "sigmoid_backward",
+    "gelu_backward", "gelu_approx_tanh_backward",
+    # BinaryOperationNode ops without CudaTile lowering
+    "atan2",
+    # ScaledMatmulOp: no TensorToCudaTile lowering pattern yet; uses Collective backend
+    "scaled_matmul",
+])
+
+# Operations whose CudaTile lowering only supports f32/f64 operands.
+# These are waived when the operation's output type is f16.
+# Note: the test-graph op_names here are "erf" and "gelu" (CUDNN_POINTWISE_GELU_FWD).
+_CUDA_TILE_F32_ONLY_OPS = frozenset([
+    "erf", "gelu",
+])
+
+
 def is_integer_dtype(data_type):
     return data_type in [DataType.INT8, DataType.INT32, DataType.INT64]
 
@@ -190,6 +232,7 @@ def generate_tensorir_compilation_configs(
     isUTCHMMA=False,
     isUTCIMMA=False,
     isBlockScaled=False,
+    compiler_backend="Tile",
 ):
     """
     Generate multiple TensorIR compilation configurations.
@@ -245,6 +288,33 @@ def generate_tensorir_compilation_configs(
             return False
         if args.cta_count is not None and cta_count != args.cta_count:
             return False
+
+        # For CudaTile, apply two pre-filters to avoid hard failures:
+        if compiler_backend == "CudaTile":
+            tile_m, tile_n = cga_tile_size[0], cga_tile_size[1]
+
+            # 1. CudaTile requires all tile dimensions to be powers of two.
+            #    Configs that violate this trigger an assertion abort in the
+            #    CudaTile type verifier (not catchable in Python).
+            def _is_pow2(v):
+                return v > 0 and (v & (v - 1)) == 0
+            if not _is_pow2(tile_m) or not _is_pow2(tile_n):
+                return False
+
+            # 2. Reject configs whose C-tile shared memory footprint exceeds
+            #    the target SM limit.  The dominant smem term is the output
+            #    (C) tile: tile_M * tile_N * bytes_per_element.  Configs that
+            #    exceed the limit fail with ptxas "uses too much shared data".
+            bytes_per_element = max(1, matmul_element_bits // 8)
+            smem_estimate = tile_m * tile_n * bytes_per_element
+            max_smem = _SM_MAX_SMEM_BYTES.get(args.cubin_chip, _SM_MAX_SMEM_BYTES_DEFAULT)
+            if smem_estimate > max_smem:
+                print(
+                    f"#### Skipping tile_size={cga_tile_size[:2]} for CudaTile: "
+                    f"estimated smem {smem_estimate} bytes exceeds {args.cubin_chip} limit {max_smem} bytes"
+                )
+                return False
+
         return True
 
     # Apply filter to configList
@@ -490,13 +560,18 @@ def calculate_stride_div_from_alignment(
 class TensorIRNode(ABC):
     """Base class for all Tensor IR operation nodes."""
 
-    def __init__(self, node, node_map, ip, tensor_ir_test):
+    def __init__(
+        self,
+        node,
+        node_map,
+        ip,
+        tensor_ir_test,
+    ):
         self.node = node
         self.node_map = node_map
         self.ip = ip
         self.tensor_ir_test = tensor_ir_test
         self.children = [node_map[child] for child in node.producer_nodes]
-
         # Get output tensor info with compute data type from node kwargs or output data type
         self.output_tensor_info = self.tensor_ir_test.determine_tensor_ir_inout_tensor_type(
             node,
@@ -557,12 +632,15 @@ class ReductionNode(TensorIRNode):
             else:
                 convert_value = self.children[0]
 
-            reduction_dimensions = []
-            reduction_dim = 0
-            for s in self.output_tensor_info.stride:
-                if s == 0:
-                    reduction_dimensions.append(reduction_dim)
-                reduction_dim += 1
+            # Detect reduction dimensions by comparing input and output shapes.
+            # stride==0 is unreliable for outputs with non-broadcast physical layout
+            # (e.g. shape=(B,1,N) with stride=(N,N,1) — no zero stride despite being reduced).
+            input_shape = self.node.producer_nodes[0].output[0].dim
+            output_shape = self.node.output[0].dim
+            reduction_dimensions = [
+                i for i, (in_d, out_d) in enumerate(zip(input_shape, output_shape))
+                if in_d != out_d
+            ]
 
             mlir_value = nv_tensor_ir.reduce(
                 nv_tensor_ir.TensorType.get(shape=self.output_tensor_info.shape, datatype=output_datatype),
@@ -1009,11 +1087,12 @@ class test_tensor_ir:
             for op_name in op_names:
                 cls.NODE_CLASS_MAP[op_name] = node_class
 
-    def __init__(self, test_graph, static_shapes_only):
+    def __init__(self, test_graph, static_shapes_only, compiler_backend="Tile"):
         self.test_graph = test_graph
         self.outputs = []
         self.ref_outputs = None
         self.static_shapes_only = static_shapes_only
+        self.compiler_backend = compiler_backend
         self.node_overwrite_stride_func_map = {}
 
         # Initialize the node class map if it's empty
@@ -1041,7 +1120,6 @@ class test_tensor_ir:
 
         shape = []
         stride = []
-        idx = 0
 
         ori_stride = test_tensor.stride
         ori_shape = test_tensor.dim
@@ -1059,10 +1137,18 @@ class test_tensor_ir:
                 return 32  # bytes
 
         if isScalarTensor:
-            # If tensor is scalar in json definition, convert to dense memref with shape to [-1] and stride to [0]
-            scalar_dim = 1 if self.static_shapes_only else -1
-            shape = [scalar_dim] * len(ori_shape)
-            stride = [0] * len(ori_stride)
+            if self.compiler_backend == "CudaTile":
+                # CudaTile backend: use static shape [1,...,1] with stride [1,...,1].
+                # build_tensor_ir_recursive sees a different type from the output (?,?,?) and
+                # inserts a nv_tensor_ir.broadcast op; BroadcastOpConversion clamps static-1 dims.
+                shape = [1] * len(ori_shape)
+                stride = [1] * len(ori_stride)
+            else:
+                # Collective backend: use stride=0 and dynamic shape (no explicit BroadcastOp).
+                # stride=0 encodes broadcast natively in collective IR.
+                scalar_dim = 1 if self.static_shapes_only else -1
+                shape = [scalar_dim] * len(ori_shape)
+                stride = [0] * len(ori_stride)
             stride_div = [1] * len(ori_stride)
             return TensorInfo(
                 tensor_type=nv_tensor_ir.TensorType.get(shape=shape, datatype=dtype),
@@ -1077,17 +1163,20 @@ class test_tensor_ir:
 
         for s, d in zip(ori_stride, ori_shape):
             if d == 1:
-                # Use concrete dimension 'd' if static_shapes_only is True, otherwise use -1
-                shape.append(d if self.static_shapes_only else -1)
-                # row broadcast need to set broadcast dim to `?`
-                stride.append(0)
+                if self.compiler_backend == "CudaTile":
+                    # CudaTile backend: static shape=1 + stride=1 triggers explicit BroadcastOp.
+                    shape.append(1)
+                    stride.append(1)
+                else:
+                    # Collective backend: stride=0 + dynamic shape encodes broadcast natively.
+                    shape.append(d if self.static_shapes_only else -1)
+                    stride.append(0)
             else:
                 if s != 1:
                     stride.append(s if self.static_shapes_only else -1)
                 else:
                     stride.append(1)
                 shape.append(d if self.static_shapes_only else -1)
-            idx += 1
 
         # Find leading dimension and calculate alignment
         leading_dim_idx = find_leading_dimension(stride, ori_shape)
@@ -1101,7 +1190,7 @@ class test_tensor_ir:
         else:
             alignment = get_tma_alignment(dtype_width)
 
-        # Calculate stride divisibility from stride layout
+        # Calculate stride divisibility from alignment
         stride_div = calculate_stride_div_from_alignment(
             stride,
             ori_stride,
@@ -1231,7 +1320,7 @@ class test_tensor_ir:
         if not self.ref_outputs:
             self.calc_ref()
 
-        # Create output tensors on GPU
+        # Create output tensors on GPU.
         outputs_gpu = [
             torch.as_strided(
                 torch.empty(
@@ -1359,18 +1448,47 @@ class test_tensor_ir:
                         torch.cuda.synchronize()
                     finished_cnt += 1
             else:
+                _BACKEND_ENUM_MAP = {
+                    "Tile": nv_tensor_ir.CompilerBackend.Tile,
+                    "CudaTile": nv_tensor_ir.CompilerBackend.CudaTile,
+                }
+                backend_enum = _BACKEND_ENUM_MAP.get(compiler_backend, nv_tensor_ir.CompilerBackend.Tile)
+
+                # Waive CudaTile tests that use ops with no CudaTile lowering pattern.
+                if compiler_backend == "CudaTile":
+                    unsupported = [
+                        node.op_name
+                        for node in self.test_graph.nodes
+                        if isinstance(node, tg.operation) and node.op_name in _CUDA_TILE_UNSUPPORTED_OPS
+                    ]
+                    # erf and gelu_fwd only support f32/f64 operands in CudaTile;
+                    # waive when the operation's output type is f16 or bf16.
+                    if not unsupported:
+                        unsupported = [
+                            node.op_name
+                            for node in self.test_graph.nodes
+                            if isinstance(node, tg.operation)
+                            and node.op_name in _CUDA_TILE_F32_ONLY_OPS
+                            and node.output[0].data_type in (DataType.HALF, DataType.BFLOAT16)
+                        ]
+                    if unsupported:
+                        print(f"#### CudaTile does not support op(s) {unsupported}; waiving test")
+                        return StatusCode.WAIVED
+
+                tile_cc = self.compiler_with_kernel_cache.get_compute_capability()
+                tile_cubin_chip = self.SUPPORTED_CUBIN_CHIP.get(tile_cc, "sm_100a")
                 for config in kernel_configs:
                     tile_size = config[0]  # Extract first value from the config list
                     cloned_module = ir.Module.parse(str(module))
                     conversion_options = nv_tensor_ir.TensorConversionOptions()
                     conversion_options.tileSize = tile_size
+                    if compiler_backend == "CudaTile":
+                        conversion_options.computeCapability = tile_cubin_chip
 
-                    dump_ir_path = ""  # Set this to dump intermediate IR
-                    load_ir_path = ""
                     enable_timing = False
                     compile_options = nv_tensor_ir.TensorIRCompilationOptions(
-                        100,  # Hardcoded for blackwell
-                        nv_tensor_ir.CompilerBackend.Tile,
+                        tile_cc,
+                        backend_enum,
                         conversion_options,
                         nv_tensor_ir.DebugOptions(dump_ir_path, load_ir_path, enable_timing),
                     )
@@ -1502,10 +1620,13 @@ class test_tensor_ir:
                 node_map[node] = graph.regions[0].blocks[0].arguments[i]
 
             with ir.InsertionPoint(graph.regions[0].blocks[0]) as ip:
-                for node in output_tensors:  # This should be built from output nodes no?
+                for node, tensor_info in zip(output_tensors, output_tensor_infos):
                     # Recursively lower ops
                     self.build_tensor_ir_recursive(
-                        node, node_map, ip
+                        node,
+                        node_map,
+                        ip,
+                        tensor_info,
                     )  # This is passed the insertion point, which provides a mutable reference to the module. # Consider passing other things, as order in graph module is said to not matter.
 
                 # Generate return op
@@ -1520,7 +1641,6 @@ class test_tensor_ir:
                     result.append(node_map[node])
 
                 nv_tensor_ir.results_(result)
-        print(module)
         module.operation.verify()
 
         return module
@@ -1563,15 +1683,47 @@ class test_tensor_ir:
         else:
             return scalar_tensor
 
-    def build_tensor_ir_recursive(self, node, node_map, ip):
+    def build_tensor_ir_recursive(self, node, node_map, ip, output_tensor_info):
         """Build tensor IR representation recursively for the given node."""
+
+        # for node in input_tensors:
+        if (not self.static_shapes_only) and (len(node.producer_nodes) == 0):
+            input_tensor = node_map[node]
+            # Skip scalars / by-value arguments
+            if not isinstance(input_tensor.type, nv_tensor_ir.TensorType):
+                return
+
+            # Broadcast input tensor to output shape when types differ.
+            # Use input dtype so the broadcast doesn't change the element type
+            # (e.g. scalar (1,1,1) bias vs output (1,M,N)).  The subsequent
+            # convert op handles any dtype difference.
+            # TODO:CL-19939 Unify broadcast-dim encoding between CudaTile and Collective backends.
+            # This part will be revisited when we unify the broadcast encoding between the CudaTile and Collective backends.
+            input_dtype = nv_tensor_ir.get_tensor_datatype(input_tensor.type)
+            broadcast_tensor_type = nv_tensor_ir.TensorType.get(
+                shape=output_tensor_info.shape,
+                datatype=input_dtype,
+            )
+
+            if broadcast_tensor_type != input_tensor.type:
+                broadcast_tensor = nv_tensor_ir.broadcast(
+                    broadcast_tensor_type,
+                    input_tensor,
+                )
+                node_map[node] = broadcast_tensor
+
         # Skip if node is already processed
         if node in node_map.keys():
             return
 
         # Process all children first
         for child in node.producer_nodes:
-            self.build_tensor_ir_recursive(child, node_map, ip)
+            self.build_tensor_ir_recursive(
+                child,
+                node_map,
+                ip,
+                output_tensor_info,
+            )
 
         # Only process operation nodes
         if not isinstance(node, tg.operation):
