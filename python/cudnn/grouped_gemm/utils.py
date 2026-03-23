@@ -51,6 +51,7 @@ from cutlass.cutlass_dsl import T
 from cutlass.cute.typing import Float32, Int32
 import cutlass.cute as cute
 import cutlass
+import torch
 
 ##############################################################################
 # Helper functions
@@ -112,6 +113,16 @@ def warp_redux_sync_fmax(
             asm_dialect=llvm.AsmDialect.AD_ATT,
         )
     )
+
+
+def logical_shape_fp4x2_aware(tensor: torch.Tensor) -> Tuple[int, ...]:
+    """Return correct shapes for NVFP4 tensor."""
+    if tensor.dtype == torch.float4_e2m1fn_x2:
+        innermost_dim_index = next((i for i, s in enumerate(tensor.stride()) if s == 1), None)
+        if innermost_dim_index is None:
+            raise RuntimeError(f"tensor has shape {tuple(tensor.shape)} stride {tuple(tensor.stride())} " "but no contiguous (stride == 1) dimension was found")
+        return tuple(dim * 2 if i == innermost_dim_index else dim for i, dim in enumerate(tensor.shape))
+    return tuple(tensor.shape)
 
 
 def atomic_max_float32(

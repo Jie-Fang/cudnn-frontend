@@ -36,6 +36,7 @@ backward pass with dSwiGLU activation gradient for MoE (Mixture of Experts) work
 from .grouped_gemm_dswiglu_quant import (
     BlockScaledContiguousGroupedGemmKernel,
 )
+from ..utils import logical_shape_fp4x2_aware
 from cuda.bindings import driver as cuda
 import os
 import torch
@@ -770,8 +771,9 @@ def grouped_gemm_dswiglu_wrapper_sm100(
             - **sfd_row_tensor** (torch.Tensor or None): Row-wise scale factors for D
             - **sfd_col_tensor** (torch.Tensor or None): Column-wise scale factors for D
     """
-    valid_m = a_tensor.shape[0]
-    n, _, l = b_tensor.shape
+
+    valid_m, _, _ = logical_shape_fp4x2_aware(a_tensor)
+    n, _, l = logical_shape_fp4x2_aware(b_tensor)
 
     _logger.debug("grouped_gemm_dswiglu_wrapper_sm100: Creating output tensors d_row_tensor, d_col_tensor, dprob_tensor")
 
