@@ -1055,7 +1055,10 @@ class SDPAFP8BackwardNode : public NodeCRTP<SDPAFP8BackwardNode> {
 
     std::pair<int64_t, std::unordered_map<KnobType_t, int64_t>>
     override_heuristics_query() const {
-        if (is_deterministic_algorithm_supported_on_blackwell) {
+        int32_t const sm_version = context.get_sm_version();
+        if (sm_version > 103 && is_deterministic_algorithm_supported_on_blackwell) {
+            return {18, {{KnobType_t::KERNEL_CFG, 31}, {KnobType_t::STAGES, 2}}};
+        } else if (is_deterministic_algorithm_supported_on_blackwell) {
             return {5, {{KnobType_t::KERNEL_CFG, 31}, {KnobType_t::STAGES, 2}}};
         } else {
             return {-1, {}};
