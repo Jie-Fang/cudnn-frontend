@@ -377,6 +377,25 @@ cudnn_backend_dev_latest:
     stage: backend_triggers
     needs: []
     interruptible: true
+
+cudnn_backend_next_arch_latest:
+    trigger:
+        project:  cudnn/cudnn
+        branch:   feature/rubin-bringup
+        strategy: depend
+    inherit:
+        variables: false
+    variables:
+        CI_CUDNN_FRONTEND_MERGE_REQUEST_SOURCE_BRANCH_NAME: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME
+        CI_CUDNN_FRONTEND_REF_NAME: $CI_COMMIT_REF_NAME
+        CI_CUDNN_FRONTEND_COMMIT_SHA: $CI_COMMIT_SHA
+    rules:
+        - if: $CI_MERGE_REQUEST_TITLE =~ /^(\[Draft\]|\(Draft\)|Draft:)/
+          when: never
+        - if: $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "merge_request_event"
+    stage: backend_triggers
+    needs: []
+    interruptible: true
 # ==============================================================================
 # Slack Notification Job
 # Posts pipeline status to #swdl-cudnn-frontend-dev channel
