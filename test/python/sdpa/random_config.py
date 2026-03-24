@@ -239,6 +239,9 @@ class RandomizationContext:
         if "is_deterministic" in randoms:
             randoms_.is_determin = randoms["is_deterministic"] == True
 
+        if "is_alibi" in randoms:
+            randoms_.is_alibi = randoms["is_alibi"] == True
+
         if "is_bias" in randoms:
             randoms_.is_bias = randoms["is_bias"] == True
 

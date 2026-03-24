@@ -1648,6 +1648,11 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
     AttentionImplementation_t implementation = AttentionImplementation_t::AUTO;
 
     bool
+    has_bias() const {
+        return inputs.find(input_names::Bias) != inputs.end() && inputs.at(input_names::Bias) != nullptr;
+    }
+
+    bool
     has_causal_like_masking() const {
         return right_bound.has_value();
     }
@@ -2410,6 +2415,10 @@ class DiagonalBandMaskNodeBase;
 class CompositeDiagonalBandMaskNode;
 class UnifiedDiagonalBandMaskNode;
 
+// Diagonal band mask attributes.
+// A diagonal band mask is *either* a left-bound mask or a right-bound mask.
+// LeftBound and ShiftRightBound cannot both be set at the same time.
+// If neither LeftBound nor ShiftRightBound is set, a right-bound mask is assumed.
 class DiagonalBandMask_attributes : public Attributes<DiagonalBandMask_attributes> {
     friend class Attributes<DiagonalBandMask_attributes>;
     friend class CompositeDiagonalBandMaskNode;

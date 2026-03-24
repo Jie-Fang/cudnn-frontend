@@ -70,6 +70,8 @@ inline std::shared_ptr<Tensor_attributes> alibi_mask(
     int64_t h_q,
     int64_t& alibi_slopes_size
 );
+
+inline error_t build_operation_subgraph(std::shared_ptr<Graph> graph);
 // clang-format on
 
 }  // namespace attn::score_modifiers
@@ -1222,7 +1224,7 @@ class CompositeSDPABackwardNode : public NodeCRTP<CompositeSDPABackwardNode> {
                                        error_code_t::INVALID_VALUE,
                                        "Left bound (Sliding window length) should be greater than or equals to zero when set.");
 
-         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.left_bound.has_value() && (s_q * attributes.left_bound.value() == s_kv * attributes.left_bound.value()) && (detail::get_backend_version() <= 90900) && (prop_major == 9) && attributes.has_causal_mask_bottom_right(),
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.left_bound.has_value() && (s_q * attributes.left_bound.value() == s_kv * attributes.left_bound.value()) && (detail::get_backend_version() <= 90900) && (prop_major == 9) && attributes.has_causal_mask_bottom_right(),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "On Hopper architecture, this specific combination of s_q, s_kv, and left_bound + right_bound + bottom right diagonal alignment is not supported for backend version 9.9 or below");
 
@@ -2079,6 +2081,58 @@ class UnifiedSDPANode : public SDPANodeBase<UnifiedSDPANode> {
                 std::make_shared<Tensor_attributes>(attributes.attn_scale_value.value());
         }
 
+        // Optional attention score modifier
+        if (attributes.attention_score_modifier != nullptr) {
+            if (!subgraph) init_subgraph();
+            subgraph_output = attributes.attention_score_modifier(subgraph, subgraph_output);
+        }
+
+        // Optional bias
+        if (attributes.inputs.find(input_names::Bias) != attributes.inputs.end() &&
+            attributes.inputs[input_names::Bias]) {
+            if (!subgraph) init_subgraph();
+            subgraph_output =
+                attn::score_modifiers::bias(subgraph, subgraph_output, attributes.inputs[input_names::Bias]);
+        }
+
+        // Optional alibi mask
+        if (attributes.alibi_mask) {
+            if (!subgraph) init_subgraph();
+            auto h_q = attributes.inputs[input_names::Q]->get_dim()[1];
+            subgraph_output =
+                attn::score_modifiers::alibi_mask(subgraph, subgraph_output, alibi_slopes, h_q, alibi_slopes_size);
+        }
+
+        // Optional casual masking
+        if (attributes.left_bound.has_value() || attributes.right_bound.has_value()) {
+            if (!subgraph) init_subgraph();
+
+            auto s_q      = attributes.inputs[input_names::Q]->get_dim()[2];
+            auto s_kv     = infer_s_kv();
+            auto s_kv_ptr = attributes.inputs.find(input_names::SEQ_LEN_KV) != attributes.inputs.end()
+                                ? attributes.inputs[input_names::SEQ_LEN_KV]
+                                : nullptr;
+            auto s_q_ptr  = attributes.inputs.find(input_names::SEQ_LEN_Q) != attributes.inputs.end()
+                                ? attributes.inputs[input_names::SEQ_LEN_Q]
+                                : nullptr;
+
+            subgraph_output = attn::score_modifiers::sliding_window_mask(subgraph,
+                                                                         subgraph_output,
+                                                                         attributes.diagonal_alignment,
+                                                                         attributes.left_bound,
+                                                                         attributes.right_bound,
+                                                                         s_q,
+                                                                         s_kv,
+                                                                         s_q_ptr,
+                                                                         s_kv_ptr);
+        }
+
+        if (subgraph) {
+            subgraph_output->set_name(attributes.name + "::subgraph_output");
+            auto subgraph_node = std::static_pointer_cast<INode>(subgraph);
+            sub_nodes.emplace_back(subgraph_node);
+        }
+
         return {error_code_t::OK, ""};
     }
 
@@ -2224,6 +2278,44 @@ class UnifiedSDPANode : public SDPANodeBase<UnifiedSDPANode> {
 #endif
         }
 
+        // Subgraph attributes
+        if (subgraph) {
+            auto subgraph_cudnn_ver_error = error_t{error_code_t::GRAPH_NOT_SUPPORTED,
+                                                    "Subgraph attributes in unified SDPA node requires cuDNN 9.21.0"};
+#if (CUDNN_VERSION >= 92100)
+            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(92100, subgraph_cudnn_ver_error);
+
+            CHECK_CUDNN_FRONTEND_ERROR(attn::score_modifiers::build_operation_subgraph(subgraph));
+            auto subgraph_cudnn   = std::static_pointer_cast<ICudnn>(subgraph);
+            auto backend_subgraph = subgraph_cudnn->get_operation_graph()->get_raw_desc();
+            _CUDNN_CHECK_CUDNN_ERROR(detail::set_attribute(unified_sdpa_operation->get_backend_descriptor(),
+                                                           CUDNN_ATTR_OPERATION_SDPA_FWD_SUBGRAPH,
+                                                           CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                                                           1,
+                                                           &backend_subgraph));
+
+            auto subgraph_input_uid = subgraph_input->get_uid();
+            _CUDNN_CHECK_CUDNN_ERROR(detail::set_attribute(unified_sdpa_operation->get_backend_descriptor(),
+                                                           CUDNN_ATTR_OPERATION_SDPA_FWD_SUBGRAPH_INPUT_UID,
+                                                           CUDNN_TYPE_INT64,
+                                                           1,
+                                                           &subgraph_input_uid));
+
+            auto subgraph_output_uid = subgraph_output->get_uid();
+            _CUDNN_CHECK_CUDNN_ERROR(detail::set_attribute(unified_sdpa_operation->get_backend_descriptor(),
+                                                           CUDNN_ATTR_OPERATION_SDPA_FWD_SUBGRAPH_OUTPUT_UID,
+                                                           CUDNN_TYPE_INT64,
+                                                           1,
+                                                           &subgraph_output_uid));
+
+            // Add non-virtual uids from subgraph to uids_involved_in_operations
+            uids_involved_in_operations.insert(subgraph_cudnn->variant_pack_uids.begin(),
+                                               subgraph_cudnn->variant_pack_uids.end());
+#else
+            return subgraph_cudnn_ver_error;
+#endif
+        }
+
         _CUDNN_CHECK_CUDNN_ERROR(detail::finalize(unified_sdpa_operation->get_backend_descriptor()));
 
         raw_operations.push_back(unified_sdpa_operation);
@@ -2237,6 +2329,28 @@ class UnifiedSDPANode : public SDPANodeBase<UnifiedSDPANode> {
         CUDNN_FRONTEND_UNUSED(tensors);
         return cudnn_ver_error;
 #endif  // CUDNN_VERSION >= 91301
+    }
+
+   protected:
+    std::shared_ptr<Graph> subgraph;  // Pre-softmax subgraph
+    std::shared_ptr<Tensor_attributes> subgraph_input;
+    std::shared_ptr<Tensor_attributes> subgraph_output;
+
+    void
+    init_subgraph() {
+        subgraph               = std::make_shared<Graph>();
+        auto subgraph_node     = std::static_pointer_cast<INode>(subgraph);
+        subgraph_node->context = context;
+        subgraph_input         = std::make_shared<Tensor_attributes>();
+        subgraph_input->set_is_virtual(true);
+        subgraph_input->set_name(attributes.name + "::subgraph_input");
+        auto b    = attributes.inputs[input_names::Q]->get_dim()[0];
+        auto h_q  = attributes.inputs[input_names::Q]->get_dim()[1];
+        auto s_q  = attributes.inputs[input_names::Q]->get_dim()[2];
+        auto s_kv = infer_s_kv();
+        subgraph_input->set_dim({b, h_q, s_q, s_kv});
+        subgraph_input->set_stride({h_q * s_q * s_kv, s_q * s_kv, s_kv, 1});
+        subgraph_output = subgraph_input;
     }
 };
 
