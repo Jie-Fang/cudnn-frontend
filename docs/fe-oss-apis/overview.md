@@ -5,11 +5,14 @@
 This folder documents the Python FE APIs implemented under `python/cudnn`. For details on currently implemented operations, see:
 - [GEMM + Amax](gemm_fusions/gemm_amax.md)
 - [GEMM + SwiGLU](gemm_fusions/gemm_swiglu.md)
-- [Grouped GEMM + SwiGLU](gemm_fusions/grouped_gemm_swiglu.md)
-- [Grouped GEMM + dSwiGLU](gemm_fusions/grouped_gemm_dswiglu.md)
+- [Grouped GEMM + GLU (Unified)](gemm_fusions/grouped_gemm_glu.md)
+- [Grouped GEMM + dGLU (Unified)](gemm_fusions/grouped_gemm_dglu.md)
+- [Grouped GEMM + SwiGLU (Legacy, Contiguous-only)](gemm_fusions/grouped_gemm_swiglu.md)
+- [Grouped GEMM + dSwiGLU (Legacy, Contiguous-only)](gemm_fusions/grouped_gemm_dswiglu.md)
 - [Discrete Grouped GEMM + SwiGLU](gemm_fusions/discrete_grouped_gemm_swiglu.md)
 - [Discrete Grouped GEMM + dSwiGLU](gemm_fusions/discrete_grouped_gemm_dswiglu.md)
-- [Grouped GEMM + Quant](gemm_fusions/grouped_gemm_quant.md)
+- [Grouped GEMM + Quant (Legacy, Dense-only)](gemm_fusions/grouped_gemm_quant.md)
+- [Grouped GEMM + Quant (Unified)](gemm_fusions/grouped_gemm_quant_unified.md)
 - [Native Sparse Attention (NSA)](nsa.md)
 - [RMSNorm + SiLU](rmsnorm_silu.md)
 

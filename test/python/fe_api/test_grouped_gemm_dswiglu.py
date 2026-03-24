@@ -29,6 +29,7 @@ def test_grouped_gemm_dswiglu_compile_execute_fp4(
     ab_dtype,
     c_dtype,
     d_dtype,
+    b_major,
     cd_major,
     acc_dtype,
     mma_tiler_mn,
@@ -43,7 +44,7 @@ def test_grouped_gemm_dswiglu_compile_execute_fp4(
         ab_dtype=ab_dtype,
         c_dtype=c_dtype,
         d_dtype=d_dtype,
-        b_major="k",
+        b_major=b_major,
         cd_major=cd_major,
         acc_dtype=acc_dtype,
         mma_tiler_mn=mma_tiler_mn,
@@ -98,6 +99,7 @@ def test_grouped_gemm_dswiglu_wrapper_fp4(
     ab_dtype,
     c_dtype,
     d_dtype,
+    b_major,
     cd_major,
     acc_dtype,
     mma_tiler_mn,
@@ -112,7 +114,7 @@ def test_grouped_gemm_dswiglu_wrapper_fp4(
         ab_dtype=ab_dtype,
         c_dtype=c_dtype,
         d_dtype=d_dtype,
-        b_major="k",
+        b_major=b_major,
         cd_major=cd_major,
         acc_dtype=acc_dtype,
         mma_tiler_mn=mma_tiler_mn,
@@ -182,7 +184,7 @@ def test_grouped_gemm_dswiglu_wrapper_cache_partial_dynamic_smoke(request, monke
 
 
 @pytest.mark.L0
-@torch_fork_set_rng(seed=1)
+@torch_fork_set_rng(seed=0)
 @pytest.mark.parametrize(
     "ab_dtype",
     [
@@ -203,7 +205,7 @@ def test_grouped_gemm_dswiglu_wrapper_cache_full_dynamic_smoke(request, monkeypa
 
 
 @pytest.mark.L0
-@torch_fork_set_rng(seed=2)
+@torch_fork_set_rng(seed=0)
 @pytest.mark.parametrize(
     "ab_dtype",
     [
@@ -224,7 +226,7 @@ def test_grouped_gemm_dswiglu_wrapper_cache_zero_m_after_compile_partial_dynamic
 
 
 @pytest.mark.L0
-@torch_fork_set_rng(seed=3)
+@torch_fork_set_rng(seed=0)
 @pytest.mark.parametrize(
     "ab_dtype",
     [
@@ -245,7 +247,7 @@ def test_grouped_gemm_dswiglu_wrapper_cache_zero_m_after_compile_full_dynamic_sm
 
 
 @pytest.mark.L0
-@torch_fork_set_rng(seed=4)
+@torch_fork_set_rng(seed=0)
 @pytest.mark.parametrize(
     "ab_dtype",
     [
@@ -266,7 +268,7 @@ def test_grouped_gemm_dswiglu_wrapper_cache_zero_m_before_compile_partial_dynami
 
 
 @pytest.mark.L0
-@torch_fork_set_rng(seed=5)
+@torch_fork_set_rng(seed=0)
 @pytest.mark.parametrize(
     "ab_dtype",
     [

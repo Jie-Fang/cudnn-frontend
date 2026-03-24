@@ -96,6 +96,7 @@ class DiscreteGroupedGemmDswigluSm100(APIBase):
         act_func: str = "dswiglu",
         b_major: str = "k",
         epilogue_op: Optional[str] = None,
+        use_dynamic_sched: bool = False,
     ):
         """Initialize the DiscreteGroupedGemmDswigluSm100 API.
 
@@ -126,6 +127,7 @@ class DiscreteGroupedGemmDswigluSm100(APIBase):
         :param act_func: Activation function, one of "dswiglu" or "dgeglu"
         :param b_major: Major dimension for B tensor, one of "k" or "n"
         :param epilogue_op: Optional epilogue operation ("relu", "srelu", or None)
+        :param use_dynamic_sched: Enable dynamic tile scheduling for load balancing
         """
         super().__init__()
 
@@ -176,6 +178,7 @@ class DiscreteGroupedGemmDswigluSm100(APIBase):
         self.discrete_col_sfd = discrete_col_sfd
         self.act_func = act_func
         self.b_major = b_major
+        self.use_dynamic_sched = use_dynamic_sched
 
         if epilogue_op in [None, "none", "identity"]:
             self.epilogue_op = lambda x: x
@@ -479,6 +482,7 @@ class DiscreteGroupedGemmDswigluSm100(APIBase):
             discrete_col_sfd=self.discrete_col_sfd,
             expert_cnt=self.expert_cnt,
             act_func=self.act_func,
+            use_dynamic_sched=self.use_dynamic_sched,
         )
 
         hardware_info = cutlass.utils.HardwareInfo()
@@ -732,6 +736,7 @@ def discrete_grouped_gemm_dswiglu_wrapper_sm100(
     act_func: str = "dswiglu",
     b_major: str = "k",
     epilogue_op: Optional[str] = None,
+    use_dynamic_sched: bool = False,
     current_stream: Optional[cuda.CUstream] = None,
 ) -> TupleDict:
     """Convenience wrapper for discrete-weight grouped GEMM dGLU backward.
@@ -837,6 +842,7 @@ def discrete_grouped_gemm_dswiglu_wrapper_sm100(
         act_func,
         b_major,
         epilogue_op,
+        use_dynamic_sched,
         num_experts,
     )
 
@@ -871,6 +877,7 @@ def discrete_grouped_gemm_dswiglu_wrapper_sm100(
             act_func=act_func,
             b_major=b_major,
             epilogue_op=epilogue_op,
+            use_dynamic_sched=use_dynamic_sched,
         )
         if not api.check_support():
             raise RuntimeError("Unsupported configuration")

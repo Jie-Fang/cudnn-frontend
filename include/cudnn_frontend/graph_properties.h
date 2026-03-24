@@ -2375,8 +2375,7 @@ class SDPA_fp8_backward_attributes : public Attributes<SDPA_fp8_backward_attribu
 
     bool
     has_sink_token() const {
-        return inputs.find(input_names::SINK_TOKEN) != inputs.end() &&
-               inputs.at(input_names::SINK_TOKEN) != nullptr;
+        return inputs.find(input_names::SINK_TOKEN) != inputs.end() && inputs.at(input_names::SINK_TOKEN) != nullptr;
     }
 };
 

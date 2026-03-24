@@ -348,6 +348,48 @@ def __getattr__(name: str) -> Any:
                 f"grouped_gemm_quant_wrapper_sm100 requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]': {e}"
             ) from e
 
+    # Unified Grouped GEMM GLU (forward)
+    elif name == "GroupedGemmGluSm100":
+        try:
+            from .grouped_gemm import GroupedGemmGluSm100 as _GroupedGemmGluSm100
+
+            return _GroupedGemmGluSm100
+        except Exception as e:
+            raise ImportError(f"GroupedGemmGluSm100 requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]': {e}") from e
+
+    elif name == "grouped_gemm_glu_wrapper_sm100":
+        try:
+            from .grouped_gemm import (
+                grouped_gemm_glu_wrapper_sm100 as _grouped_gemm_glu_wrapper_sm100,
+            )
+
+            return _grouped_gemm_glu_wrapper_sm100
+        except Exception as e:
+            raise ImportError(
+                f"grouped_gemm_glu_wrapper_sm100 requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]': {e}"
+            ) from e
+
+    # Unified Grouped GEMM dGLU (backward)
+    elif name == "GroupedGemmDgluSm100":
+        try:
+            from .grouped_gemm import GroupedGemmDgluSm100 as _GroupedGemmDgluSm100
+
+            return _GroupedGemmDgluSm100
+        except Exception as e:
+            raise ImportError(f"GroupedGemmDgluSm100 requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]': {e}") from e
+
+    elif name == "grouped_gemm_dglu_wrapper_sm100":
+        try:
+            from .grouped_gemm import (
+                grouped_gemm_dglu_wrapper_sm100 as _grouped_gemm_dglu_wrapper_sm100,
+            )
+
+            return _grouped_gemm_dglu_wrapper_sm100
+        except Exception as e:
+            raise ImportError(
+                f"grouped_gemm_dglu_wrapper_sm100 requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]': {e}"
+            ) from e
+
     # Discrete-weight Grouped GEMM GLU module
     elif name == "discrete_grouped_gemm":
         try:

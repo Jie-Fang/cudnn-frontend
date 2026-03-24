@@ -742,7 +742,7 @@ class MoEPersistentTileScheduler:
     def initial_work_tile_info(self, *, loc=None, ip=None) -> MoEWorkTileInfo:
         """Get the initial work tile info."""
         if const_expr(self.use_dynamic_sched):
-            if const_expr(self.cluster_pipeline is None):
+            if const_expr(not hasattr(self, "cluster_pipeline")):
                 raise RuntimeError("Make sure sched.internal_init() is called at the barrier init place before used.")
             self._current_work_linear_idx = self._fetch_next_cluster_idx(loc=loc, ip=ip)
             work_tile_info = self._get_work_tile_for_linear_idx(self._current_work_linear_idx, loc=loc, ip=ip)

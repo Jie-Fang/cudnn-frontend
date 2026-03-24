@@ -39,11 +39,14 @@ To add a new frontend-only API, follow these steps:
 **Currently implemented frontend-only APIs**:
 - `GEMM + Amax`
 - `GEMM + SwiGLU`
-- `Grouped Gemm + SwiGLU`
-- `Grouped Gemm + dSwiglu`
+- `Grouped Gemm + GLU (Unified)`
+- `Grouped Gemm + dGLU (Unified)`
+- `Grouped Gemm + SwiGLU (Legacy, Contiguous-only)`
+- `Grouped Gemm + dSwiglu (Legacy, Contiguous-only)`
 - `Discrete Grouped Gemm + SwiGLU`
 - `Discrete Grouped Gemm + dSwiglu`
-- `Grouped Gemm + Quant`
+- `Grouped Gemm + Quant (Legacy, Dense-only)`
+- `Grouped Gemm + Quant (Unified)`
 
 **In progress frontend-only APIs**:
 - GEMM + Dswiglu

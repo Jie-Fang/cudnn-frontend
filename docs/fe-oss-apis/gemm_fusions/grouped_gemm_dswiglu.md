@@ -2,6 +2,8 @@
 
 **This is an experimental API and subject to change.**
 
+**Legacy contiguous-only API note:** This page documents the older contiguous-only dSwiGLU API. For new integrations, prefer the unified [Grouped GEMM + dGLU](grouped_gemm_dglu.md) API, which covers dense and discrete weight layouts.
+
 ## Overview
 
 **Grouped GEMM + dSwiGLU fusion**: A contiguous grouped block-scaled GEMM fused with a dSwiGLU backward epilogue on NVIDIA Blackwell GPUs (SM100+), designed for MoE (Mixture of Experts) workloads. Implemented with CUTLASS/CUTE.

@@ -54,11 +54,11 @@ def is_float_dtype(data_type):
 # CudaTile tile configs before invoking ptxas.  Values are the hard limits
 # reported by ptxas ("uses too much shared data … max").
 _SM_MAX_SMEM_BYTES = {
-    "sm_80":  163_840,  # A100  160 KB
-    "sm_86":   99_328,  # RTX 30xx  97 KB
-    "sm_87":   99_328,
-    "sm_89":   99_328,  # RTX 40xx  97 KB
-    "sm_90":  231_424,  # H100  226 KB  (0x38c00)
+    "sm_80": 163_840,  # A100  160 KB
+    "sm_86": 99_328,  # RTX 30xx  97 KB
+    "sm_87": 99_328,
+    "sm_89": 99_328,  # RTX 40xx  97 KB
+    "sm_90": 231_424,  # H100  226 KB  (0x38c00)
     "sm_90a": 231_424,
     "sm_100": 232_448,  # B100  0x38c00 (from ptxas)
     "sm_100a": 232_448,  # 0x38c00 (from ptxas)
@@ -70,26 +70,38 @@ _SM_MAX_SMEM_BYTES_DEFAULT = 231_424
 # Operations that have no lowering pattern in TensorToCudaTile.cpp and will
 # therefore produce kErrorCompilation when compiled with the CudaTile backend.
 # Tests using these ops are waived for CudaTile until lowering support is added.
-_CUDA_TILE_UNSUPPORTED_OPS = frozenset([
-    # ActivationForwardNode ops (no EluFwd/SwishFwd/SoftplusFwd conversion)
-    "elu", "swish", "softplus",
-    # ActivationBackwardNode ops
-    "elu_backward", "swish_backward", "softplus_backward",
-    # BinaryOperationNode backward ops
-    "relu_backward", "tanh_backward", "sigmoid_backward",
-    "gelu_backward", "gelu_approx_tanh_backward",
-    # BinaryOperationNode ops without CudaTile lowering
-    "atan2",
-    # ScaledMatmulOp: no TensorToCudaTile lowering pattern yet; uses Collective backend
-    "scaled_matmul",
-])
+_CUDA_TILE_UNSUPPORTED_OPS = frozenset(
+    [
+        # ActivationForwardNode ops (no EluFwd/SwishFwd/SoftplusFwd conversion)
+        "elu",
+        "swish",
+        "softplus",
+        # ActivationBackwardNode ops
+        "elu_backward",
+        "swish_backward",
+        "softplus_backward",
+        # BinaryOperationNode backward ops
+        "relu_backward",
+        "tanh_backward",
+        "sigmoid_backward",
+        "gelu_backward",
+        "gelu_approx_tanh_backward",
+        # BinaryOperationNode ops without CudaTile lowering
+        "atan2",
+        # ScaledMatmulOp: no TensorToCudaTile lowering pattern yet; uses Collective backend
+        "scaled_matmul",
+    ]
+)
 
 # Operations whose CudaTile lowering only supports f32/f64 operands.
 # These are waived when the operation's output type is f16.
 # Note: the test-graph op_names here are "erf" and "gelu" (CUDNN_POINTWISE_GELU_FWD).
-_CUDA_TILE_F32_ONLY_OPS = frozenset([
-    "erf", "gelu",
-])
+_CUDA_TILE_F32_ONLY_OPS = frozenset(
+    [
+        "erf",
+        "gelu",
+    ]
+)
 
 
 def is_integer_dtype(data_type):
@@ -298,6 +310,7 @@ def generate_tensorir_compilation_configs(
             #    CudaTile type verifier (not catchable in Python).
             def _is_pow2(v):
                 return v > 0 and (v & (v - 1)) == 0
+
             if not _is_pow2(tile_m) or not _is_pow2(tile_n):
                 return False
 
@@ -637,10 +650,7 @@ class ReductionNode(TensorIRNode):
             # (e.g. shape=(B,1,N) with stride=(N,N,1) — no zero stride despite being reduced).
             input_shape = self.node.producer_nodes[0].output[0].dim
             output_shape = self.node.output[0].dim
-            reduction_dimensions = [
-                i for i, (in_d, out_d) in enumerate(zip(input_shape, output_shape))
-                if in_d != out_d
-            ]
+            reduction_dimensions = [i for i, (in_d, out_d) in enumerate(zip(input_shape, output_shape)) if in_d != out_d]
 
             mlir_value = nv_tensor_ir.reduce(
                 nv_tensor_ir.TensorType.get(shape=self.output_tensor_info.shape, datatype=output_datatype),
@@ -1457,9 +1467,7 @@ class test_tensor_ir:
                 # Waive CudaTile tests that use ops with no CudaTile lowering pattern.
                 if compiler_backend == "CudaTile":
                     unsupported = [
-                        node.op_name
-                        for node in self.test_graph.nodes
-                        if isinstance(node, tg.operation) and node.op_name in _CUDA_TILE_UNSUPPORTED_OPS
+                        node.op_name for node in self.test_graph.nodes if isinstance(node, tg.operation) and node.op_name in _CUDA_TILE_UNSUPPORTED_OPS
                     ]
                     # erf and gelu_fwd only support f32/f64 operands in CudaTile;
                     # waive when the operation's output type is f16 or bf16.
