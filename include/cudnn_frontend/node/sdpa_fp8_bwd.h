@@ -125,9 +125,23 @@ class SDPAFP8BackwardNode : public NodeCRTP<SDPAFP8BackwardNode> {
         auto const& dropout_mask     = attributes.inputs.find(input_names::Dropout_mask);
         bool const is_dropout_custom = (dropout_mask != attributes.inputs.end()) && (dropout_mask->second != nullptr);
         bool const is_dropout        = attributes.dropout_probability.has_value();
+        bool const is_ragged         =
+            attributes.inputs.at(input_names::Q)->get_ragged_offset() ||
+            attributes.inputs.at(input_names::K)->get_ragged_offset() ||
+            attributes.inputs.at(input_names::V)->get_ragged_offset() ||
+            attributes.inputs.at(input_names::O)->get_ragged_offset() ||
+            attributes.inputs.at(input_names::Stats)->get_ragged_offset() ||
+            attributes.inputs.at(input_names::dO)->get_ragged_offset() ||
+            attributes.outputs.at(output_names::dQ)->get_ragged_offset() ||
+            attributes.outputs.at(output_names::dK)->get_ragged_offset() ||
+            attributes.outputs.at(output_names::dV)->get_ragged_offset();
 
         // validation TODO:
         //    - validate stats has valid dims
+
+        RETURN_CUDNN_FRONTEND_ERROR_IF((prop_major == 9) && is_ragged,
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "sdpa fp8 backward with THD is not supported on Hopper architecture.");
 
         // validate basic dimension requirements
         if(prop_major >= 10) {
