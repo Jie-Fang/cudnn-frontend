@@ -6,11 +6,12 @@
 #include <vector>
 
 // cudaLibrary_t, cudaKernel_t, cudaJitOption, cudaLibraryOption etc.
-// were introduced in CUDA 12.8. On older toolkits, provide typedefs
+// were introduced in CUDA 12.8. On older toolkits (or when using dynamic
+// loading where cuda_runtime.h may lack these types), provide typedefs
 // from the driver API equivalents (available via cuda.h) so that
 // engine headers can declare members without #ifdef clutter.
 // The actual runtime API functions are guarded by CUDART_VERSION checks below.
-#if !defined(NV_CUDNN_FRONTEND_USE_DYNAMIC_LOADING) && defined(CUDART_VERSION) && CUDART_VERSION < 12080
+#if !defined(CUDART_VERSION) || CUDART_VERSION < 12080
 using cudaLibrary_t     = CUlibrary;
 using cudaKernel_t      = CUkernel;
 using cudaJitOption     = CUjit_option;
