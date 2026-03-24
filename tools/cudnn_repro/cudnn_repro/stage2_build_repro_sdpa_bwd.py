@@ -24,7 +24,6 @@ def normalize_repro_cfg(cfg: dict) -> dict:
 def build_command(cfg: dict) -> str:
     """Build a simple one-line pytest command."""
     repro_cfg = normalize_repro_cfg(cfg)
-    # TODO: Route to backward-specific test function instead of test_repro
     return f'pytest -vv -s -rA test/python/test_mhas_v2.py::test_repro --repro "{repro_cfg}"'
 
 
@@ -34,7 +33,7 @@ def build_pretty_command(cfg: dict) -> str:
     indent = " " * 4
     lines = [
         "pytest -vv -s -rA",
-        f"{indent}test/python/test_mhas_v2.py::test_repro",  # TODO: Change to backward test function
+        f"{indent}test/python/test_mhas_v2.py::test_repro",
         f"{indent}--repro \"",
         f"{indent}{indent}" + "{",
     ]
