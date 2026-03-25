@@ -8,6 +8,8 @@ from pathlib import Path
 # should be in pytorch container
 import requests
 
+JFROG_API_KEY = os.getenv("JFROG_API_KEY")
+
 # matches
 # <a*>x.y.w.z/</a> DD-month-YYYY HH:MM
 PATTERN = re.compile(r"<a.*?>v(\d+\.\d+\.\d+\.\d+)/</a>\s+(\d{2}-[A-Za-z]+-\d{4} \d{2}:\d{2})\s")
@@ -17,7 +19,7 @@ def download_url(url, path):
     # temporarily download to another location to avoid partial downloads
     temp_path = Path(f"{path}.tmp")
     try:
-        with requests.get(url, auth=("", os.getenv("JFROG_API_KEY")), stream=True) as r:
+        with requests.get(url, auth=("", JFROG_API_KEY) if JFROG_API_KEY else None, stream=True) as r:
             r.raise_for_status()
             with temp_path.open("wb") as f:
                 for chunk in r.iter_content(chunk_size=8192):
@@ -30,8 +32,8 @@ def download_url(url, path):
             temp_path.unlink()
 
 
-def fetch_cudnn(base_url, cuda_version, cudnn_version=None):
-    response = requests.get(base_url).text
+def fetch_cudnn(base_url, cuda_version, download_dir, unzip_dir, output_dir, cudnn_version=None):
+    response = requests.get(base_url, auth=("", JFROG_API_KEY) if JFROG_API_KEY else None).text
     matches = PATTERN.findall(response)
     matches = [{"version": a, "last_modified": b} for a, b in matches]
 
@@ -43,7 +45,7 @@ def fetch_cudnn(base_url, cuda_version, cudnn_version=None):
 
     # download if not exists
     # if it fails to download, try a lower version one
-    downloads_dir = Path("downloads")
+    downloads_dir = Path(download_dir)
     downloads_dir.mkdir(exist_ok=True)
     tarball_path = None
     for match in candidates:
@@ -70,13 +72,13 @@ def fetch_cudnn(base_url, cuda_version, cudnn_version=None):
 
     # extract, move, and copy
     print(f"Extracting {tarball_path}")
-    subprocess.run(["tar", "xvf", str(tarball_path), "--directory", "/"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+    subprocess.run(["tar", "xvf", str(tarball_path), "--directory", unzip_dir], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
-    print(f"Moving /cudnn to /debug_cudnn")
-    subprocess.run(["mv", "/cudnn", "/debug_cudnn"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+    print(f"Moving {Path(unzip_dir) / 'cudnn'} to {output_dir}")
+    subprocess.run(["mv", str(Path(unzip_dir) / "cudnn"), output_dir], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
-    print(f"Copying /debug_cudnn/lib to /debug_cudnn/lib64")
-    subprocess.run(["cp", "-r", "/debug_cudnn/lib", "/debug_cudnn/lib64"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+    print(f"Copying {Path(output_dir) / 'lib'} to {Path(output_dir) / 'lib64'}")
+    subprocess.run(["cp", "-r", str(Path(output_dir) / "lib"), str(Path(output_dir) / "lib64")], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
     print(f"fetch_cudnn complete")
 
@@ -94,6 +96,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Fetch a cuDNN debug tarball from URM/JFrog, extract it to /debug_cudnn, and clean old cached downloads.")
     parser.add_argument("--base-url", dest="base_url", required=True, help="Base repository URL containing versioned cuDNN folders, e.g. https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.21")
     parser.add_argument("--cuda-version", dest="cuda_version", required=True, help="CUDA version subdirectory to fetch from, e.g. 13.2")
+    parser.add_argument("--download-dir", dest="download_dir", default="downloads", help="Directory where downloaded tarballs are cached.")
+    parser.add_argument("--unzip-dir", dest="unzip_dir", default="/", help="Directory where the tarball is extracted before moving cudnn/ into place.")
+    parser.add_argument("--output-dir", dest="output_dir", default="/debug_cudnn", help="Directory where the extracted cudnn/ tree will be moved.")
     parser.add_argument("--cudnn-version", dest="cudnn_version", help="Optional cuDNN version in x.y.w.z format, e.g. --cudnn-version 9.21.0.3")
     args = parser.parse_args()
-    fetch_cudnn(args.base_url, args.cuda_version, args.cudnn_version)
+    fetch_cudnn(args.base_url, args.cuda_version, args.download_dir, args.unzip_dir, args.output_dir, args.cudnn_version)
