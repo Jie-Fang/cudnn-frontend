@@ -2,6 +2,14 @@ import os
 import sys
 import traceback
 import pytest
+
+# Import TransformerEngine BEFORE cudnn to avoid library loading conflicts
+# TE requires specific CUDA library versions that conflict if cudnn is loaded first
+try:
+    import transformer_engine
+except ImportError:
+    pass
+
 import cudnn
 import torch
 

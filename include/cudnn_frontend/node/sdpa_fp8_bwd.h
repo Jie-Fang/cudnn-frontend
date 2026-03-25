@@ -23,7 +23,8 @@ class SDPAFP8BackwardNode : public NodeCRTP<SDPAFP8BackwardNode> {
     mutable bool is_deterministic_algorithm_supported_on_blackwell = false;  // Will be edited in pre_validate_node()
 
    public:
-    SDPA_fp8_backward_attributes attributes;
+    mutable SDPA_fp8_backward_attributes
+        attributes;  // mutable to allow auto-routing to deterministic in pre_validate_node()
 
     SDPAFP8BackwardNode(SDPA_fp8_backward_attributes&& attributes_, detail::Context const& context)
         : NodeCRTP(context), attributes(std::move(attributes_)) {}
@@ -229,16 +230,34 @@ class SDPAFP8BackwardNode : public NodeCRTP<SDPAFP8BackwardNode> {
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "Intermediate tensor data type needs to be set as internal tensors require it.");
 
+        // Auto-route to deterministic algorithm for cases where non-deterministic is not supported on Blackwell:
+        // 1. MXFP8 backward - requires deterministic (STAGES=2)
+        // 2. FP8 backward with d_qk <= 192 and d_v <= 128 - requires deterministic
+        bool const is_mxfp8 = is_mxfp8_scaling();
+        bool const is_supported_dims = (d_qk <= 192) && (d_v <= 128);
+        if ((prop_major == 10) && !attributes.is_deterministic_algorithm) {
+            if (is_mxfp8) {
+                getLogger() << "[cudnn_frontend] INFO: MXFP8 SDPA backward detected on Blackwell - "
+                            << "auto-routing to deterministic algorithm (non-deterministic not supported for MXFP8)"
+                            << std::endl;
+                attributes.is_deterministic_algorithm = true;
+            } else if (is_supported_dims) {
+                getLogger() << "[cudnn_frontend] INFO: FP8 SDPA backward with d_qk=" << d_qk << ", d_v=" << d_v
+                            << " detected on Blackwell - auto-routing to deterministic algorithm"
+                            << std::endl;
+                attributes.is_deterministic_algorithm = true;
+            }
+        }
+
         // validate options for deterministic algorithm
         if (attributes.is_deterministic_algorithm && (prop_major == 10)) {
             RETURN_CUDNN_FRONTEND_ERROR_IF((detail::get_backend_version() < 91900),
                                            error_code_t::GRAPH_NOT_SUPPORTED,
-                                           "FP8 deterministic algorithm is not supported on blackwell architecture with cudnn version below 9.19.0");
+                                           "FP8 deterministic algorithm (required for MXFP8 and d_qk=192/d_v=128) is not supported on Blackwell with cuDNN version below 9.19.0");
 
-            // dbias bias rng/dropout alibi
             RETURN_CUDNN_FRONTEND_ERROR_IF(is_dropout,
                                            error_code_t::GRAPH_NOT_SUPPORTED,
-                                           "FP8 deterministic algorithm is not supported on blackwell architecture when dropout is enabled");
+                                           "FP8 deterministic algorithm (required for MXFP8 and d_qk=192/d_v=128) is not supported on Blackwell when dropout is enabled");
 
             is_deterministic_algorithm_supported_on_blackwell = true;
         }
