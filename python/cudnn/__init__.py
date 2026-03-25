@@ -447,5 +447,11 @@ def __getattr__(name: str) -> Any:
                 f"discrete_grouped_gemm_dswiglu_wrapper_sm100 requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]': {e}"
             ) from e
 
+    elif name == "experimental":
+        from . import experimental as _experimental
+
+        globals()["experimental"] = _experimental
+        return _experimental
+
     else:
         raise AttributeError(name)
