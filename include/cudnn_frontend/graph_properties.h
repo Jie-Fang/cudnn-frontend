@@ -1647,6 +1647,8 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
 
     AttentionImplementation_t implementation = AttentionImplementation_t::AUTO;
 
+    bool unfuse_fma = false;  // For SM100: use __fmul_rn + __fadd_rn instead of ffma2 in softmax
+
     bool
     has_bias() const {
         return inputs.find(input_names::Bias) != inputs.end() && inputs.at(input_names::Bias) != nullptr;
@@ -1907,6 +1909,12 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
     SDPA_attributes&
     set_implementation(AttentionImplementation_t value) {
         implementation = value;
+        return *this;
+    }
+
+    SDPA_attributes&
+    set_unfuse_fma(bool value) {
+        unfuse_fma = value;
         return *this;
     }
 

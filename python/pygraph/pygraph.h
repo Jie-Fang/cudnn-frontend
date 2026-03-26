@@ -404,7 +404,8 @@ class PyGraph {
          cudnn_frontend::AttentionImplementation_t const& implementation,
          std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> score_max,
          std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> score_sum_exp,
-         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> sink_token);
+         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> sink_token,
+         bool const unfuse_fma);
 
     // return [dQ, dK, dV]
     std::array<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, 3>
@@ -750,7 +751,8 @@ class PyGraph {
                   std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> descale_s = nullptr,
                   std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> scale_s   = nullptr,
                   std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> scale_o   = nullptr,
-                  cudnn_frontend::AttentionImplementation_t const& implementation = AttentionImplementation_t::AUTO);
+                  cudnn_frontend::AttentionImplementation_t const& implementation     = AttentionImplementation_t::AUTO,
+                  bool const unfuse_fma                                               = false);
 };
 
 }  // namespace cudnn_frontend::python_bindings

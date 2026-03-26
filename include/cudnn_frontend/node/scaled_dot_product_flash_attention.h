@@ -2316,6 +2316,23 @@ class UnifiedSDPANode : public SDPANodeBase<UnifiedSDPANode> {
 #endif
         }
 
+        // Set unfuse_fma attribute (for SM100: use __fmul_rn + __fadd_rn instead of ffma2 in softmax)
+        if (attributes.unfuse_fma) {
+            auto unfuse_fma_cudnn_ver_error =
+                error_t{error_code_t::GRAPH_NOT_SUPPORTED, "Unfuse FMA in unified SDPA node requires cuDNN 9.21.0"};
+#if CUDNN_VERSION >= 92100
+            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(92100, unfuse_fma_cudnn_ver_error);
+            bool unfuse_fma_value = true;
+            _CUDNN_CHECK_CUDNN_ERROR(detail::set_attribute(unified_sdpa_operation->get_backend_descriptor(),
+                                                           CUDNN_ATTR_OPERATION_SDPA_FWD_UNFUSE_FMA,
+                                                           CUDNN_TYPE_BOOLEAN,
+                                                           1,
+                                                           &unfuse_fma_value));
+#else
+            return unfuse_fma_cudnn_ver_error;
+#endif
+        }
+
         _CUDNN_CHECK_CUDNN_ERROR(detail::finalize(unified_sdpa_operation->get_backend_descriptor()));
 
         raw_operations.push_back(unified_sdpa_operation);
