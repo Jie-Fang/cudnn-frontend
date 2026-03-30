@@ -513,7 +513,11 @@ class SDPANodeBase : public NodeCRTP<DerivedT> {
     virtual void
     serialize(json& j) const override final {
         j = attributes;
-        j.update(R"({"tag": "SDPA"})"_json);
+        if (attributes.mma_core_mode == DataType_t::FP8_E4M3 || attributes.mma_core_mode == DataType_t::FP8_E5M2) {
+            j.update(R"({"tag": "SDPA_FP8_FWD"})"_json);
+        } else {
+            j.update(R"({"tag": "SDPA"})"_json);
+        }
     }
 #endif
 };

@@ -9,36 +9,9 @@ import argparse
 import os
 from pathlib import Path
 
+from . import routing
 from . import stage0_extract_json as stage0
-from . import stage1_annotate_sdpa_fwd as stage1_fwd
-from . import stage1_annotate_sdpa_bwd as stage1_bwd
-from . import stage2_build_repro_sdpa_fwd as stage2_fwd
-from . import stage2_build_repro_sdpa_bwd as stage2_bwd
 from . import utils
-
-
-def detect_operation_type(payload: dict) -> str:
-    """Detect the operation type from the JSON payload.
-
-    Returns:
-        'fwd' for forward operations
-        'bwd' for backward operations
-    """
-    for node in payload.get("nodes", []):
-        tag = node.get("tag", "")
-        if tag == "SDPA_FWD":
-            return "fwd"
-        if tag in ("SDPA_BWD", "SDPA_FP8_BWD"):
-            return "bwd"
-    # Default to forward if unclear
-    return "fwd"
-
-
-def _select_stage_modules(payload: dict):
-    op_type = detect_operation_type(payload)
-    if op_type == "fwd":
-        return stage1_fwd, stage2_fwd
-    return stage1_bwd, stage2_bwd
 
 
 # Expose functions for backward compatibility with tests
@@ -49,7 +22,7 @@ def _iter_context_entries(lines):
 
 def _build_cfg(raw_line: str, payload: dict, seed=None):
     """Wrapper for stage1 build_cfg for test compatibility."""
-    stage1, _ = _select_stage_modules(payload)
+    stage1, _ = routing.select_stage_modules(payload)
     return stage1.build_cfg(raw_line, payload, seed)
 
 
@@ -57,8 +30,9 @@ def _build_command(cfg: dict, payload: dict | None = None) -> str:
     """Wrapper for stage2 build_command for test compatibility."""
     if payload is None:
         is_bwd = cfg.get("is_infer") is False
-        return stage2_bwd.build_command(cfg) if is_bwd else stage2_fwd.build_command(cfg)
-    _, stage2 = _select_stage_modules(payload)
+        stage2 = routing.select_stage2_module({"nodes": [{"tag": "SDPA_BWD" if is_bwd else "SDPA_FWD"}]})
+        return stage2.build_command(cfg)
+    _, stage2 = routing.select_stage_modules(payload)
     return stage2.build_command(cfg)
 
 
@@ -82,7 +56,7 @@ def main() -> None:
     # Process each selected entry
     for idx, (raw_line, payload) in enumerate(selected):
         # Detect operation type and route to appropriate stage modules
-        stage1, stage2 = _select_stage_modules(payload)
+        stage1, stage2 = routing.select_stage_modules(payload)
 
         # Stage 1: Extract and annotate
         stage1_json = stage1.extract_and_annotate(raw_line, payload, full_log_text)

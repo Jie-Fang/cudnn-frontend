@@ -1,14 +1,11 @@
-"""Stage 2: Build pytest repro command for SDPA backward."""
+"""Stage 2: Build pytest repro command for SDPA FP8 backward."""
 
 from . import repro_command
-from . import stage1_annotate_sdpa_bwd as stage1
+from . import stage1_annotate_sdpa_fp8_bwd as stage1
 
 
 def normalize_repro_cfg(cfg: dict) -> dict:
-    """Normalize config for command generation.
-
-    TODO: Add backward-specific normalization if needed.
-    """
+    """Normalize config for command generation."""
     return repro_command.normalize_repro_cfg(cfg)
 
 
@@ -23,7 +20,7 @@ def build_pretty_command(cfg: dict) -> str:
 
 
 def build_repro_command(raw_line: str, stage1_json: dict) -> str:
-    """Stage 2: Build pytest command from stage1 JSON for backward."""
+    """Stage 2: Build pytest command from stage1 JSON."""
     seed = stage1_json.get("repro_metadata", {}).get("rng_data_seed")
     cfg = stage1.build_cfg(raw_line, stage1_json, seed)
     return build_pretty_command(cfg)
