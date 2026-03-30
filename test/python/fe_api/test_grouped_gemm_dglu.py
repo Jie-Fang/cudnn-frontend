@@ -767,6 +767,7 @@ def _test_grouped_gemm_dglu_discrete_compile_execute(
     act_func,
     request,
     b_major="k",
+    generate_dbias=False,
     use_dynamic_sched=False,
 ):
     try:
@@ -816,6 +817,7 @@ def _test_grouped_gemm_dglu_discrete_compile_execute(
         cd_major=cfg["cd_major"],
         sf_dtype=cfg["sf_dtype"],
         sf_vec_size=cfg["sf_vec_size"],
+        generate_dbias=generate_dbias,
     )
 
     api = GroupedGemmDgluSm100(
@@ -829,6 +831,7 @@ def _test_grouped_gemm_dglu_discrete_compile_execute(
         sample_beta=inputs["beta_tensor"],
         sample_prob=inputs["prob_tensor"],
         sample_dprob=inputs["dprob_tensor"],
+        sample_dbias=outputs.get("dbias_tensor"),
         num_experts=len(inputs["b_list"]),
         b_shape=(cfg["n"], cfg["k"]),
         b_dtype=inputs["b_list"][0].dtype,
@@ -865,6 +868,7 @@ def _test_grouped_gemm_dglu_discrete_compile_execute(
         beta_tensor=inputs["beta_tensor"],
         prob_tensor=inputs["prob_tensor"],
         dprob_tensor=inputs["dprob_tensor"],
+        dbias_tensor=outputs.get("dbias_tensor"),
         b_ptrs=inputs["b_ptrs_tensor"],
         sfb_ptrs=inputs["sfb_ptrs_tensor"],
         sfd_row_tensor=outputs.get("sfd_row_tensor"),
@@ -893,6 +897,7 @@ def _test_grouped_gemm_dglu_discrete_wrapper(
     act_func,
     request,
     b_major="k",
+    generate_dbias=False,
     use_dynamic_sched=False,
 ):
     try:
@@ -945,6 +950,7 @@ def _test_grouped_gemm_dglu_discrete_wrapper(
                 beta_tensor=inputs["beta_tensor"],
                 prob_tensor=inputs["prob_tensor"],
                 dprob_tensor=inputs["dprob_tensor"],
+                generate_dbias=generate_dbias,
                 b_ptrs=inputs["b_ptrs_tensor"],
                 sfb_ptrs=inputs["sfb_ptrs_tensor"],
                 n=cfg["n"],
@@ -969,3 +975,45 @@ def _test_grouped_gemm_dglu_discrete_wrapper(
 
     torch.cuda.synchronize()
     check_ref_discrete_dswiglu(inputs, outputs, cfg, skip_ref=cfg["skip_ref"])
+
+
+@pytest.mark.L0
+@torch_fork_set_rng(seed=0)
+def test_grouped_gemm_dglu_discrete_compile_execute_with_dbias(request):
+    _test_grouped_gemm_dglu_discrete_compile_execute(
+        ab_dtype=torch.float4_e2m1fn_x2,
+        c_dtype=torch.bfloat16,
+        d_dtype=torch.bfloat16,
+        cd_major="n",
+        acc_dtype=torch.float32,
+        mma_tiler_mn=(256, 256),
+        cluster_shape_mn=(2, 1),
+        sf_vec_size=32,
+        sf_dtype=torch.float8_e8m0fnu,
+        vector_f32=False,
+        discrete_col_sfd=False,
+        act_func="dswiglu",
+        request=request,
+        generate_dbias=True,
+    )
+
+
+@pytest.mark.L0
+@torch_fork_set_rng(seed=0)
+def test_grouped_gemm_dglu_discrete_wrapper_with_dbias(request):
+    _test_grouped_gemm_dglu_discrete_wrapper(
+        ab_dtype=torch.float4_e2m1fn_x2,
+        c_dtype=torch.bfloat16,
+        d_dtype=torch.bfloat16,
+        cd_major="n",
+        acc_dtype=torch.float32,
+        mma_tiler_mn=(256, 256),
+        cluster_shape_mn=(2, 1),
+        sf_vec_size=32,
+        sf_dtype=torch.float8_e8m0fnu,
+        vector_f32=False,
+        discrete_col_sfd=False,
+        act_func="dswiglu",
+        request=request,
+        generate_dbias=True,
+    )

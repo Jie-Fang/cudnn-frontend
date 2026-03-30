@@ -174,6 +174,7 @@ def _test_discrete_dswiglu_compile_execute(
     act_func,
     request,
     b_major="k",
+    generate_dbias=False,
 ):
     try:
         from cudnn import DiscreteGroupedGemmDswigluSm100
@@ -222,6 +223,7 @@ def _test_discrete_dswiglu_compile_execute(
         cd_major=cfg["cd_major"],
         sf_dtype=cfg["sf_dtype"],
         sf_vec_size=cfg["sf_vec_size"],
+        generate_dbias=generate_dbias,
     )
 
     api = DiscreteGroupedGemmDswigluSm100(
@@ -238,6 +240,7 @@ def _test_discrete_dswiglu_compile_execute(
         sample_beta=inputs["beta_tensor"],
         sample_prob=inputs["prob_tensor"],
         sample_dprob=inputs["dprob_tensor"],
+        sample_dbias=outputs.get("dbias_tensor"),
         sample_amax=outputs.get("amax_tensor"),
         sample_sfd_row=outputs.get("sfd_row_tensor"),
         sample_sfd_col=outputs.get("sfd_col_tensor"),
@@ -273,6 +276,7 @@ def _test_discrete_dswiglu_compile_execute(
         beta_tensor=inputs["beta_tensor"],
         prob_tensor=inputs["prob_tensor"],
         dprob_tensor=inputs["dprob_tensor"],
+        dbias_tensor=outputs.get("dbias_tensor"),
         sfd_row_tensor=outputs.get("sfd_row_tensor"),
         sfd_col_tensor=outputs.get("sfd_col_tensor"),
         amax_tensor=outputs.get("amax_tensor"),
@@ -298,6 +302,7 @@ def _test_discrete_dswiglu_wrapper(
     act_func,
     request,
     b_major="k",
+    generate_dbias=False,
 ):
     try:
         from cudnn import discrete_grouped_gemm_dswiglu_wrapper_sm100
@@ -339,6 +344,7 @@ def _test_discrete_dswiglu_wrapper(
 
     try:
         for _ in range(2):  # Run twice to test caching
+            inputs["dprob_tensor"].zero_()
             outputs = discrete_grouped_gemm_dswiglu_wrapper_sm100(
                 a_tensor=inputs["a_tensor"],
                 b_ptrs=inputs["b_ptrs_tensor"],
@@ -350,6 +356,7 @@ def _test_discrete_dswiglu_wrapper(
                 beta_tensor=inputs["beta_tensor"],
                 prob_tensor=inputs["prob_tensor"],
                 dprob_tensor=inputs["dprob_tensor"],
+                generate_dbias=generate_dbias,
                 n=cfg["n"],
                 b_dtype=inputs["b_list"][0].dtype,
                 norm_const_tensor=inputs.get("norm_const_tensor"),
@@ -370,6 +377,48 @@ def _test_discrete_dswiglu_wrapper(
         pytest.skip(f"Unsupported testcase: {e}")
 
     check_ref_discrete_dswiglu(inputs, outputs, cfg, skip_ref=cfg["skip_ref"])
+
+
+@pytest.mark.L0
+@torch_fork_set_rng(seed=0)
+def test_discrete_dswiglu_compile_execute_with_dbias(request):
+    _test_discrete_dswiglu_compile_execute(
+        ab_dtype=torch.float4_e2m1fn_x2,
+        c_dtype=torch.bfloat16,
+        d_dtype=torch.bfloat16,
+        cd_major="n",
+        acc_dtype=torch.float32,
+        mma_tiler_mn=(256, 256),
+        cluster_shape_mn=(2, 1),
+        sf_vec_size=32,
+        sf_dtype=torch.float8_e8m0fnu,
+        vector_f32=False,
+        discrete_col_sfd=False,
+        act_func="dswiglu",
+        request=request,
+        generate_dbias=True,
+    )
+
+
+@pytest.mark.L0
+@torch_fork_set_rng(seed=0)
+def test_discrete_dswiglu_wrapper_with_dbias(request):
+    _test_discrete_dswiglu_wrapper(
+        ab_dtype=torch.float4_e2m1fn_x2,
+        c_dtype=torch.bfloat16,
+        d_dtype=torch.bfloat16,
+        cd_major="n",
+        acc_dtype=torch.float32,
+        mma_tiler_mn=(256, 256),
+        cluster_shape_mn=(2, 1),
+        sf_vec_size=32,
+        sf_dtype=torch.float8_e8m0fnu,
+        vector_f32=False,
+        discrete_col_sfd=False,
+        act_func="dswiglu",
+        request=request,
+        generate_dbias=True,
+    )
 
 
 @pytest.mark.L0

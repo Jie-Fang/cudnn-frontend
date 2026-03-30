@@ -183,6 +183,7 @@ def _test_discrete_grouped_gemm_compile_execute(
     act_func,
     request,
     b_major="k",
+    enable_bias=False,
 ):
     try:
         from cudnn import DiscreteGroupedGemmSwigluSm100
@@ -219,6 +220,7 @@ def _test_discrete_grouped_gemm_compile_execute(
         sf_vec_size=cfg["sf_vec_size"],
         m_aligned=cfg["m_aligned"],
         b_major=cfg["b_major"],
+        enable_bias=enable_bias,
     )
 
     outputs = allocate_discrete_output_tensors(
@@ -245,6 +247,7 @@ def _test_discrete_grouped_gemm_compile_execute(
         sample_alpha=inputs["alpha_tensor"],
         sample_amax=outputs.get("amax_tensor"),
         sample_d_col=outputs["d_col_tensor"],
+        sample_bias=inputs.get("bias_tensor"),
         sample_sfd_row=outputs.get("sfd_row_tensor"),
         sample_sfd_col=outputs.get("sfd_col_tensor"),
         sample_norm_const=inputs.get("norm_const_tensor"),
@@ -275,6 +278,7 @@ def _test_discrete_grouped_gemm_compile_execute(
         sfb_ptrs=inputs["sfb_ptrs_tensor"],
         padded_offsets=inputs["padded_offsets_tensor"],
         alpha_tensor=inputs["alpha_tensor"],
+        bias_tensor=inputs.get("bias_tensor"),
         d_col_tensor=outputs["d_col_tensor"],
         sfd_row_tensor=outputs.get("sfd_row_tensor"),
         sfd_col_tensor=outputs.get("sfd_col_tensor"),
@@ -313,6 +317,7 @@ def _test_discrete_grouped_gemm_wrapper(
     act_func,
     request,
     b_major="k",
+    enable_bias=False,
 ):
     try:
         from cudnn import discrete_grouped_gemm_swiglu_wrapper_sm100
@@ -349,6 +354,7 @@ def _test_discrete_grouped_gemm_wrapper(
         sf_vec_size=cfg["sf_vec_size"],
         m_aligned=cfg["m_aligned"],
         b_major=cfg["b_major"],
+        enable_bias=enable_bias,
     )
 
     try:
@@ -360,6 +366,7 @@ def _test_discrete_grouped_gemm_wrapper(
                 sfb_ptrs=inputs["sfb_ptrs_tensor"],
                 padded_offsets=inputs["padded_offsets_tensor"],
                 alpha_tensor=inputs["alpha_tensor"],
+                bias_tensor=inputs.get("bias_tensor"),
                 n=cfg["n"],
                 b_dtype=inputs["b_list"][0].dtype,
                 norm_const_tensor=inputs.get("norm_const_tensor"),
@@ -386,6 +393,48 @@ def _test_discrete_grouped_gemm_wrapper(
         outputs,
         cfg,
         skip_ref=cfg["skip_ref"],
+    )
+
+
+@pytest.mark.L0
+@torch_fork_set_rng(seed=0)
+def test_discrete_grouped_gemm_compile_execute_with_bias(request):
+    _test_discrete_grouped_gemm_compile_execute(
+        ab_dtype=torch.float4_e2m1fn_x2,
+        c_dtype=torch.bfloat16,
+        d_dtype=torch.bfloat16,
+        cd_major="n",
+        acc_dtype=torch.float32,
+        mma_tiler_mn=(256, 256),
+        cluster_shape_mn=(2, 1),
+        sf_vec_size=32,
+        sf_dtype=torch.float8_e8m0fnu,
+        vector_f32=False,
+        discrete_col_sfd=False,
+        act_func="swiglu",
+        request=request,
+        enable_bias=True,
+    )
+
+
+@pytest.mark.L0
+@torch_fork_set_rng(seed=0)
+def test_discrete_grouped_gemm_wrapper_with_bias(request):
+    _test_discrete_grouped_gemm_wrapper(
+        ab_dtype=torch.float4_e2m1fn_x2,
+        c_dtype=torch.bfloat16,
+        d_dtype=torch.bfloat16,
+        cd_major="n",
+        acc_dtype=torch.float32,
+        mma_tiler_mn=(256, 256),
+        cluster_shape_mn=(2, 1),
+        sf_vec_size=32,
+        sf_dtype=torch.float8_e8m0fnu,
+        vector_f32=False,
+        discrete_col_sfd=False,
+        act_func="swiglu",
+        request=request,
+        enable_bias=True,
     )
 
 

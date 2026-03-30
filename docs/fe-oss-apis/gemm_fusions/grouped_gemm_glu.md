@@ -34,7 +34,7 @@ This kernel performs:
   - `SFB` (discrete): per-expert SFB pointers, `sfb_ptrs` shape `(num_experts,)` of int64
   - `padded_offsets`: cumulative sum of aligned group M sizes, shape `(L,)`. `valid_m = padded_offsets[-1]`
   - `alpha`: per-group scaling factors, shape `(L,)`
-  - `bias` (dense only, optional): per-expert bias tensor, shape `(N, L)` with stride `(1, N)`
+  - `bias` (optional): per-expert bias tensor, shape `(N, L)` with stride `(1, N)`
   - `prob`: per-row gating probabilities, shape `(valid_m, 1, 1)`
   - `norm_const`: normalization constant for FP8 quantization, shape `(1,)`
 - **Outputs**
@@ -318,7 +318,9 @@ Providing both or neither raises `ValueError`.
 
 - `acc_dtype`: Must be `torch.float32`
 - `mma_tiler_mn`: Kernel tile size `(TILE_M, TILE_N)`. Default: `(256, 256)`
-- `cluster_shape_mn`: Thread Block cluster shape. Default: `(2, 1)` when `TILE_M=256`
+  - `TILE_M ∈ {128, 256}`
+  - `TILE_N = 256`
+- `cluster_shape_mn`: Thread Block cluster shape. Default: `(2, 1)` when `TILE_M=256`, `(1, 1)` otherwise
 - `sf_vec_size`: Scale factor vector size. `{16, 32}`. Default: `16`
 - `vector_f32`: Enable packed f32 operations. Default: `False`
 - `m_aligned`: Must be `256` (FIX_PAD_SIZE). Default: `256`
@@ -368,9 +370,8 @@ Returns a `TupleDict` (dictionary + tuple unpacking):
 - Scale factor tensors (SFA, SFB, SFD_row, SFD_col) must have the same dtype
 - `D` and `D_col` must have the same dtype
 - `bias` must be one of `{float16, bfloat16, float32}`
-- Dense `bias` must have shape `(N, L)` and stride `(1, N)`
+- `bias` must have shape `(N, L)` and stride `(1, N)`
 - For non-bias paths, FP4 `ab_dtype` with `sf_vec_size=16` and `d_dtype=float32` is not supported
-- FP8 `ab_dtype` with `mma_tiler_mn[1]=128` and FP8 `d_dtype` is not supported
 - FP4 `ab_dtype` requires `c_dtype` in `{float16, bfloat16}`
 
 ### Shapes and Divisibility
@@ -378,8 +379,7 @@ Returns a `TupleDict` (dictionary + tuple unpacking):
 - `N` must be divisible by 64 (two consecutive 32-column blocks for GLU pairing)
 - Expert count must be `<= 1024`
 - Each group's M dimension is aligned to `m_aligned` (256)
-- Dense `bias` support currently requires `mma_tiler_mn[1] == 256`
-- `bias` is not supported in discrete mode
+- All supported kernel configurations require `mma_tiler_mn[1] == 256`
 
 ### Environment
 

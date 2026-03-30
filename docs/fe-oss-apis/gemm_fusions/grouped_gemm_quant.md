@@ -258,8 +258,8 @@ api.execute(
 
 - `mma_tiler_mn: Tuple[int, int]`
   - Kernel tile size `(TILE_M, TILE_N)`. Default: `(256, 256)`
-  - `TILE_M ∈ {64, 128, 256}`
-  - `TILE_N ∈ {128, 256}`
+  - `TILE_M ∈ {128, 256}`
+  - `TILE_N = 256`
 
 - `cluster_shape_mn: Tuple[int, int] | None`
   - Thread Block cluster shape `(CLUSTER_M, CLUSTER_N)`
@@ -342,7 +342,6 @@ Returns a `TupleDict` - a dictionary-like object that also supports tuple unpack
 - `sf_dtype=float8_e4m3fn` is incompatible with `sf_vec_size=32`
 - FP8 `ab_dtype` is incompatible with `sf_vec_size=16`
 - FP4 `ab_dtype` with `sf_vec_size=16` and `d_dtype=float32` is not supported
-- FP8 `ab_dtype` with `mma_tiler_mn[1]=128` and FP8 `d_dtype` is not supported
 - FP4 `ab_dtype` requires `c_dtype ∈ {float16, bfloat16}`
 
 ### Scale Factor Output Requirements

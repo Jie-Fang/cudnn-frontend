@@ -79,6 +79,7 @@ class GroupedGemmQuantSm100(APIBase):
         # Dense mode (contiguous) -- provide these:
         sample_b: Optional[torch.Tensor] = None,
         sample_sfb: Optional[torch.Tensor] = None,
+        sample_bias: Optional[torch.Tensor] = None,
         # Discrete mode -- provide these instead:
         num_experts: Optional[int] = None,
         b_shape: Optional[Tuple[int, ...]] = None,
@@ -112,6 +113,8 @@ class GroupedGemmQuantSm100(APIBase):
         :param sample_d_col: Column-quantized D tensor (required for quant kernel)
         :param sample_b: (Dense) Sample B tensor (n, k, l)
         :param sample_sfb: (Dense) Sample scale factor B tensor
+        :param sample_bias: Optional bias tensor with shape (n, l) or (n, expert_cnt), stride (1, n).
+            Dense mode supports fp16/bfloat16/float32 bias; discrete mode supports fp16/bfloat16 bias.
         :param num_experts: (Discrete) Number of experts
         :param b_shape: (Discrete) Shape of a single expert B tensor, e.g. (n, k)
         :param b_dtype: (Discrete) Data type of B tensors
@@ -164,6 +167,7 @@ class GroupedGemmQuantSm100(APIBase):
             "norm_const",
         )
         self.prob_desc = self._make_tensor_desc(sample_prob, name="sample_prob")
+        self.bias_desc = self._make_tensor_desc(sample_bias, name="sample_bias")
 
         # C tensor: required by kernel for dtype inference but never written to (generate_c=False).
         # If not provided, derive from D descriptor with bfloat16 dtype.
@@ -210,6 +214,7 @@ class GroupedGemmQuantSm100(APIBase):
             self.b_major = b_major
 
         self._interpret_uint8_as_fp4x2 = True
+        self._has_bias = self.bias_desc is not None
         self._kernel = BlockScaledMoEGroupedGemmQuantKernel
 
         self.num_cluster_overlap_margin = int(os.getenv("CUDNNFE_CLUSTER_OVERLAP_MARGIN", "0"))
@@ -274,6 +279,7 @@ class GroupedGemmQuantSm100(APIBase):
             "Pass a tensor of ones with shape (valid_m, 1, 1) if no gating is needed.",
         )
         self._check_tensor_shape(self.prob_desc, (tensor_m, 1, 1), "prob")
+        self._check_tensor_shape(self.bias_desc, (n, l), "bias")
         self._check_tensor_shape(self.amax_desc, (self.expert_cnt, 1), "amax")
         self._check_tensor_shape(self.norm_const_desc, (1,), "norm_const")
         self._check_tensor_shape(self.padded_offsets_desc, (self.expert_cnt,), "padded_offsets")
@@ -311,6 +317,10 @@ class GroupedGemmQuantSm100(APIBase):
             stride=[(n, 1, tensor_m * n)],
             extra_error_msg="D_col must have n-major layout",
         )
+        _ = self._check_tensor_stride(
+            self.bias_desc,
+            stride=[(1, n)],
+        )
 
         self._logger.debug("Checking data types")
         self.ab_dtype = self._check_dtype(
@@ -330,10 +340,22 @@ class GroupedGemmQuantSm100(APIBase):
                 name="B",
                 extra_error_msg="B must have the same dtype as A",
             )
+            self._check_dtype(
+                self.bias_desc,
+                dtype=[torch.bfloat16, torch.float16, torch.float32],
+                name="bias",
+                extra_error_msg="bias must be fp16, bfloat16, or float32",
+            )
         else:
             self._value_error_if(
                 self.b_dtype != self.ab_dtype,
                 f"b_dtype ({self.b_dtype}) must match A dtype ({self.ab_dtype})",
+            )
+            self._check_dtype(
+                self.bias_desc,
+                dtype=[torch.bfloat16, torch.float16],
+                name="bias",
+                extra_error_msg="bias must be fp16 or bfloat16 in discrete mode",
             )
 
         self.sf_dtype = self._check_dtype(
@@ -436,16 +458,16 @@ class GroupedGemmQuantSm100(APIBase):
 
         self._logger.debug("Checking MMA tile shape and cluster shape")
         self._value_error_if(
-            not self.use_2cta_instrs and self.mma_tiler_mn[0] not in [64, 128],
-            f"MMA tiler M must be 64 or 128 when use_2cta_instrs=False, got {self.mma_tiler_mn[0]}",
+            not self.use_2cta_instrs and self.mma_tiler_mn[0] != 128,
+            f"MMA tiler M must be 128 when use_2cta_instrs=False, got {self.mma_tiler_mn[0]}",
         )
         self._value_error_if(
-            self.use_2cta_instrs and self.mma_tiler_mn[0] not in [128, 256],
-            f"MMA tiler M must be 128 or 256 when use_2cta_instrs=True, got {self.mma_tiler_mn[0]}",
+            self.use_2cta_instrs and self.mma_tiler_mn[0] != 256,
+            f"MMA tiler M must be 256 when use_2cta_instrs=True, got {self.mma_tiler_mn[0]}",
         )
         self._value_error_if(
-            self.mma_tiler_mn[1] not in [128, 256],
-            f"MMA tiler N must be 128 or 256, got {self.mma_tiler_mn[1]}",
+            self.mma_tiler_mn[1] != 256,
+            f"MMA tiler N must be 256, got {self.mma_tiler_mn[1]}",
         )
         self._value_error_if(
             self.cluster_shape_mn[0] % (2 if self.use_2cta_instrs else 1) != 0,
@@ -507,6 +529,8 @@ class GroupedGemmQuantSm100(APIBase):
             f"expert_cnt must be <= 1024, got {self.expert_cnt}",
         )
 
+        self._not_implemented_error_if(self._has_bias and self.mma_tiler_mn[1] != 256, "Bias fusion currently requires mma_tiler_mn[1] == 256")
+
         self._not_implemented_error_if(
             (self._is_fp8(self.ab_dtype)) and (self.mma_tiler_mn[1] == 128) and (self._is_fp8(self.d_dtype)),
             "Invalid configuration: fp8 ab_dtype and sf_vec_size 32 with mma_tiler_mn[1] == 128 and fp8 d_dtype is not supported. "
@@ -550,7 +574,7 @@ class GroupedGemmQuantSm100(APIBase):
             generate_sfd=self.generate_sfd,
             discrete_col_sfd=self.discrete_col_sfd,
             generate_c=False,
-            enable_bias=False,
+            enable_bias=self._has_bias,
             expert_cnt=self.expert_cnt,
             weight_mode=self.weight_mode,
             use_dynamic_sched=self.use_dynamic_sched,
@@ -603,7 +627,7 @@ class GroupedGemmQuantSm100(APIBase):
             norm_const_tensor=self._make_fake_cute_tensor_from_desc(self.norm_const_desc, assumed_align=16),
             padded_offsets=self._make_fake_cute_tensor_from_desc(self.padded_offsets_desc, assumed_align=16),
             alpha=self._make_fake_cute_tensor_from_desc(self.alpha_desc, assumed_align=16),
-            bias=None,
+            bias=self._make_fake_cute_tensor_from_desc(self.bias_desc, assumed_align=16),
             prob=self._make_fake_cute_tensor_from_desc(self.prob_desc, assumed_align=16),
             max_active_clusters=max_active_clusters,
             stream=fake_stream,
@@ -627,6 +651,7 @@ class GroupedGemmQuantSm100(APIBase):
             padded_offsets: torch.Tensor,
             alpha_tensor: torch.Tensor,
             prob_tensor: Optional[torch.Tensor],
+            bias_tensor: Optional[torch.Tensor],
             stream: cuda.CUstream,
         ) -> None:
             norm_const_tensor = self._unpad_tensor_to_ndim(norm_const_tensor, 1, "norm_const")
@@ -648,7 +673,7 @@ class GroupedGemmQuantSm100(APIBase):
                 norm_const_tensor,
                 padded_offsets,
                 alpha_tensor,
-                None,
+                bias_tensor,
                 prob_tensor,
                 stream,
             )
@@ -696,6 +721,7 @@ class GroupedGemmQuantSm100(APIBase):
         prob_tensor = self._make_fake_cute_tensor_from_desc(self.prob_desc, assumed_align=16)
         if prob_tensor is not None:
             prob_tensor.mark_layout_dynamic(leading_dim=1)
+        bias_cute_fake = self._make_fake_cute_tensor_from_desc(self.bias_desc, assumed_align=16)
 
         b_ptrs_placeholder = torch.empty((self.expert_cnt,), dtype=torch.int64, device="cuda")
         sfb_ptrs_placeholder = torch.empty((self.expert_cnt,), dtype=torch.int64, device="cuda")
@@ -724,7 +750,7 @@ class GroupedGemmQuantSm100(APIBase):
             norm_const_tensor_cute,
             padded_offsets_tensor,
             alpha_tensor,
-            None,
+            bias_cute_fake,
             prob_tensor,
             max_active_clusters,
             fake_stream,
@@ -752,6 +778,7 @@ class GroupedGemmQuantSm100(APIBase):
             padded_offsets: torch.Tensor,
             alpha_tensor: torch.Tensor,
             prob_tensor: Optional[torch.Tensor],
+            bias_tensor: Optional[torch.Tensor],
             stream: cuda.CUstream,
         ) -> None:
             norm_const_tensor = self._unpad_tensor_to_ndim(norm_const_tensor, 1, "norm_const")
@@ -775,7 +802,7 @@ class GroupedGemmQuantSm100(APIBase):
                 norm_const_tensor,
                 padded_offsets,
                 alpha_tensor,
-                None,
+                bias_tensor,
                 prob_tensor,
                 stream,
             )
@@ -792,6 +819,7 @@ class GroupedGemmQuantSm100(APIBase):
         # Dense mode:
         b_tensor: Optional[torch.Tensor] = None,
         sfb_tensor: Optional[torch.Tensor] = None,
+        bias_tensor: Optional[torch.Tensor] = None,
         # Discrete mode:
         b_ptrs: Optional[torch.Tensor] = None,
         sfb_ptrs: Optional[torch.Tensor] = None,
@@ -813,6 +841,9 @@ class GroupedGemmQuantSm100(APIBase):
         :param d_tensor: Output D tensor
         :param b_tensor: (Dense) Input B tensor (weights)
         :param sfb_tensor: (Dense) Scale factor B
+        :param bias_tensor: Optional bias tensor with shape (n, l) and stride (1, n).
+            Bias fusion is specialized at compile time: if ``sample_bias`` was omitted
+            at construction, ``bias_tensor`` must also be omitted at execute time.
         :param b_ptrs: (Discrete) 1-D int64 device tensor of per-expert B data pointers
         :param sfb_ptrs: (Discrete) 1-D int64 device tensor of per-expert SFB data pointers
         :param c_tensor: Optional C tensor placeholder (kernel requires it but never writes to it;
@@ -848,6 +879,16 @@ class GroupedGemmQuantSm100(APIBase):
             "prob_tensor is required: the kernel unconditionally multiplies output by per-row gating probability. "
             "Pass a tensor of ones with shape (valid_m, 1, 1) if no gating is needed.",
         )
+        if self._has_bias:
+            self._value_error_if(
+                bias_tensor is None,
+                "bias_tensor must be provided at execute() when the API was compiled with sample_bias",
+            )
+        else:
+            self._value_error_if(
+                bias_tensor is not None,
+                "bias_tensor must be omitted at execute() when the API was compiled without sample_bias",
+            )
 
         self._logger.debug("Executing grouped_gemm_quant kernel")
         if self.weight_mode == MoEWeightMode.DENSE:
@@ -866,6 +907,7 @@ class GroupedGemmQuantSm100(APIBase):
                 padded_offsets=padded_offsets,
                 alpha_tensor=alpha_tensor,
                 prob_tensor=prob_tensor,
+                bias_tensor=bias_tensor,
                 stream=current_stream,
             )
         else:
@@ -884,6 +926,7 @@ class GroupedGemmQuantSm100(APIBase):
                 padded_offsets=padded_offsets,
                 alpha_tensor=alpha_tensor,
                 prob_tensor=prob_tensor,
+                bias_tensor=bias_tensor,
                 stream=current_stream,
             )
 
@@ -903,6 +946,7 @@ def grouped_gemm_quant_wrapper_sm100(
     alpha_tensor: torch.Tensor,
     b_tensor: Optional[torch.Tensor] = None,
     sfb_tensor: Optional[torch.Tensor] = None,
+    bias_tensor: Optional[torch.Tensor] = None,
     b_ptrs: Optional[torch.Tensor] = None,
     sfb_ptrs: Optional[torch.Tensor] = None,
     n: Optional[int] = None,
@@ -935,6 +979,8 @@ def grouped_gemm_quant_wrapper_sm100(
         alpha_tensor: Per-group scaling
         b_tensor: (Dense) Weight B tensor (n, k, l)
         sfb_tensor: (Dense) Scale factor B
+        bias_tensor: Optional per-expert bias, shape ``(n, l)`` in dense mode or ``(n, num_experts)``
+            in discrete mode, stride ``(1, n)``. Bias fusion requires ``mma_tiler_mn[1] == 256``.
         b_ptrs: (Discrete) 1-D int64 device tensor of per-expert B data pointers
         sfb_ptrs: (Discrete) 1-D int64 device tensor of per-expert SFB data pointers
         n: (Discrete) B weight N dimension
@@ -992,6 +1038,8 @@ def grouped_gemm_quant_wrapper_sm100(
     if is_dense:
         weight_mode = MoEWeightMode.DENSE
         n_out, _, l = b_tensor.shape
+        if bias_tensor is not None and tuple(bias_tensor.shape) != (n_out, l):
+            raise ValueError(f"bias_tensor must have shape {(n_out, l)}, got {tuple(bias_tensor.shape)}")
     else:
         weight_mode = MoEWeightMode.DISCRETE
         _require_pointer_tensor(b_ptrs, "b_ptrs")
@@ -1003,6 +1051,8 @@ def grouped_gemm_quant_wrapper_sm100(
         b_shape = (n, k_logical)
         n_out = n
         l = num_experts
+        if bias_tensor is not None and tuple(bias_tensor.shape) != (n_out, num_experts):
+            raise ValueError(f"bias_tensor must have shape {(n_out, num_experts)}, got {tuple(bias_tensor.shape)}")
 
     _logger.debug("grouped_gemm_quant_wrapper_sm100: Creating output tensors d_tensor, d_col_tensor")
 
@@ -1107,6 +1157,7 @@ def grouped_gemm_quant_wrapper_sm100(
             c_tensor.dtype,
             *tensor_signature(sfa_tensor),
             *tensor_signature(sfb_tensor),
+            *tensor_signature(bias_tensor),
             *tensor_signature(alpha_tensor),
             *tensor_signature(norm_const_tensor),
             *tensor_signature(prob_tensor),
@@ -1137,6 +1188,7 @@ def grouped_gemm_quant_wrapper_sm100(
             tuple(c_tensor.stride()),
             c_tensor.dtype,
             *tensor_signature(sfa_tensor),
+            *tensor_signature(bias_tensor),
             *tensor_signature(alpha_tensor),
             *tensor_signature(norm_const_tensor),
             *tensor_signature(prob_tensor),
@@ -1179,6 +1231,7 @@ def grouped_gemm_quant_wrapper_sm100(
                 sample_d_col=d_col_tensor,
                 sample_b=b_tensor,
                 sample_sfb=sfb_tensor,
+                sample_bias=bias_tensor,
                 sample_amax=amax_tensor,
                 sample_sfd_row=sfd_row_tensor,
                 sample_sfd_col=sfd_col_tensor,
@@ -1205,6 +1258,7 @@ def grouped_gemm_quant_wrapper_sm100(
                 num_experts=num_experts,
                 b_shape=b_shape,
                 b_dtype=b_dtype,
+                sample_bias=bias_tensor,
                 sample_amax=amax_tensor,
                 sample_sfd_row=sfd_row_tensor,
                 sample_sfd_col=sfd_col_tensor,
@@ -1242,6 +1296,7 @@ def grouped_gemm_quant_wrapper_sm100(
             amax_tensor=amax_tensor,
             norm_const_tensor=norm_const_tensor,
             prob_tensor=prob_tensor,
+            bias_tensor=bias_tensor,
             current_stream=current_stream,
         )
     else:
@@ -1260,6 +1315,7 @@ def grouped_gemm_quant_wrapper_sm100(
             amax_tensor=amax_tensor,
             norm_const_tensor=norm_const_tensor,
             prob_tensor=prob_tensor,
+            bias_tensor=bias_tensor,
             current_stream=current_stream,
         )
 

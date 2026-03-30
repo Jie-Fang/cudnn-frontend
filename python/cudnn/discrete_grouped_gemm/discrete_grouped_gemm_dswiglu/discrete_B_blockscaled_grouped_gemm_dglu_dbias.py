@@ -27,17 +27,11 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 """
-MoE Block-Scaled Grouped GEMM Kernel with dGLU (dSwiGLU/dGeGLU) Backward Fusion.
+Discrete-weight block-scaled grouped GEMM kernel with dGLU (backward SwiGLU/GeGLU),
+optional FP8 quantization fusion, and optional dBias (bias gradient) fusion.
 
-Supports:
-    - Static / Dynamic persistent tile scheduling (MoEPersistentTileScheduler)
-    - Dense (contiguous 3-D B) / Discrete (per-expert pointer array B) weight layout
-    - FP8/FP4 output quantization with row/column scale factors (SFD)
-    - AMAX reduction for FP8 calibration
-    - dGLU backward activation fusion (dSwiGLU / dGeGLU)
-
-This module contains only the kernel class.
-MoE scheduler components live in moe_persistent_scheduler.py / moe_sched_extension.py / moe_utils.py.
+This module contains only the kernel class. Shared utilities are in discrete_kernel_utils.py.
+Test/validation code is in discrete_kernel_test.py.
 """
 
 from typing import Type, Tuple, Union, Optional
@@ -66,15 +60,11 @@ from ..moe_persistent_scheduler import (
     MoEWorkTileInfo,
 )
 from ..moe_utils import (
-    MoEWeightMode,
     TensormapWorkspace,
     store_tma_desc,
 )
-from ..moe_sched_extension import (
-    DiscreteWeightScaledGemmSchedExtension,
-    ContiguousAndConsistentGroupedGemmSchedExtension,
-)
-from ..moe_kernel_helpers import (
+from ..moe_sched_extension import DiscreteWeightScaledGemmSchedExtension
+from ..discrete_kernel_utils import (
     fmin,
     fmax,
     fmin_bf16x2,
@@ -82,6 +72,7 @@ from ..moe_kernel_helpers import (
     warp_redux_sync,
     atomic_max_float32,
     atomic_add_float32,
+    atomic_add_bf16x2,
     sigmoid_f32,
     get_dtype_rcp_limits,
     get_amax_smem_size,
@@ -182,14 +173,9 @@ CUDA Graph Support:
 """
 
 
-class BlockScaledMoEGroupedGemmDgluKernel:
-    """Block-scaled grouped GEMM kernel with MoE tile scheduling and dGLU backward fusion.
-
-    Supports both dense and discrete weight layouts, static and dynamic
-    scheduling, and quantized output with row/column scale factors.
-
-    This version uses a fixed padding size (FIX_PAD_SIZE=256) that is decoupled from the kernel's tile size,
-    allowing users to pad their tensors without knowing the specific kernel implementation details.
+class BlockScaledDiscreteWeightDgluDbiasGroupedGemmKernel:
+    """This class implements batched matrix multiplication (D = A x SFA x B x SFB) with support for various data types
+    and architectural features specific to Blackwell GPUs with persistent tile scheduling and warp specialization.
 
     :param sf_vec_size: Scalefactor vector size.
     :type sf_vec_size: int
@@ -254,7 +240,7 @@ class BlockScaledMoEGroupedGemmDgluKernel:
         m_aligned: int,
         act_func: str,
     ) -> bool:
-        FPS = BlockScaledMoEGroupedGemmDgluKernel.FIX_PAD_SIZE
+        FPS = BlockScaledDiscreteWeightDgluDbiasGroupedGemmKernel.FIX_PAD_SIZE
         result = True
         if m_aligned != FPS:
             result = False
@@ -282,11 +268,10 @@ class BlockScaledMoEGroupedGemmDgluKernel:
         vectorized_f32: bool,
         discrete_col_sfd: bool,
         expert_cnt: int,
-        weight_mode: MoEWeightMode = MoEWeightMode.DISCRETE,
         use_dynamic_sched: bool = False,
         act_func: str = "dswiglu",
     ):
-        """Initializes the configuration for a Blackwell blockscaled grouped GEMM dGLU kernel.
+        """Initializes the configuration for a Blackwell blockscaled dense GEMM kernel.
 
         This configuration includes several key aspects:
 
@@ -327,8 +312,6 @@ class BlockScaledMoEGroupedGemmDgluKernel:
             )
         if expert_cnt > 1024:
             raise ValueError("Expert count > 1024 is not supported.")
-        if not isinstance(weight_mode, MoEWeightMode):
-            raise TypeError(f"weight_mode must be a MoEWeightMode, got {type(weight_mode)}")
 
         self.sf_vec_size = sf_vec_size
         self.expert_cnt = expert_cnt
@@ -393,7 +376,6 @@ class BlockScaledMoEGroupedGemmDgluKernel:
         self.num_epilog_warps = len(self.epilog_warp_id)
 
         self.discrete_col_sfd = discrete_col_sfd
-        self.weight_mode = weight_mode
 
         self.act_func = act_func
 
@@ -528,6 +510,7 @@ class BlockScaledMoEGroupedGemmDgluKernel:
             self.num_smem_capacity,
             self.occupancy,
             self.store_d_directly,
+            self.generate_dbias,
         )
 
         # Compute A/B/D/Scale shared memory layout
@@ -605,11 +588,9 @@ class BlockScaledMoEGroupedGemmDgluKernel:
 
     def get_desc_workspace_bytes(self) -> int:
         """Return descriptor workspace size in bytes."""
-        if self.weight_mode == MoEWeightMode.DISCRETE:
-            from ..moe_utils import DiscreteWeightTensormapConstructor
+        from ..moe_utils import DiscreteWeightTensormapConstructor
 
-            return DiscreteWeightTensormapConstructor.get_workspace_size(self.expert_cnt)
-        return 0
+        return DiscreteWeightTensormapConstructor.get_workspace_size(self.expert_cnt)
 
     def get_workspace_bytes(self) -> int:
         """Return descriptor workspace plus optional dynamic scheduler state."""
@@ -628,7 +609,7 @@ class BlockScaledMoEGroupedGemmDgluKernel:
         )
 
     @cute.kernel
-    def helper_kernel(
+    def desc_init_kernel_device_ptrs(
         self,
         ptrs_b: cute.Pointer,  # Device pointer to int64[expert_cnt] array of B addresses
         ptrs_sfb: cute.Pointer,  # Device pointer to int64[expert_cnt] array of SFB addresses
@@ -644,71 +625,64 @@ class BlockScaledMoEGroupedGemmDgluKernel:
         cluster_layout_vmnk_shape_arg: cutlass.Constexpr,
         cluster_layout_sfb_vmnk_shape_arg: cutlass.Constexpr,
     ):
-        """Pre-main-kernel initialization.
+        """Initialize per-expert B/SFB TMA descriptors into workspace.
 
-        Launched with grid=(expert_cnt, 1, 1) for discrete mode, or
-        grid=(1, 1, 1) for dense+dynamic mode.
-
-        Discrete weight: each block builds B/SFB TMA descriptors for one expert.
-        Dynamic sched: block 0 resets the atomic tile counter to 0.
+        Reads expert pointers from device memory arrays and writes one
+        descriptor pair per expert. When dynamic scheduling is enabled,
+        expert 0 also resets the global scheduler counter at the workspace tail.
         """
+        b_tma_op_arg = sm100_utils.cluster_shape_to_tma_atom_B(self.cluster_shape_mn, tiled_mma_arg.thr_id)
+        sfb_tma_op_arg = sm100_utils.cluster_shape_to_tma_atom_SFB(self.cluster_shape_mn, tiled_mma_arg.thr_id)
+
         expert_idx = cute.arch.block_idx()[0]
 
-        if cutlass.const_expr(self.weight_mode == MoEWeightMode.DISCRETE):
-            b_tma_op_arg = sm100_utils.cluster_shape_to_tma_atom_B(self.cluster_shape_mn, tiled_mma_arg.thr_id)
-            sfb_tma_op_arg = sm100_utils.cluster_shape_to_tma_atom_SFB(self.cluster_shape_mn, tiled_mma_arg.thr_id)
+        b_ptr_tensor = cute.make_tensor(cute.make_ptr(cutlass.Int64, ptrs_b.toint(), AddressSpace.gmem, assumed_align=8), cute.make_layout((self.expert_cnt,)))
+        sfb_ptr_tensor = cute.make_tensor(
+            cute.make_ptr(cutlass.Int64, ptrs_sfb.toint(), AddressSpace.gmem, assumed_align=8), cute.make_layout((self.expert_cnt,))
+        )
 
-            b_ptr_tensor = cute.make_tensor(
-                cute.make_ptr(cutlass.Int64, ptrs_b.toint(), AddressSpace.gmem, assumed_align=8),
-                cute.make_layout((self.expert_cnt,)),
-            )
-            sfb_ptr_tensor = cute.make_tensor(
-                cute.make_ptr(cutlass.Int64, ptrs_sfb.toint(), AddressSpace.gmem, assumed_align=8),
-                cute.make_layout((self.expert_cnt,)),
-            )
+        c1 = cutlass.Int32(1)
+        c0 = cutlass.Int64(0)
+        c1_64 = 1
+        if cutlass.const_expr(b_major_mode == OperandMajorMode.K):
+            stride_n = b_stride_size
+            stride_k = c1_64
+        else:
+            stride_n = c1_64
+            stride_k = b_stride_size
 
-            c1 = cutlass.Int32(1)
-            c0 = cutlass.Int64(0)
-            c1_64 = 1
-            if cutlass.const_expr(b_major_mode == OperandMajorMode.K):
-                stride_n = b_stride_size
-                stride_k = c1_64
-            else:
-                stride_n = c1_64
-                stride_k = b_stride_size
+        b_ptr_val = b_ptr_tensor[expert_idx]
+        b_ptr = cute.make_ptr(self.b_dtype, b_ptr_val, AddressSpace.gmem)
+        b_tensor_i = cute.make_tensor(
+            b_ptr,
+            cute.make_layout((n, k, c1), stride=(stride_n, stride_k, c0)),
+        )
+        tma_atom_b, _ = cute.nvgpu.make_tiled_tma_atom_B(
+            b_tma_op_arg,
+            b_tensor_i,
+            b_smem_layout_arg,
+            self.mma_tiler,
+            tiled_mma_arg,
+            cluster_layout_vmnk_shape_arg,
+        )
 
-            b_ptr_val = b_ptr_tensor[expert_idx]
-            b_ptr = cute.make_ptr(self.b_dtype, b_ptr_val, AddressSpace.gmem)
-            b_tensor_i = cute.make_tensor(
-                b_ptr,
-                cute.make_layout((n, k, c1), stride=(stride_n, stride_k, c0)),
-            )
-            tma_atom_b, _ = cute.nvgpu.make_tiled_tma_atom_B(
-                b_tma_op_arg,
-                b_tensor_i,
-                b_smem_layout_arg,
-                self.mma_tiler,
-                tiled_mma_arg,
-                cluster_layout_vmnk_shape_arg,
-            )
+        workspace = TensormapWorkspace(workspace_ptr, ["b", "sfb"])
+        store_tma_desc(tma_atom_b, workspace.get_ptr("b", expert_idx))
 
-            workspace = TensormapWorkspace(workspace_ptr, ["b", "sfb"])
-            store_tma_desc(tma_atom_b, workspace.get_ptr("b", expert_idx))
-
-            sfb_ptr_val = sfb_ptr_tensor[expert_idx]
-            sfb_ptr = cute.make_ptr(self.sf_dtype, sfb_ptr_val, AddressSpace.gmem)
-            sfb_layout = blockscaled_utils.tile_atom_to_shape_SF((n, k, c1), self.sf_vec_size)
-            sfb_tensor_i = cute.make_tensor(sfb_ptr, sfb_layout)
-            tma_atom_sfb, _ = cute.nvgpu.make_tiled_tma_atom_B(
-                sfb_tma_op_arg,
-                sfb_tensor_i,
-                sfb_smem_layout_arg,
-                self.mma_tiler_sfb,
-                tiled_mma_sfb_arg,
-                cluster_layout_sfb_vmnk_shape_arg,
-                internal_type=cutlass.Uint64,
-            )
-            store_tma_desc(tma_atom_sfb, workspace.get_ptr("sfb", expert_idx))
+        sfb_ptr_val = sfb_ptr_tensor[expert_idx]
+        sfb_ptr = cute.make_ptr(self.sf_dtype, sfb_ptr_val, AddressSpace.gmem)
+        sfb_layout = blockscaled_utils.tile_atom_to_shape_SF((n, k, c1), self.sf_vec_size)
+        sfb_tensor_i = cute.make_tensor(sfb_ptr, sfb_layout)
+        tma_atom_sfb, _ = cute.nvgpu.make_tiled_tma_atom_B(
+            sfb_tma_op_arg,
+            sfb_tensor_i,
+            sfb_smem_layout_arg,
+            self.mma_tiler_sfb,
+            tiled_mma_sfb_arg,
+            cluster_layout_sfb_vmnk_shape_arg,
+            internal_type=cutlass.Uint64,
+        )
+        store_tma_desc(tma_atom_sfb, workspace.get_ptr("sfb", expert_idx))
 
         if cutlass.const_expr(self.use_dynamic_sched):
             if expert_idx == cutlass.Int32(0):
@@ -722,12 +696,12 @@ class BlockScaledMoEGroupedGemmDgluKernel:
     def __call__(
         self,
         a: cute.Tensor,
-        b,  # Dense: cute.Tensor (N,K,L) | Discrete: cute.Pointer to int64[]
-        sfb,  # Dense: cute.Tensor         | Discrete: cute.Pointer to int64[]
-        n: Int32,  # Ignored for dense mode
-        k: Int32,  # Ignored for dense mode
-        b_stride_size: cutlass.Int64,  # Ignored for dense mode
-        b_major_mode: cutlass.Constexpr,  # Ignored for dense mode
+        b_ptrs: cute.Pointer,  # Device pointer to int64[expert_cnt] B addresses
+        sfb_ptrs: cute.Pointer,  # Device pointer to int64[expert_cnt] SFB addresses
+        n: Int32,  # B's N dimension, uniform across experts
+        k: Int32,  # B's K dimension, uniform across experts
+        b_stride_size: cutlass.Int64,  # stride of the non-contiguous dimension (in elements)
+        b_major_mode: cutlass.Constexpr,  # OperandMajorMode.K or .MN
         workspace_ptr,  # Descriptor workspace, plus dynamic scheduler counter when enabled
         c: cute.Tensor,
         d: cute.Tensor,
@@ -743,16 +717,67 @@ class BlockScaledMoEGroupedGemmDgluKernel:
         prob: cute.Tensor,
         dprob: cute.Tensor,
         linear_offset: Float32,
+        dbias_tensor: Optional[cute.Tensor],
         max_active_clusters: cutlass.Constexpr,
         stream: cuda.CUstream,
         epilogue_op: cutlass.Constexpr = lambda x: x,
     ):
-        """Execute the GEMM.
+        """Execute the GEMM operation in steps:
+        - Initialize per-expert B/SFB TMA descriptors in workspace
+        - Setup static attributes before smem/grid/tma computation
+        - Setup TMA load/store atoms and tensors
+        - Compute grid size with regard to hardware constraints
+        - Define shared storage for kernel
+        - Launch the kernel synchronously
 
-        Dense mode: ``b`` and ``sfb`` are 3-D cute.Tensor (N, K, L).
-        Discrete mode: ``b`` and ``sfb`` are cute.Pointer to device int64[]
-        arrays of per-expert base addresses; ``n``, ``k``, ``b_stride_size``,
-        ``b_major_mode`` describe the uniform per-expert layout.
+        :param a: Input tensor A (contiguous, all experts packed in M)
+        :type a: cute.Tensor
+        :param b_ptrs: Per-expert B pointers (device i64 array)
+        :param sfb_ptrs: Per-expert SFB pointers (device i64 array)
+        :param n: B's N dimension (uniform across experts)
+        :type n: Int32
+        :param k: B's K dimension (uniform across experts)
+        :type k: Int32
+        :param b_stride_size: Stride of B's non-contiguous dimension (in elements)
+        :type b_stride_size: cutlass.Int64
+        :param b_major_mode: B's major mode (OperandMajorMode.K or .MN)
+        :type b_major_mode: cutlass.Constexpr
+        :param workspace_ptr: Pre-allocated workspace for per-expert TMA descriptors
+        :param c: Input tensor C (activation values for dGLU backward)
+        :type c: cute.Tensor
+        :param d: Output tensor D
+        :type d: cute.Tensor
+        :param d_col: Output tensor D column quantized
+        :type d_col: Optional[cute.Tensor]
+        :param sfa: Scale factor tensor A
+        :type sfa: cute.Tensor
+        :param sfd_row_tensor: Scale factor tensor D (row)
+        :type sfd_row_tensor: Optional[cute.Tensor]
+        :param sfd_col_tensor: Scale factor tensor D (col)
+        :type sfd_col_tensor: Optional[cute.Tensor]
+        :param amax_tensor: Absolute maximum value tensor
+        :type amax_tensor: Optional[cute.Tensor]
+        :param norm_const_tensor: Norm constant tensor
+        :type norm_const_tensor: Optional[cute.Tensor]
+        :param padded_offsets: End offset for each expert after padding, shape (expert_cnt,).
+        :type padded_offsets: cute.Tensor
+        :param alpha: Alpha tensor for each group
+        :type alpha: cute.Tensor
+        :param beta: Beta tensor for each group (dGLU-specific)
+        :type beta: cute.Tensor
+        :param prob: Probability tensor
+        :type prob: cute.Tensor
+        :param dprob: Probability gradient output tensor (dGLU-specific)
+        :type dprob: cute.Tensor
+        :param linear_offset: Linear offset for dGEGLU activation
+        :type linear_offset: Float32
+        :param max_active_clusters: Maximum number of active clusters
+        :type max_active_clusters: cutlass.Constexpr
+        :param stream: CUDA stream for asynchronous execution
+        :type stream: cuda.CUstream
+        :param epilogue_op: Optional elementwise lambda function
+        :type epilogue_op: cutlass.Constexpr
+        :raises TypeError: If input data types are incompatible with the MMA instruction.
         """
         # Setup static attributes before smem/grid/tma computation
         self.a_dtype: Type[cutlass.Numeric] = a.element_type
@@ -761,11 +786,7 @@ class BlockScaledMoEGroupedGemmDgluKernel:
         self.d_dtype: Type[cutlass.Numeric] = d.element_type
         self.sf_dtype: Type[cutlass.Numeric] = sfa.element_type
         self.a_major_mode = utils.LayoutEnum.from_tensor(a).mma_major_mode()
-
-        if cutlass.const_expr(self.weight_mode == MoEWeightMode.DENSE):
-            self.b_major_mode = utils.LayoutEnum.from_tensor(b).mma_major_mode()
-        else:
-            self.b_major_mode = b_major_mode
+        self.b_major_mode = b_major_mode
         self.c_layout = utils.LayoutEnum.from_tensor(c)
         self.d_layout = utils.LayoutEnum.from_tensor(d)
 
@@ -773,30 +794,30 @@ class BlockScaledMoEGroupedGemmDgluKernel:
         if cutlass.const_expr(self.a_dtype != self.b_dtype):
             raise TypeError(f"Type must match: {self.a_dtype} != {self.b_dtype}")
 
+        # dBias configuration
+        self.generate_dbias = dbias_tensor is not None
+        self.dbias_cross_warp_reduce = self.generate_dbias  # always cross-warp reduce for discrete_B
+
         # Setup attributes that dependent on gemm inputs
         self._setup_attributes()
 
-        # ---- B / SFB setup (mode-dependent) ----
-        b_from_call_arg = b
-        sfb_from_call_arg = sfb
-        if cutlass.const_expr(self.weight_mode == MoEWeightMode.DENSE):
-            sfb_layout = blockscaled_utils.tile_atom_to_shape_SF(b.shape, self.sf_vec_size)
-            sfb = cute.make_tensor(sfb.iterator, sfb_layout)
+        # Construct template B tensor for TMA atom creation
+        c1 = cutlass.Int32(1)
+        c0 = cutlass.Int64(0)
+        c1_64 = 1
+        if cutlass.const_expr(b_major_mode == OperandMajorMode.K):
+            b_template_stride = (b_stride_size, c1_64, c0)
         else:
-            c1 = cutlass.Int32(1)
-            c0 = cutlass.Int64(0)
-            c1_64 = 1
-            if cutlass.const_expr(b_major_mode == OperandMajorMode.K):
-                b_template_stride = (b_stride_size, c1_64, c0)
-            else:
-                b_template_stride = (c1_64, b_stride_size, c0)
-            b_template_layout = cute.make_layout((n, k, c1), stride=b_template_stride)
-            b_ptr_typed = cute.make_ptr(self.b_dtype, b.toint(), AddressSpace.gmem, assumed_align=16)
-            b = cute.make_tensor(b_ptr_typed, b_template_layout)
+            b_template_stride = (c1_64, b_stride_size, c0)
+        b_template_layout = cute.make_layout((n, k, c1), stride=b_template_stride)
+        b_ptr_typed = cute.make_ptr(self.b_dtype, b_ptrs.toint(), AddressSpace.gmem, assumed_align=16)
+        b = cute.make_tensor(b_ptr_typed, b_template_layout)
 
-            sfb_ptr_typed = cute.make_ptr(self.sf_dtype, sfb.toint(), AddressSpace.gmem, assumed_align=16)
-            sfb_layout = blockscaled_utils.tile_atom_to_shape_SF((n, k, c1), self.sf_vec_size)
-            sfb = cute.make_tensor(sfb_ptr_typed, sfb_layout)
+        # Construct template SFB tensor
+        sfb_ptr_typed = cute.make_ptr(self.sf_dtype, sfb_ptrs.toint(), AddressSpace.gmem, assumed_align=16)
+        sfb_template_shape = (n, k, c1)
+        sfb_layout = blockscaled_utils.tile_atom_to_shape_SF(sfb_template_shape, self.sf_vec_size)
+        sfb = cute.make_tensor(sfb_ptr_typed, sfb_layout)
 
         # Setup sfa tensor by filling A tensor to scale factor atom layout
         # ((Atom_M, Rest_M),(Atom_K, Rest_K),RestL)
@@ -1032,36 +1053,41 @@ class BlockScaledMoEGroupedGemmDgluKernel:
                 cute.struct.MemRange[cutlass.Float32, self.num_epilog_warps],
                 4,
             ]
+            # dBias SMEM transpose buffer: (128, epi_tile_n*2) col-major FP32
+            sDbias: cute.struct.Align[
+                cute.struct.MemRange[
+                    cutlass.Float32,
+                    128 * self.epi_tile[1] * 2 if self.generate_dbias else 1,
+                ],
+                128 if self.generate_dbias else 4,
+            ]
 
         self.shared_storage = SharedStorage
 
         # Initialize per-expert B/SFB TMA descriptors in workspace
         b_smem_layout = cute.slice_(self.b_smem_layout_staged, (None, None, None, 0))
         sfb_smem_layout = cute.slice_(self.sfb_smem_layout_staged, (None, None, None, 0))
-        _need_helper = cutlass.const_expr(self.weight_mode == MoEWeightMode.DISCRETE or self.use_dynamic_sched)
-        if cutlass.const_expr(_need_helper):
-            _helper_grid_x = self.expert_cnt if cutlass.const_expr(self.weight_mode == MoEWeightMode.DISCRETE) else 1
-            _helper_args = (
-                (b_from_call_arg if cutlass.const_expr(self.weight_mode == MoEWeightMode.DISCRETE) else cute.make_ptr(cutlass.Int64, 0, AddressSpace.gmem)),
-                (sfb_from_call_arg if cutlass.const_expr(self.weight_mode == MoEWeightMode.DISCRETE) else cute.make_ptr(cutlass.Int64, 0, AddressSpace.gmem)),
-                (n if cutlass.const_expr(self.weight_mode == MoEWeightMode.DISCRETE) else cutlass.Int32(0)),
-                (k if cutlass.const_expr(self.weight_mode == MoEWeightMode.DISCRETE) else cutlass.Int32(0)),
-                (b_stride_size if cutlass.const_expr(self.weight_mode == MoEWeightMode.DISCRETE) else cutlass.Int64(0)),
-                (b_major_mode if cutlass.const_expr(self.weight_mode == MoEWeightMode.DISCRETE) else self.b_major_mode),
-                workspace_ptr,
-                tiled_mma,
-                tiled_mma_sfb,
-                b_smem_layout,
-                sfb_smem_layout,
-                self.cluster_layout_vmnk.shape,
-                self.cluster_layout_sfb_vmnk.shape,
-            )
-            self.helper_kernel(*_helper_args).launch(
-                grid=(_helper_grid_x, 1, 1),
-                block=(1, 1, 1),
-                stream=stream,
-                min_blocks_per_mp=1,
-            )
+        _desc_init_args = (
+            b_ptrs,
+            sfb_ptrs,
+            n,
+            k,
+            b_stride_size,
+            b_major_mode,
+            workspace_ptr,
+            tiled_mma,
+            tiled_mma_sfb,
+            b_smem_layout,
+            sfb_smem_layout,
+            self.cluster_layout_vmnk.shape,
+            self.cluster_layout_sfb_vmnk.shape,
+        )
+        self.desc_init_kernel_device_ptrs(*_desc_init_args).launch(
+            grid=(self.expert_cnt, 1, 1),
+            block=(1, 1, 1),
+            stream=stream,
+            min_blocks_per_mp=1,
+        )
 
         # Launch the main kernel
         self.kernel(
@@ -1091,6 +1117,7 @@ class BlockScaledMoEGroupedGemmDgluKernel:
             prob,
             dprob,
             linear_offset,
+            dbias_tensor,
             workspace_ptr,
             self.cluster_layout_vmnk,
             self.cluster_layout_sfb_vmnk,
@@ -1113,23 +1140,6 @@ class BlockScaledMoEGroupedGemmDgluKernel:
             min_blocks_per_mp=1,
         )
         return
-
-    # ------------------------------------------------------------------
-    # Internal: create extension based on weight_mode
-    # ------------------------------------------------------------------
-
-    @cute.jit
-    def _make_extension(self, workspace_ptr):
-        if cutlass.const_expr(self.weight_mode == MoEWeightMode.DISCRETE):
-            desc_workspace = TensormapWorkspace(workspace_ptr, ["b", "sfb"])
-            return DiscreteWeightScaledGemmSchedExtension(
-                tensormap_ctor=desc_workspace,
-                sf_vec_size=self.sf_vec_size,
-            )
-        else:
-            return ContiguousAndConsistentGroupedGemmSchedExtension(
-                sf_vec_size=self.sf_vec_size,
-            )
 
     def mainloop_s2t_copy_and_partition(
         self,
@@ -1596,6 +1606,98 @@ class BlockScaledMoEGroupedGemmDgluKernel:
         return tCgSFDCol_mnl
 
     @cute.jit
+    def dbias_reduction(
+        self,
+        d1_vec,
+        d2_vec,
+        warp_idx,
+        sDbias,
+        dbias_gmem_2d,
+        expert_idx,
+        n_base_d1,
+        n_base_d2,
+        dbias_n_total,
+    ) -> None:
+        """Merged dy1+dy2 dbias reduction via SMEM transpose.
+
+        sDbias layout: (N=64, M=32, W=4):(32, 1, N*M) FP32
+        STS: plain 3D indexing, zero bank conflict.
+        LDS: LDS.128 with zero bank conflict by swizzle_128B.
+        Each lane reduces 2 adjacent N-columns → BF16x2 atomicAdd.
+        """
+        epi_n = self.epi_tile[1]
+        lane_idx = cute.arch.lane_idx()
+        warp_local = warp_idx - self.epilog_warp_id[0]
+
+        # Transpose store: each thread writes its N values into its M-row
+        for n in cutlass.range(epi_n, unroll_full=True):
+            sDbias[(n, lane_idx, warp_local)] = d1_vec[n]
+            sDbias[(epi_n + n, lane_idx, warp_local)] = d2_vec[n]
+
+        self.epilog_sync_barrier.arrive_and_wait()
+
+        # Reduction: lane 0-15 → dy1, lane 16-31 → dy2, 2 adjacent cols per lane
+        col_a = 2 * lane_idx if lane_idx < 16 else epi_n + 2 * (lane_idx - 16)
+        col_b = col_a + 1
+
+        copy_128bit_atom = cute.make_copy_atom(cute.nvgpu.CopyUniversalOp(), cutlass.Float32, num_bits_per_copy=128)
+        warp_base_ptr = sDbias.iterator + warp_local * epi_n * 2 * 32
+        swizzle_a = ((col_a >> 1) & 0x7) << 2
+        swizzle_b = ((col_b >> 1) & 0x7) << 2
+
+        sum_a = cutlass.Float32(0.0)
+        sum_b = cutlass.Float32(0.0)
+        rDst_a = cute.make_rmem_tensor(cute.make_layout((4,)), cutlass.Float32)
+        rDst_b = cute.make_rmem_tensor(cute.make_layout((4,)), cutlass.Float32)
+        for g in cutlass.range(8, unroll_full=True):
+            m_base = g * 4
+            sw_offset_a = col_a * 32 + (m_base ^ swizzle_a)
+            sSrc_a = cute.make_tensor(warp_base_ptr + sw_offset_a, cute.make_layout((4,)))
+            cute.copy_atom_call(copy_128bit_atom, sSrc_a, rDst_a)
+
+            sw_offset_b = col_b * 32 + (m_base ^ swizzle_b)
+            sSrc_b = cute.make_tensor(warp_base_ptr + sw_offset_b, cute.make_layout((4,)))
+            cute.copy_atom_call(copy_128bit_atom, sSrc_b, rDst_b)
+
+            for i in cutlass.range(4, unroll_full=True):
+                sum_a = sum_a + rDst_a[i]
+                sum_b = sum_b + rDst_b[i]
+
+        # Reduce to global
+        n_offset = (n_base_d1 + 2 * lane_idx) if lane_idx < 16 else (n_base_d2 + 2 * (lane_idx - 16))
+
+        if cutlass.const_expr(self.dbias_cross_warp_reduce):
+            # Cross-warp SMEM reduce → single atomicAdd per CTA (NVF4)
+            reduce_base = sDbias.iterator
+            copy_64bit_atom = cute.make_copy_atom(cute.nvgpu.CopyUniversalOp(), cutlass.Float32, num_bits_per_copy=64)
+
+            self.epilog_sync_barrier.arrive_and_wait()
+            rSrc_partial = cute.make_rmem_tensor(cute.make_layout((2,)), cutlass.Float32)
+            rSrc_partial[0] = sum_a
+            rSrc_partial[1] = sum_b
+            sDst_partial = cute.make_tensor(reduce_base + warp_local * 64 + lane_idx * 2, cute.make_layout((2,)))
+            cute.copy_atom_call(copy_64bit_atom, rSrc_partial, sDst_partial)
+            self.epilog_sync_barrier.arrive_and_wait()
+
+            if warp_idx == self.epilog_warp_id[0]:
+                cta_sum_a = cutlass.Float32(0.0)
+                cta_sum_b = cutlass.Float32(0.0)
+                rDst_w = cute.make_rmem_tensor(cute.make_layout((2,)), cutlass.Float32)
+                for w in cutlass.range(self.num_epilog_warps):
+                    sSrc_w = cute.make_tensor(reduce_base + w * 64 + lane_idx * 2, cute.make_layout((2,)))
+                    cute.copy_atom_call(copy_64bit_atom, sSrc_w, rDst_w)
+                    cta_sum_a = cta_sum_a + rDst_w[0]
+                    cta_sum_b = cta_sum_b + rDst_w[1]
+                if n_offset < dbias_n_total:
+                    gmem_ptr = dbias_gmem_2d[(expert_idx, n_offset, None)].iterator.llvm_ptr
+                    atomic_add_bf16x2(gmem_ptr, cta_sum_a, cta_sum_b)
+        else:
+            # Per-warp atomicAdd (MXF8)
+            if n_offset < dbias_n_total:
+                gmem_ptr = dbias_gmem_2d[(expert_idx, n_offset, None)].iterator.llvm_ptr
+                atomic_add_bf16x2(gmem_ptr, sum_a, sum_b)
+
+    @cute.jit
     def dswiglu(
         self,
         acc_vec: cute.Tensor,
@@ -1864,10 +1966,7 @@ class BlockScaledMoEGroupedGemmDgluKernel:
                 x1_filter_0 = y1_0 if x1_0 <= geglu_max_value else cutlass.Float32(0.0)
                 x1_filter_1 = y1_1 if x1_1 <= geglu_max_value else cutlass.Float32(0.0)
 
-                dx1_vec[i], dx1_vec[i + 1] = fmul2(
-                    (dy1_0, dy1_1),
-                    (cutlass.Float32(x1_filter_0), cutlass.Float32(x1_filter_1)),
-                )
+                dx1_vec[i], dx1_vec[i + 1] = fmul2((dy1_0, dy1_1), (cutlass.Float32(x1_filter_0), cutlass.Float32(x1_filter_1)))
 
                 # dy2 = g * y1 * sigmoid_out * mProb
                 dy2_0, dy2_1 = fmul2(y1, acc_mul_sigmoid_prob)
@@ -1875,10 +1974,7 @@ class BlockScaledMoEGroupedGemmDgluKernel:
                 x2_filter_1 = x2_1 if x2_1 <= geglu_max_value else x_dtype(0.0)
                 x2_filter_0 = y2_0 if x2_filter_0 >= geglu_min_value else cutlass.Float32(0.0)
                 x2_filter_1 = y2_1 if x2_filter_1 >= geglu_min_value else cutlass.Float32(0.0)
-                dx2_vec[i], dx2_vec[i + 1] = fmul2(
-                    (dy2_0, dy2_1),
-                    (cutlass.Float32(x2_filter_0), cutlass.Float32(x2_filter_1)),
-                )
+                dx2_vec[i], dx2_vec[i + 1] = fmul2((dy2_0, dy2_1), (cutlass.Float32(x2_filter_0), cutlass.Float32(x2_filter_1)))
 
                 if cutlass.const_expr(self.generate_dprob):
                     prob_grad, prob_grad_1 = fmul2(
@@ -1956,6 +2052,7 @@ class BlockScaledMoEGroupedGemmDgluKernel:
         prob: cute.Tensor,
         dprob: cute.Tensor,
         linear_offset: Float32,
+        mDbias_tensor: Optional[cute.Tensor],
         workspace_ptr,
         cluster_layout_vmnk: cute.Layout,
         cluster_layout_sfb_vmnk: cute.Layout,
@@ -1984,9 +2081,6 @@ class BlockScaledMoEGroupedGemmDgluKernel:
         if warp_idx == self.tma_warp_id:
             cpasync.prefetch_descriptor(tma_atom_a)
             cpasync.prefetch_descriptor(tma_atom_sfa)
-            if cutlass.const_expr(self.weight_mode == MoEWeightMode.DENSE):
-                cpasync.prefetch_descriptor(tma_atom_b)
-                cpasync.prefetch_descriptor(tma_atom_sfb)
             cpasync.prefetch_descriptor(tma_atom_c)
             if cutlass.const_expr(not self.store_d_directly):
                 cpasync.prefetch_descriptor(tma_atom_d)
@@ -2082,6 +2176,15 @@ class BlockScaledMoEGroupedGemmDgluKernel:
             sched_storage=sched_storage,
         )
         scheduler.internal_init()
+
+        # dBias SMEM setup
+        if cutlass.const_expr(self.generate_dbias):
+            sDbias = storage.sDbias.get_tensor(
+                cute.make_layout(
+                    (self.epi_tile[1] * 2, 32, len(self.epilog_warp_id)),
+                    stride=(32, 1, self.epi_tile[1] * 2 * 32),
+                )
+            )
 
         # Tensor memory dealloc barrier init
         tmem = utils.TmemAllocator(
@@ -2221,7 +2324,11 @@ class BlockScaledMoEGroupedGemmDgluKernel:
         # Specialized TMA load warp
         #
         if warp_idx == self.tma_warp_id:
-            ext = self._make_extension(workspace_ptr)
+            desc_workspace = TensormapWorkspace(workspace_ptr, ["b", "sfb"])
+            ext = DiscreteWeightScaledGemmSchedExtension(
+                tensormap_ctor=desc_workspace,
+                sf_vec_size=self.sf_vec_size,
+            )
 
             ab_producer_state = pipeline.make_pipeline_state(pipeline.PipelineUserType.Producer, self.num_ab_stage)
 
@@ -2254,26 +2361,10 @@ class BlockScaledMoEGroupedGemmDgluKernel:
                 real_sfb, desc_ptr_sfb = ext.get_gmem_tensor("sfb", mSFB_nkl, padded_offsets, work_tile_info)
 
                 # local_tile on per-expert tensors
-                gA_mkl = cute.local_tile(
-                    real_a,
-                    cute.slice_(self.mma_tiler, (None, 0, None)),
-                    (None, None, None),
-                )
-                gB_nkl = cute.local_tile(
-                    real_b,
-                    cute.slice_(self.mma_tiler, (0, None, None)),
-                    (None, None, None),
-                )
-                gSFA_mkl = cute.local_tile(
-                    real_sfa,
-                    cute.slice_(self.mma_tiler, (None, 0, None)),
-                    (None, None, None),
-                )
-                gSFB_nkl = cute.local_tile(
-                    real_sfb,
-                    cute.slice_(self.mma_tiler_sfb, (0, None, None)),
-                    (None, None, None),
-                )
+                gA_mkl = cute.local_tile(real_a, cute.slice_(self.mma_tiler, (None, 0, None)), (None, None, None))
+                gB_nkl = cute.local_tile(real_b, cute.slice_(self.mma_tiler, (0, None, None)), (None, None, None))
+                gSFA_mkl = cute.local_tile(real_sfa, cute.slice_(self.mma_tiler, (None, 0, None)), (None, None, None))
+                gSFB_nkl = cute.local_tile(real_sfb, cute.slice_(self.mma_tiler_sfb, (0, None, None)), (None, None, None))
 
                 # MMA partition
                 thr_mma = tiled_mma.get_slice(mma_tile_coord_v)
@@ -2668,7 +2759,11 @@ class BlockScaledMoEGroupedGemmDgluKernel:
                 d_rcp_limits = get_dtype_rcp_limits(self.d_dtype)
 
             # Extension for per-expert domain conversion in epilogue
-            epi_ext = self._make_extension(workspace_ptr)
+            epi_desc_workspace = TensormapWorkspace(workspace_ptr, ["b", "sfb"])
+            epi_ext = DiscreteWeightScaledGemmSchedExtension(
+                tensormap_ctor=epi_desc_workspace,
+                sf_vec_size=self.sf_vec_size,
+            )
 
             acc_consumer_state = pipeline.make_pipeline_state(pipeline.PipelineUserType.Consumer, self.num_acc_stage)
 
@@ -2729,47 +2824,21 @@ class BlockScaledMoEGroupedGemmDgluKernel:
                 # Per-expert gmem tensor setup via extension
                 #
                 real_d, _ = epi_ext.get_gmem_tensor("d", mD_mnl, padded_offsets, epi_work_tile_info)
-                gD_mnl_loop = cute.local_tile(
-                    real_d,
-                    cute.slice_(self.mma_tiler_d, (None, None, 0)),
-                    (None, None, None),
-                )
+                gD_mnl_loop = cute.local_tile(real_d, cute.slice_(self.mma_tiler_d, (None, None, 0)), (None, None, None))
                 thr_mma_epi = tiled_mma.get_slice(mma_tile_coord_v)
                 tCgD_loop = thr_mma_epi.partition_C(gD_mnl_loop)
 
                 if cutlass.const_expr(not self.store_d_directly):
                     bSG_sD, bSG_gD_partitioned = self.epilog_gmem_copy_and_partition(epi_tidx, tma_atom_d, tCgD_loop, epi_tile, sD)
-                    bSG_gD = bSG_gD_partitioned[
-                        (
-                            None,
-                            None,
-                            None,
-                            mma_tile_coord_mnl[0],
-                            mma_tile_coord_mnl[1],
-                            0,
-                        )
-                    ]
+                    bSG_gD = bSG_gD_partitioned[(None, None, None, mma_tile_coord_mnl[0], mma_tile_coord_mnl[1], 0)]
                     bSG_gD = cute.group_modes(bSG_gD, 1, cute.rank(bSG_gD))
 
                 if cutlass.const_expr(self.generate_sfd):
                     real_d_col, _ = epi_ext.get_gmem_tensor("d_col", mD_col_mnl, padded_offsets, epi_work_tile_info)
-                    gD_col_mnl_loop = cute.local_tile(
-                        real_d_col,
-                        cute.slice_(self.mma_tiler_d, (None, None, 0)),
-                        (None, None, None),
-                    )
+                    gD_col_mnl_loop = cute.local_tile(real_d_col, cute.slice_(self.mma_tiler_d, (None, None, 0)), (None, None, None))
                     tCgD_col_loop = thr_mma_epi.partition_C(gD_col_mnl_loop)
                     bSG_sD_col, bSG_gD_partitioned_col = self.epilog_gmem_copy_and_partition(epi_tidx, tma_atom_d_col, tCgD_col_loop, epi_tile, sD_col)
-                    bSG_gD_col = bSG_gD_partitioned_col[
-                        (
-                            None,
-                            None,
-                            None,
-                            mma_tile_coord_mnl[0],
-                            mma_tile_coord_mnl[1],
-                            0,
-                        )
-                    ]
+                    bSG_gD_col = bSG_gD_partitioned_col[(None, None, None, mma_tile_coord_mnl[0], mma_tile_coord_mnl[1], 0)]
                     bSG_gD_col = cute.group_modes(bSG_gD_col, 1, cute.rank(bSG_gD_col))
 
                 # Get accumulator stage index
@@ -2941,24 +3010,9 @@ class BlockScaledMoEGroupedGemmDgluKernel:
                     #
                     square_alpha = alpha_val * alpha_val
                     if cutlass.const_expr(self.act_func == "dswiglu"):
-                        d1_vec, d2_vec, dprob_swiglu = self.dswiglu(
-                            acc_vec,
-                            ab1_vec_load,
-                            ab2_vec_load,
-                            mProb,
-                            beta_val,
-                            square_alpha,
-                            dprob_swiglu,
-                        )
+                        d1_vec, d2_vec, dprob_swiglu = self.dswiglu(acc_vec, ab1_vec_load, ab2_vec_load, mProb, beta_val, square_alpha, dprob_swiglu)
                     elif cutlass.const_expr(self.act_func == "dgeglu"):
-                        d1_vec, d2_vec, dprob_swiglu = self.dgeglu(
-                            acc_vec,
-                            ab1_vec_load,
-                            ab2_vec_load,
-                            mProb,
-                            linear_offset,
-                            dprob_swiglu,
-                        )
+                        d1_vec, d2_vec, dprob_swiglu = self.dgeglu(acc_vec, ab1_vec_load, ab2_vec_load, mProb, linear_offset, dprob_swiglu)
 
                     if cutlass.const_expr(self.generate_dprob):
                         # dprob sum reduction
@@ -2982,6 +3036,25 @@ class BlockScaledMoEGroupedGemmDgluKernel:
                                 cutlass.Float32(0.0),
                                 0,
                             )
+
+                    #
+                    # Generate dBias
+                    #
+                    if cutlass.const_expr(self.generate_dbias):
+                        n_base_d1 = epi_work_tile_info.tile_n_idx * (self.mma_tiler[1] * 2) + (2 * real_subtile_idx + 0) * self.epi_tile[1]
+                        n_base_d2 = epi_work_tile_info.tile_n_idx * (self.mma_tiler[1] * 2) + (2 * real_subtile_idx + 1) * self.epi_tile[1]
+                        dbias_n_total = cute.size(mDbias_tensor, mode=[1])
+                        self.dbias_reduction(
+                            d1_vec,
+                            d2_vec,
+                            warp_idx,
+                            sDbias,
+                            mDbias_tensor,
+                            expert_idx,
+                            n_base_d1,
+                            n_base_d2,
+                            dbias_n_total,
+                        )
 
                     #
                     # Generate amax
@@ -3070,8 +3143,10 @@ class BlockScaledMoEGroupedGemmDgluKernel:
                             else:
                                 self.cvt_f32x4_to_f8x4(tCrSFDRow_pvscale, tCrSFDRow)
                                 self.cvt_f32x4_to_f8x4(tCrSFDCol_pvscale, tCrSFDCol)
-                            cute.autovec_copy(tCrSFDRow, tCgSFDRow)
-                            cute.autovec_copy(tCrSFDCol, tCgSFDCol)
+                            if sfd_row_idx_mn[1] * 32 * regPerSubtile < cute.size(cute.shape(mSFDRow_mnl.layout, mode=[1])):
+                                cute.autovec_copy(tCrSFDRow, tCgSFDRow)
+                            if sfd_col_idx_mn[1] * 32 * regPerSubtile < cute.size(cute.shape(mSFDCol_mnl.layout, mode=[1])):
+                                cute.autovec_copy(tCrSFDCol, tCgSFDCol)
                     else:
                         #
                         # Convert to D type
@@ -3232,7 +3307,11 @@ class BlockScaledMoEGroupedGemmDgluKernel:
         # Specialized epilog load warp (loads C from GMEM to SMEM via TMA)
         #
         if warp_idx == self.epilog_load_tma_id:
-            c_load_ext = self._make_extension(workspace_ptr)
+            c_load_desc_workspace = TensormapWorkspace(workspace_ptr, ["b", "sfb"])
+            c_load_ext = DiscreteWeightScaledGemmSchedExtension(
+                tensormap_ctor=c_load_desc_workspace,
+                sf_vec_size=self.sf_vec_size,
+            )
 
             tile_info_consumer_state = pipeline.make_pipeline_state(pipeline.PipelineUserType.Consumer, self.num_tile_stage)
             tile_info = cute.make_rmem_tensor((4,), cutlass.Int32)
@@ -3265,11 +3344,7 @@ class BlockScaledMoEGroupedGemmDgluKernel:
 
                 # Per-expert C tensor via extension
                 real_c, _ = c_load_ext.get_gmem_tensor("c", mC_mnl, padded_offsets, c_work_tile_info)
-                gC_mnl_loop = cute.local_tile(
-                    real_c,
-                    cute.slice_(self.mma_tiler, (None, None, 0)),
-                    (None, None, None),
-                )
+                gC_mnl_loop = cute.local_tile(real_c, cute.slice_(self.mma_tiler, (None, None, 0)), (None, None, None))
                 thr_mma_c_load = tiled_mma.get_slice(mma_tile_coord_v)
                 tCgC_loop = thr_mma_c_load.partition_C(gC_mnl_loop)
 
@@ -3506,6 +3581,7 @@ class BlockScaledMoEGroupedGemmDgluKernel:
         num_smem_capacity: int,
         occupancy: int,
         store_d_directly: bool,
+        generate_dbias: bool = False,
     ) -> Tuple[int, int, int]:
         """Computes the number of stages for A/B/D operands based on heuristics.
 
@@ -3607,8 +3683,10 @@ class BlockScaledMoEGroupedGemmDgluKernel:
             d_bytes = d_bytes * 2
         # AMAX bytes
         amax_bytes = get_amax_smem_size() if d_dtype == cutlass.BFloat16 else 0
+        # dBias transpose buffer: (128, 64) column-major FP32 = 32 KB
+        dbias_bytes = 128 * 64 * cute.size_in_bytes(cutlass.Float32, cute.make_layout((1,))) if generate_dbias else 0
         # Epilogue bytes
-        epi_bytes = c_bytes + d_bytes + amax_bytes
+        epi_bytes = c_bytes + d_bytes + amax_bytes + dbias_bytes
 
         # Calculate A/B stages:
         # Start with total smem per CTA (capacity / occupancy)

@@ -42,7 +42,7 @@ This kernel performs:
   - `D_row`: row-quantized dGLU output, shape `(valid_m, 2N, 1)`
   - `D_col`: column-quantized dGLU output, shape `(valid_m, 2N, 1)`
   - `dprob`: gradient of `prob`, shape `(valid_m, 1, 1)`. Must be zero-initialized.
-  - `dbias` (dense only, optional): per-expert bias gradient tensor, shape `(L, 2N, 1)`
+  - `dbias` (optional): per-expert bias gradient tensor, shape `(L, 2N, 1)`
   - `SFD_row`: row scale factors (when `d_dtype` is FP8), shape `(32, 4, ceil(valid_m/128), 4, ceil(ceil((2N)/sf_vec_size)/4), 1)`
   - `SFD_col`: column scale factors (when `d_dtype` is FP8), shape `(32, 4, ceil((2N)/128), 4, ceil(ceil(valid_m/sf_vec_size)/4), 1)`
   - `amax`: per-group amax (when `d_dtype` is bf16/float16), shape `(L, 2, 1)`
@@ -234,6 +234,8 @@ api.execute(
 )
 ```
 
+In the class API, dbias generation is specialized at compile time: if `sample_dbias` is omitted, `dbias_tensor` must also be omitted at `execute()`.
+
 **Discrete mode:**
 
 ```python
@@ -321,7 +323,9 @@ Providing both or neither raises `ValueError`.
 
 - `acc_dtype`: Must be `torch.float32`
 - `mma_tiler_mn`: Kernel tile size. Default: `(256, 256)`
-- `cluster_shape_mn`: Thread Block cluster shape. Default: `(2, 1)` when `TILE_M=256`
+  - `TILE_M ∈ {128, 256}`
+  - `TILE_N = 256`
+- `cluster_shape_mn`: Thread Block cluster shape. Default: `(2, 1)` when `TILE_M=256`, `(1, 1)` otherwise
 - `sf_vec_size`: Scale factor vector size. `{16, 32}`. Default: `16`
 - `vector_f32`: Enable packed f32 operations. Default: `False`
 - `m_aligned`: Must be `256`. Default: `256`
@@ -382,7 +386,7 @@ Returns a `TupleDict` (dictionary + tuple unpacking):
 - `N` must be divisible by 32 (32-column blocks for input/gate interleaving)
 - Expert count must be `<= 1024`
 - Each group's M dimension is aligned to `m_aligned` (256)
-- `dbias` is currently supported only in dense mode
+- In the class API, `dbias` is compiled in only when `sample_dbias` is provided; passing a runtime `dbias_tensor` without `sample_dbias` raises `ValueError`
 
 ### Environment
 

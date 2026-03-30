@@ -366,6 +366,48 @@ def test_grouped_gemm_glu_dense_wrapper_with_bias_fp8(
     )
 
 
+@pytest.mark.L0
+@torch_fork_set_rng(seed=0)
+def test_grouped_gemm_glu_dense_compile_execute_with_bias_partial_n(request):
+    _test_grouped_gemm_glu_dense_compile_execute(
+        ab_dtype=torch.float4_e2m1fn_x2,
+        c_dtype=torch.bfloat16,
+        d_dtype=torch.bfloat16,
+        cd_major="n",
+        acc_dtype=torch.float32,
+        mma_tiler_mn=(128, 256),
+        cluster_shape_mn=(1, 1),
+        sf_vec_size=32,
+        sf_dtype=torch.float8_e8m0fnu,
+        vector_f32=True,
+        discrete_col_sfd=False,
+        request=request,
+        cfg_overrides={"n": 384},
+        enable_bias=True,
+    )
+
+
+@pytest.mark.L0
+@torch_fork_set_rng(seed=0)
+def test_grouped_gemm_glu_dense_wrapper_with_bias_partial_n(request):
+    _test_grouped_gemm_glu_dense_wrapper(
+        ab_dtype=torch.float4_e2m1fn_x2,
+        c_dtype=torch.bfloat16,
+        d_dtype=torch.bfloat16,
+        cd_major="n",
+        acc_dtype=torch.float32,
+        mma_tiler_mn=(128, 256),
+        cluster_shape_mn=(1, 1),
+        sf_vec_size=32,
+        sf_dtype=torch.float8_e8m0fnu,
+        vector_f32=True,
+        discrete_col_sfd=False,
+        request=request,
+        cfg_overrides={"n": 384},
+        enable_bias=True,
+    )
+
+
 # ---------------------------------------------------------------------------
 #  Impl: Dense Class API
 # ---------------------------------------------------------------------------
@@ -720,6 +762,7 @@ def _test_grouped_gemm_glu_discrete_compile_execute(
     act_func,
     request,
     b_major="k",
+    enable_bias=False,
     use_dynamic_sched=False,
 ):
     try:
@@ -757,6 +800,7 @@ def _test_grouped_gemm_glu_discrete_compile_execute(
         sf_vec_size=cfg["sf_vec_size"],
         m_aligned=cfg["m_aligned"],
         b_major=cfg["b_major"],
+        enable_bias=enable_bias,
     )
 
     outputs = allocate_discrete_output_tensors(
@@ -779,6 +823,7 @@ def _test_grouped_gemm_glu_discrete_compile_execute(
         sample_padded_offsets=inputs["padded_offsets_tensor"],
         sample_alpha=inputs["alpha_tensor"],
         sample_d_col=outputs["d_col_tensor"],
+        sample_bias=inputs.get("bias_tensor"),
         num_experts=len(inputs["b_list"]),
         b_shape=(cfg["n"], cfg["k"]),
         b_dtype=inputs["b_list"][0].dtype,
@@ -814,6 +859,7 @@ def _test_grouped_gemm_glu_discrete_compile_execute(
         alpha_tensor=inputs["alpha_tensor"],
         b_ptrs=inputs["b_ptrs_tensor"],
         sfb_ptrs=inputs["sfb_ptrs_tensor"],
+        bias_tensor=inputs.get("bias_tensor"),
         d_col_tensor=outputs["d_col_tensor"],
         sfd_row_tensor=outputs.get("sfd_row_tensor"),
         sfd_col_tensor=outputs.get("sfd_col_tensor"),
@@ -841,6 +887,7 @@ def _test_grouped_gemm_glu_discrete_wrapper(
     act_func,
     request,
     b_major="k",
+    enable_bias=False,
     use_dynamic_sched=False,
 ):
     try:
@@ -878,6 +925,7 @@ def _test_grouped_gemm_glu_discrete_wrapper(
         sf_vec_size=cfg["sf_vec_size"],
         m_aligned=cfg["m_aligned"],
         b_major=cfg["b_major"],
+        enable_bias=enable_bias,
     )
 
     try:
@@ -889,6 +937,7 @@ def _test_grouped_gemm_glu_discrete_wrapper(
                 alpha_tensor=inputs["alpha_tensor"],
                 b_ptrs=inputs["b_ptrs_tensor"],
                 sfb_ptrs=inputs["sfb_ptrs_tensor"],
+                bias_tensor=inputs.get("bias_tensor"),
                 n=cfg["n"],
                 b_dtype=inputs["b_list"][0].dtype,
                 b_major=cfg["b_major"],
@@ -912,3 +961,45 @@ def _test_grouped_gemm_glu_discrete_wrapper(
         pytest.skip(f"Unsupported testcase: {e}")
 
     check_ref_discrete_grouped_gemm(inputs, outputs, cfg, skip_ref=cfg["skip_ref"])
+
+
+@pytest.mark.L0
+@torch_fork_set_rng(seed=0)
+def test_grouped_gemm_glu_discrete_compile_execute_with_bias(request):
+    _test_grouped_gemm_glu_discrete_compile_execute(
+        ab_dtype=torch.float4_e2m1fn_x2,
+        c_dtype=torch.bfloat16,
+        d_dtype=torch.bfloat16,
+        cd_major="n",
+        acc_dtype=torch.float32,
+        mma_tiler_mn=(256, 256),
+        cluster_shape_mn=(2, 1),
+        sf_vec_size=32,
+        sf_dtype=torch.float8_e8m0fnu,
+        vector_f32=False,
+        discrete_col_sfd=False,
+        act_func="swiglu",
+        request=request,
+        enable_bias=True,
+    )
+
+
+@pytest.mark.L0
+@torch_fork_set_rng(seed=0)
+def test_grouped_gemm_glu_discrete_wrapper_with_bias(request):
+    _test_grouped_gemm_glu_discrete_wrapper(
+        ab_dtype=torch.float4_e2m1fn_x2,
+        c_dtype=torch.bfloat16,
+        d_dtype=torch.bfloat16,
+        cd_major="n",
+        acc_dtype=torch.float32,
+        mma_tiler_mn=(256, 256),
+        cluster_shape_mn=(2, 1),
+        sf_vec_size=32,
+        sf_dtype=torch.float8_e8m0fnu,
+        vector_f32=False,
+        discrete_col_sfd=False,
+        act_func="swiglu",
+        request=request,
+        enable_bias=True,
+    )

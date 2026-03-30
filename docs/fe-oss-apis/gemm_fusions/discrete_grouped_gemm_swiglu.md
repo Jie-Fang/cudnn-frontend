@@ -287,8 +287,8 @@ api.execute(
 
 - `mma_tiler_mn: Tuple[int, int]`
   - Kernel tile size `(TILE_M, TILE_N)`. Default: `(256, 256)`
-  - `TILE_M in {64, 128, 256}` (effective combinations depend on `use_2cta_instrs`)
-  - `TILE_N in {128, 256}`
+  - `TILE_M in {128, 256}`
+  - `TILE_N = 256`
 
 - `cluster_shape_mn: Tuple[int, int] | None`
   - Thread block cluster shape `(CLUSTER_M, CLUSTER_N)`
@@ -387,7 +387,6 @@ Returns a `TupleDict` - a dictionary-like object that also supports tuple unpack
 - `sf_dtype=float8_e4m3fn` with `sf_vec_size=32` is not supported
 - FP8 `ab_dtype` with `sf_vec_size=16` is not supported
 - FP4 `ab_dtype` with `sf_vec_size=16` and `d_dtype=float32` is not supported
-- FP8 `ab_dtype` with `mma_tiler_mn[1]=128` and FP8 `d_dtype` is not supported
 - FP4 `ab_dtype` requires `c_dtype in {float16, bfloat16}`
 - FP4 `ab_dtype` requires `b_major="k"`
 
@@ -404,6 +403,7 @@ Returns a `TupleDict` - a dictionary-like object that also supports tuple unpack
 ### Tiling and Cluster
 
 - `mma_tiler_mn[0] = 256` enables 2-CTA instructions (`use_2cta_instrs=True`)
+- `mma_tiler_mn[0] = 128` uses the non-2CTA instruction path
 - When `use_2cta_instrs=True`: `cluster_shape_mn[0]` must be divisible by 2
 - `m_aligned` must be divisible by `mma_tiler_mn[0]`
 - `m_aligned` must equal `FIX_PAD_SIZE=256`

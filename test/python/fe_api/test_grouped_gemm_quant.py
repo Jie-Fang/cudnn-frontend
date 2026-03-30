@@ -469,6 +469,84 @@ def test_grouped_gemm_quant_wrapper_requires_norm_const_tensor_for_fp8(request):
         )
 
 
+@pytest.mark.L0
+@torch_fork_set_rng(seed=0)
+@with_scheduler_modes
+def test_grouped_gemm_quant_wrapper_with_bias_sm100(use_dynamic_sched, request):
+    """Dense grouped GEMM quant with fused bias: D matches ref (alpha * GEMM + bias * prob)."""
+    try:
+        from cudnn import grouped_gemm_quant_wrapper_sm100
+        from cuda.bindings import driver as cuda
+    except ImportError:
+        pytest.skip("Environment not supported: cudnn optional dependencies not installed")
+
+    if torch.cuda.get_device_capability()[0] < 10:
+        pytest.skip("Requires SM100+ for grouped GEMM quant kernel.")
+
+    cfg = grouped_gemm_quant_init(
+        request,
+        ab_dtype=torch.float4_e2m1fn_x2,
+        c_dtype=torch.bfloat16,
+        d_dtype=torch.bfloat16,
+        cd_major="n",
+        acc_dtype=torch.float32,
+        mma_tiler_mn=(256, 256),
+        cluster_shape_mn=(2, 1),
+        sf_vec_size=16,
+        sf_dtype=torch.float8_e4m3fn,
+        vector_f32=False,
+        discrete_col_sfd=False,
+    )
+
+    inputs = allocate_grouped_gemm_input_tensors(
+        n=cfg["n"],
+        k=cfg["k"],
+        l=cfg["l"],
+        group_m_list=cfg["group_m_list"],
+        ab_dtype=cfg["ab_dtype"],
+        sf_dtype=cfg["sf_dtype"],
+        sf_vec_size=cfg["sf_vec_size"],
+        m_aligned=cfg["m_aligned"],
+        enable_bias=True,
+    )
+    inputs["bias_ref"] = inputs["bias_tensor"]
+    stream = cuda.CUstream(torch.cuda.current_stream().cuda_stream)
+
+    try:
+        outputs = grouped_gemm_quant_wrapper_sm100(
+            a_tensor=inputs["a_tensor"],
+            sfa_tensor=inputs["sfa_tensor"],
+            padded_offsets=inputs["padded_offsets_tensor"],
+            alpha_tensor=inputs["alpha_tensor"],
+            b_tensor=inputs["b_tensor"],
+            sfb_tensor=inputs["sfb_tensor"],
+            bias_tensor=inputs["bias_tensor"],
+            norm_const_tensor=inputs.get("norm_const_tensor"),
+            prob_tensor=inputs["prob_tensor"],
+            acc_dtype=cfg["acc_dtype"],
+            c_dtype=cfg["c_dtype"],
+            d_dtype=cfg["d_dtype"],
+            cd_major=cfg["cd_major"],
+            mma_tiler_mn=cfg["mma_tiler_mn"],
+            cluster_shape_mn=cfg["cluster_shape_mn"],
+            sf_vec_size=cfg["sf_vec_size"],
+            vector_f32=cfg["vector_f32"],
+            m_aligned=cfg["m_aligned"],
+            discrete_col_sfd=cfg["discrete_col_sfd"],
+            use_dynamic_sched=use_dynamic_sched,
+            current_stream=stream,
+        )
+    except (ValueError, NotImplementedError) as exc:
+        pytest.skip(f"Unsupported testcase: {exc}")
+
+    check_ref_grouped_gemm_quant(
+        inputs,
+        outputs,
+        cfg,
+        skip_ref=cfg["skip_ref"],
+    )
+
+
 def _test_grouped_gemm_quant_compile_execute(
     ab_dtype,
     c_dtype,

@@ -210,8 +210,8 @@ api.execute(
 ### Common Parameters
 
 - `acc_dtype`: Must be `torch.float32`
-- `mma_tiler_mn`: Default `(256, 256)`
-- `cluster_shape_mn`: Default `(2, 1)` when `TILE_M=256`
+- `mma_tiler_mn`: Default `(256, 256)`; supported tiles are `TILE_M ∈ {128, 256}` and `TILE_N = 256`
+- `cluster_shape_mn`: Default `(2, 1)` when `TILE_M=256`, `(1, 1)` otherwise
 - `sf_vec_size`: `{16, 32}`. Default: `16`
 - `vector_f32`: Default: `False`
 - `m_aligned`: Must be `256`
