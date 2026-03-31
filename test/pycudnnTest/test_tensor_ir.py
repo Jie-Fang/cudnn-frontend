@@ -1366,19 +1366,20 @@ class test_tensor_ir:
                     cubin_chip,
                     matmul_element_bits,
                 ) in kernel_configs:
-                    if not nv_tensor_ir.SM100CompilationConfig.isValidConfiguration(
+                    cc = self.compiler_with_kernel_cache.get_compute_capability()
+                    if not nv_tensor_ir.SM10xCompilationConfig.isValidConfiguration(
                         nv_tensor_ir.MmaShape(mma_shape[0], mma_shape[1], mma_shape[2]),
                         nv_tensor_ir.MmaShape(tile_size[0], tile_size[1], tile_size[2]),
                         cta_count,
                         matmul_element_bits,
                         nv_tensor_ir.MmaShape(cluster_shape[0], cluster_shape[1], cluster_shape[2]),
+                        cc,
                     ):
                         print(f"#### Invalid configuration: {tile_size}, {mma_shape}, {cluster_shape}, {cta_count}")
                         print(f"#### Skip this config")
                         continue
                     print(f"\n#### Valid configuration: {tile_size}, {mma_shape}, {cluster_shape}, {cta_count}")
 
-                    cc = self.compiler_with_kernel_cache.get_compute_capability()
                     # TODO: Add enum to support more cubin_chip
                     if self.SUPPORTED_CUBIN_CHIP[cc] != cubin_chip:
                         print(f"#### cubin_chip={cubin_chip} is not supported for cc={cc}")
