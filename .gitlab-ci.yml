@@ -135,6 +135,7 @@ include:
 stages:
     - analysis
     - build
+    - sanitizer_tests
     - cpp_samples
     - oss_tests
     - cpp_tests

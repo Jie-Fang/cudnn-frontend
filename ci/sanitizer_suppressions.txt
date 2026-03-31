@@ -1,0 +1,16 @@
+# LeakSanitizer suppressions for CUDA runtime and cuDNN backend.
+# These libraries are precompiled and their internal allocations
+# are not meaningful to track from the frontend's perspective.
+
+# CUDA driver and runtime
+leak:libcuda.so
+leak:libcudart.so
+leak:libnvidia-ml.so
+
+# NOTE: libcudnn.so is intentionally NOT suppressed.
+# This allows detection of cuDNN backend descriptor leaks caused by
+# the frontend failing to call cudnnBackendDestroyDescriptor().
+
+# CUDA math libraries
+leak:libcublas.so
+leak:libcublasLt.so
