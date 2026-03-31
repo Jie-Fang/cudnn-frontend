@@ -650,6 +650,25 @@ class PyGraph {
                           py::object override_shapes  = py::none(),
                           py::object override_strides = py::none());
 
+    // --- Variant pack template (called automatically by build_plans) ---
+    void
+    prepare_variant_pack_template();
+
+    std::vector<int64_t>
+    get_variant_pack_uids_sorted() {
+        return graph->get_variant_pack_uids_sorted();
+    }
+
+    void
+    execute_with_ptrs(std::vector<std::intptr_t> const& user_ptrs, std::intptr_t workspace, std::intptr_t exec_handle);
+
+    // Raw pointer version: takes a pointer to an array of device pointers (no pybind11 copy)
+    void
+    execute_with_raw_ptrs(std::intptr_t user_ptrs_array,
+                          int64_t n_user,
+                          std::intptr_t workspace,
+                          std::intptr_t exec_handle);
+
     std::vector<BehaviorNote_t>
     get_behavior_notes();
 

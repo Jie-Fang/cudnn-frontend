@@ -468,8 +468,29 @@ def _build_bprop_graph(
 # ---------------------------------------------------------------------------
 
 
-@torch.library.custom_op("cudnn::sdpa", mutates_args=())
-def sdpa(
+_lib = torch.library.Library("cudnn", "DEF")
+
+_lib.define(
+    "sdpa(Tensor q, Tensor k, Tensor v, float attn_scale, "
+    "bool is_causal=False, int diagonal_alignment=0, "
+    "int left_bound=-1, int right_bound=-1, "
+    "Tensor? seq_len_q=None, Tensor? seq_len_kv=None, "
+    "Tensor? cumulative_seq_len_q=None, Tensor? cumulative_seq_len_kv=None"
+    ") -> (Tensor, Tensor)"
+)
+
+_lib.define(
+    "sdpa_bwd(Tensor dO, Tensor q, Tensor k, Tensor v, Tensor o, Tensor stats, "
+    "float attn_scale, bool is_causal=False, int diagonal_alignment=0, "
+    "int left_bound=-1, int right_bound=-1, "
+    "Tensor? seq_len_q=None, Tensor? seq_len_kv=None, "
+    "Tensor? cumulative_seq_len_q=None, Tensor? cumulative_seq_len_kv=None, "
+    "bool is_deterministic=False"
+    ") -> (Tensor, Tensor, Tensor)"
+)
+
+
+def _sdpa_impl(
     q: torch.Tensor,
     k: torch.Tensor,
     v: torch.Tensor,
@@ -536,18 +557,21 @@ def sdpa(
             cumulative_seq_len_q,
             cumulative_seq_len_kv,
         )
-        _fprop_cache[cache_key] = (graph, workspace_size)
+        uid_order = graph._get_variant_pack_uids_sorted()
+        _fprop_cache[cache_key] = (graph, workspace_size, uid_order)
 
-    graph, workspace_size = _fprop_cache[cache_key]
+    graph, workspace_size, uid_order = _fprop_cache[cache_key]
 
-    # Allocate outputs (BHSD layout)
+    # Allocate outputs and workspace (BHSD layout)
+    # Workspace is per-call — PyTorch's caching allocator recycles the allocation.
     B, H_q, S_q, D_qk = q.shape
     _, H_v, S_kv, D_v = v.shape
     o_gpu = torch.empty(B, H_q, S_q, D_v, dtype=q.dtype, device=q.device)
     stats_gpu = torch.empty(B, H_q, S_q, 1, dtype=torch.float32, device=q.device)
+    workspace = torch.empty(max(workspace_size, 1), device=q.device, dtype=torch.uint8)
 
-    # Variant pack (UID -> tensor). Use int() since cudnn._execute checks `type(x) is int`.
-    variant_pack = {
+    # UID → tensor map for sorted pointer extraction
+    uid_to_tensor = {
         int(_UIDs.Q): q,
         int(_UIDs.K): k,
         int(_UIDs.V): v,
@@ -555,21 +579,24 @@ def sdpa(
         int(_UIDs.STATS): stats_gpu,
     }
     if seq_len_q is not None:
-        variant_pack[int(_UIDs.SEQ_LEN_Q)] = seq_len_q
+        uid_to_tensor[int(_UIDs.SEQ_LEN_Q)] = seq_len_q
     if seq_len_kv is not None:
-        variant_pack[int(_UIDs.SEQ_LEN_KV)] = seq_len_kv
+        uid_to_tensor[int(_UIDs.SEQ_LEN_KV)] = seq_len_kv
     if cumulative_seq_len_q is not None:
-        variant_pack[int(_UIDs.CUM_SEQ_LEN_Q)] = cumulative_seq_len_q
+        uid_to_tensor[int(_UIDs.CUM_SEQ_LEN_Q)] = cumulative_seq_len_q
     if cumulative_seq_len_kv is not None:
-        variant_pack[int(_UIDs.CUM_SEQ_LEN_KV)] = cumulative_seq_len_kv
+        uid_to_tensor[int(_UIDs.CUM_SEQ_LEN_KV)] = cumulative_seq_len_kv
 
-    workspace = torch.empty(workspace_size, device=q.device, dtype=torch.uint8)
-    graph.execute(variant_pack, workspace, handle=handle)
+    ptrs = [uid_to_tensor[uid].data_ptr() for uid in uid_order]
+    graph._execute_with_ptrs(ptrs, workspace.data_ptr(), int(handle))
 
     return o_gpu, stats_gpu
 
 
-@sdpa.register_fake
+_lib.impl("sdpa", _sdpa_impl, "CUDA")
+
+
+@torch.library.register_fake("cudnn::sdpa")
 def _sdpa_fake(
     q: torch.Tensor,
     k: torch.Tensor,
@@ -596,8 +623,7 @@ def _sdpa_fake(
 # ---------------------------------------------------------------------------
 
 
-@torch.library.custom_op("cudnn::sdpa_bwd", mutates_args=())
-def sdpa_bwd(
+def _sdpa_bwd_impl(
     dO: torch.Tensor,
     q: torch.Tensor,
     k: torch.Tensor,
@@ -659,17 +685,19 @@ def sdpa_bwd(
             cumulative_seq_len_kv,
             is_deterministic,
         )
-        _bprop_cache[cache_key] = (graph, workspace_size)
+        uid_order = graph._get_variant_pack_uids_sorted()
+        _bprop_cache[cache_key] = (graph, workspace_size, uid_order)
 
-    graph, workspace_size = _bprop_cache[cache_key]
+    graph, workspace_size, uid_order = _bprop_cache[cache_key]
 
-    # Allocate gradient outputs (same shapes as Q, K, V)
+    # Allocate gradient outputs and workspace (same shapes as Q, K, V)
     dQ_gpu = torch.empty_like(q)
     dK_gpu = torch.empty_like(k)
     dV_gpu = torch.empty_like(v)
+    workspace = torch.empty(max(workspace_size, 1), device=dO.device, dtype=torch.uint8)
 
-    # Variant pack. Use int() since cudnn._execute checks `type(x) is int`.
-    variant_pack = {
+    # UID → tensor map for sorted pointer extraction
+    uid_to_tensor = {
         int(_UIDs.Q): q,
         int(_UIDs.K): k,
         int(_UIDs.V): v,
@@ -681,21 +709,24 @@ def sdpa_bwd(
         int(_UIDs.DV): dV_gpu,
     }
     if seq_len_q is not None:
-        variant_pack[int(_UIDs.SEQ_LEN_Q)] = seq_len_q
+        uid_to_tensor[int(_UIDs.SEQ_LEN_Q)] = seq_len_q
     if seq_len_kv is not None:
-        variant_pack[int(_UIDs.SEQ_LEN_KV)] = seq_len_kv
+        uid_to_tensor[int(_UIDs.SEQ_LEN_KV)] = seq_len_kv
     if cumulative_seq_len_q is not None:
-        variant_pack[int(_UIDs.CUM_SEQ_LEN_Q)] = cumulative_seq_len_q
+        uid_to_tensor[int(_UIDs.CUM_SEQ_LEN_Q)] = cumulative_seq_len_q
     if cumulative_seq_len_kv is not None:
-        variant_pack[int(_UIDs.CUM_SEQ_LEN_KV)] = cumulative_seq_len_kv
+        uid_to_tensor[int(_UIDs.CUM_SEQ_LEN_KV)] = cumulative_seq_len_kv
 
-    workspace = torch.empty(workspace_size, device=dO.device, dtype=torch.uint8)
-    graph.execute(variant_pack, workspace, handle=handle)
+    ptrs = [uid_to_tensor[uid].data_ptr() for uid in uid_order]
+    graph._execute_with_ptrs(ptrs, workspace.data_ptr(), int(handle))
 
     return dQ_gpu, dK_gpu, dV_gpu
 
 
-@sdpa_bwd.register_fake
+_lib.impl("sdpa_bwd", _sdpa_bwd_impl, "CUDA")
+
+
+@torch.library.register_fake("cudnn::sdpa_bwd")
 def _sdpa_bwd_fake(
     dO: torch.Tensor,
     q: torch.Tensor,
@@ -769,7 +800,7 @@ def _sdpa_backward(ctx, dO, dStats):
         idx += 1
     cum_kv = saved[idx] if ctx.has_cum_kv else None
 
-    dQ, dK, dV = sdpa_bwd(
+    dQ, dK, dV = torch.ops.cudnn.sdpa_bwd(
         dO,
         q,
         k,
@@ -792,7 +823,7 @@ def _sdpa_backward(ctx, dO, dStats):
     return dQ, dK, dV, None, None, None, None, None, None, None, None, None
 
 
-sdpa.register_autograd(_sdpa_backward, setup_context=_sdpa_setup_context)
+torch.library.register_autograd("cudnn::sdpa", _sdpa_backward, setup_context=_sdpa_setup_context)
 
 
 # ---------------------------------------------------------------------------
@@ -861,7 +892,7 @@ def scaled_dot_product_attention(
 
     attn_scale = scale if scale is not None else (1.0 / math.sqrt(d))
 
-    o, _stats = sdpa(
+    o, _stats = torch.ops.cudnn.sdpa(
         query,
         key,
         value,
