@@ -277,9 +277,11 @@ def generate_tensorir_compilation_configs(
         is8BitTransposeB,
     )
     print("m", m, "n", n, "k", k)
+    cc = CompilerWithKernelCacheSingleton().get_compute_capability()
     configList = nv_tensor_ir.generateAllValidConfigurations_by_problem_size(
         nv_tensor_ir.MmaShape(m, n, k),
         matmul_element_bits,
+        cc,
         isSparse=False,
         isWSMode=False,
         is8BitTransposeB=is8BitTransposeB,
