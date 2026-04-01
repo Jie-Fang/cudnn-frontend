@@ -677,6 +677,12 @@ dK.set_output(True).set_dim(k_gpu.shape).set_stride(k_gpu.stride())
 dV.set_output(True).set_dim(v_gpu.shape).set_stride(v_gpu.stride())
 ```
 
+(sdpa-backward-fe-oss-sm100-d256)=
+### SDPA Backward FE OSS API (SM100, D=256)
+
+This experimental FE OSS API provides a CUTE DSL implementation of the SDPA backward pass for head dimension `256` on NVIDIA Blackwell GPUs (`SM100+`). It computes `dQ`, `dK`, and `dV` from the forward tensors plus `dO` and `LSE`. Available through a standalone API (see [sdpa_bwd_d256.md](https://docs.nvidia.com/deeplearning/cudnn/frontend/latest/operations/Attention.html#sdpa-backward-fe-oss-sm100-d256) for details) or as part of the experimental [SDPA Pytorch custom operator](scaled-dot-product-attention-pytorch-op).
+
+
 (scaled-dot-product-attention-pytorch-op)=
 ### SDPA PyTorch Custom Op (Experimental)
 
@@ -692,6 +698,7 @@ A high-level PyTorch custom operator that wraps the cuDNN SDPA forward and backw
 **Limitations:**
 - `attn_mask` and `dropout` are not yet supported
 - FP8 is not supported (use the Graph API directly)
+- For head dimension `256`, the specialized backward path currently supports only plain BHSD inputs. `seq_len_q`, `seq_len_kv`, `cumulative_seq_len_q`, and `cumulative_seq_len_kv` are not supported on that backward path.
 
 #### Python API
 
@@ -734,6 +741,8 @@ output = scaled_dot_product_attention(
 - `seq_len_kv` (Optional[torch.Tensor]): Per-batch key/value sequence lengths `(B, 1, 1, 1)` INT32.
 - `cumulative_seq_len_q` (Optional[torch.Tensor]): Ragged offset for Q `(B+1, 1, 1, 1)` INT32.
 - `cumulative_seq_len_kv` (Optional[torch.Tensor]): Ragged offset for KV `(B+1, 1, 1, 1)` INT32.
+
+For head dimension `256`, backward support is narrower than the general SDPA op contract: the specialized `d=256` backward path requires plain BHSD tensors and does not support `seq_len_q`, `seq_len_kv`, `cumulative_seq_len_q`, or `cumulative_seq_len_kv`.
 
 **Returns:**
 - `output` (torch.Tensor): Attention output `(B, H_q, S_q, D_v)`.

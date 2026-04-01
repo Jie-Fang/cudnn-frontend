@@ -140,6 +140,14 @@ def sdpa_reference_fwd_bwd(
     )
 
 
+def _skip_if_unsupported_d256(D):
+    if D != 256:
+        return
+    major, minor = torch.cuda.get_device_capability()
+    if major < 10:
+        pytest.skip("d=256 backward path requires SM100+")
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -149,9 +157,10 @@ class TestCudnnSdpa:
     """Combined forward + backward tests with numerical gradient verification."""
 
     @pytest.mark.L0
-    @pytest.mark.parametrize("D", [128])
+    @pytest.mark.parametrize("D", [128, 256])
     def test_basic(self, D):
         """Basic forward + backward, no masking."""
+        _skip_if_unsupported_d256(D)
         B, H, S = 2, 8, 128
 
         q = torch.randn(B, H, S, D, dtype=torch.float16, device="cuda", requires_grad=True)
@@ -514,9 +523,11 @@ class TestCudnnSdpaTorchCompile:
         torch.testing.assert_close(o_eager, o_compiled)
 
     @pytest.mark.L0
-    def test_torch_compile_backward(self):
+    @pytest.mark.parametrize("D", [128, 256])
+    def test_torch_compile_backward(self, D):
         """torch.compile should work for forward + backward pass."""
-        B, H, S, D = 2, 4, 64, 128
+        _skip_if_unsupported_d256(D)
+        B, H, S = 2, 4, 64
 
         compiled_sdpa = torch.compile(scaled_dot_product_attention, fullgraph=True)
 

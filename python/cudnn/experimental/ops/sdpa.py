@@ -29,6 +29,7 @@ _logger = logging.getLogger(__name__)
 _cudnn_handles = {}
 _fprop_cache: Dict[tuple, tuple] = {}
 _bprop_cache: Dict[tuple, tuple] = {}
+_sdpa_bwd_layout_copy_warned = False
 
 # Dtype mapping (module-level constant)
 _TORCH_DTYPE_TO_CUDNN = {
@@ -85,6 +86,62 @@ def _diagonal_alignment_enum(val: int):
     if val == 0:
         return cudnn.diagonal_alignment.TOP_LEFT
     return cudnn.diagonal_alignment.BOTTOM_RIGHT
+
+
+def _stride_order(tensor: torch.Tensor) -> Tuple[int, ...]:
+    """Return tensor dimensions ordered from fastest- to slowest-varying stride."""
+    return tuple(sorted(range(tensor.ndim), key=lambda dim: tensor.stride()[dim]))
+
+
+def _to_sdpa_bwd_bhsd_layout(tensor: torch.Tensor, name: str) -> torch.Tensor:
+    """Convert BHSD tensors to the stride pattern expected by the d=256 backward API."""
+    global _sdpa_bwd_layout_copy_warned
+
+    if tensor.ndim != 4:
+        raise NotImplementedError("d=256 backward path currently supports only rank-4 BHSD tensors")
+    if _stride_order(tensor) == (3, 1, 2, 0):
+        return tensor
+    if not _sdpa_bwd_layout_copy_warned:
+        _logger.warning(
+            "d=256 backward path is copying tensor '%s' to normalize BHSD layout; this is a performance slow path",
+            name,
+        )
+        _sdpa_bwd_layout_copy_warned = True
+    return tensor.transpose(1, 2).contiguous().transpose(1, 2)
+
+
+def _packed_bhsd_stride(shape: Tuple[int, int, int, int]) -> Tuple[int, int, int, int]:
+    """Return the packed BHSD stride used for ragged/token-packed tensors."""
+    b, h, s, d = shape
+    return (s * h * d, d, h * d, 1)
+
+
+def _validate_d256_bwd_args(
+    is_causal: bool,
+    diagonal_alignment: int,
+    left_bound: int,
+    right_bound: int,
+    seq_len_q: Optional[torch.Tensor],
+    seq_len_kv: Optional[torch.Tensor],
+    cumulative_seq_len_q: Optional[torch.Tensor],
+    cumulative_seq_len_kv: Optional[torch.Tensor],
+) -> Tuple[int, int]:
+    """Validate the subset of SDPA-op features supported by the d=256 backward API."""
+    if diagonal_alignment != 0:
+        raise NotImplementedError("d=256 backward path supports only TOP_LEFT diagonal alignment")
+    if seq_len_q is not None or seq_len_kv is not None:
+        raise NotImplementedError("d=256 backward path does not support seq_len_q/seq_len_kv")
+    if cumulative_seq_len_q is not None or cumulative_seq_len_kv is not None:
+        raise NotImplementedError("d=256 backward path does not support cumulative_seq_len_q/cumulative_seq_len_kv")
+
+    if not is_causal:
+        if left_bound != -1 or right_bound != -1:
+            raise NotImplementedError("d=256 backward path supports only full-window non-causal attention")
+        return (-1, -1)
+
+    if right_bound not in (-1, 0):
+        raise NotImplementedError("d=256 backward path supports only causal right_bound=0")
+    return (left_bound if left_bound >= 0 else -1, 0)
 
 
 def _make_fprop_cache_key(
@@ -619,8 +676,94 @@ def _sdpa_fake(
 
 
 # ---------------------------------------------------------------------------
-# Backward custom op (cuDNN graph-based)
+# Backward custom ops
 # ---------------------------------------------------------------------------
+
+
+@torch.library.custom_op("cudnn::sdpa_bwd_d256", mutates_args=())
+def sdpa_bwd_d256(
+    dO: torch.Tensor,
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    o: torch.Tensor,
+    stats: torch.Tensor,
+    attn_scale: float,
+    is_causal: bool = False,
+    diagonal_alignment: int = 0,
+    left_bound: int = -1,
+    right_bound: int = -1,
+    seq_len_q: Optional[torch.Tensor] = None,
+    seq_len_kv: Optional[torch.Tensor] = None,
+    cumulative_seq_len_q: Optional[torch.Tensor] = None,
+    cumulative_seq_len_kv: Optional[torch.Tensor] = None,
+    is_deterministic: bool = False,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """SDPA backward for d=256 via the SM100 FE OSS API."""
+    del is_deterministic
+
+    window_size = _validate_d256_bwd_args(
+        is_causal,
+        diagonal_alignment,
+        left_bound,
+        right_bound,
+        seq_len_q,
+        seq_len_kv,
+        cumulative_seq_len_q,
+        cumulative_seq_len_kv,
+    )
+
+    from cuda.bindings import driver as cuda
+    from cudnn.sdpa import sdpa_bwd_wrapper_sm100_d256
+
+    q_bwd = _to_sdpa_bwd_bhsd_layout(q, "q")
+    k_bwd = _to_sdpa_bwd_bhsd_layout(k, "k")
+    v_bwd = _to_sdpa_bwd_bhsd_layout(v, "v")
+    o_bwd = _to_sdpa_bwd_bhsd_layout(o, "o")
+    dO_bwd = _to_sdpa_bwd_bhsd_layout(dO, "dO")
+    lse_bwd = stats.squeeze(-1).contiguous()
+    cum_q_bwd = None
+    cum_kv_bwd = None
+
+    current_stream = cuda.CUstream(torch.cuda.current_stream(dO.device).cuda_stream)
+    dQ, dK, dV = sdpa_bwd_wrapper_sm100_d256(
+        q_tensor=q_bwd,
+        k_tensor=k_bwd,
+        v_tensor=v_bwd,
+        o_tensor=o_bwd,
+        do_tensor=dO_bwd,
+        lse_tensor=lse_bwd,
+        cum_seqlen_q_tensor=cum_q_bwd,
+        cum_seqlen_k_tensor=cum_kv_bwd,
+        is_causal=is_causal,
+        window_size=window_size,
+        scale_softmax=attn_scale,
+        current_stream=current_stream,
+    )
+
+    return dQ.contiguous(), dK.contiguous(), dV.contiguous()
+
+
+@sdpa_bwd_d256.register_fake
+def _sdpa_bwd_d256_fake(
+    dO: torch.Tensor,
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    o: torch.Tensor,
+    stats: torch.Tensor,
+    attn_scale: float,
+    is_causal: bool = False,
+    diagonal_alignment: int = 0,
+    left_bound: int = -1,
+    right_bound: int = -1,
+    seq_len_q: Optional[torch.Tensor] = None,
+    seq_len_kv: Optional[torch.Tensor] = None,
+    cumulative_seq_len_q: Optional[torch.Tensor] = None,
+    cumulative_seq_len_kv: Optional[torch.Tensor] = None,
+    is_deterministic: bool = False,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    return torch.empty_like(q), torch.empty_like(k), torch.empty_like(v)
 
 
 def _sdpa_bwd_impl(
@@ -800,23 +943,48 @@ def _sdpa_backward(ctx, dO, dStats):
         idx += 1
     cum_kv = saved[idx] if ctx.has_cum_kv else None
 
-    dQ, dK, dV = torch.ops.cudnn.sdpa_bwd(
-        dO,
-        q,
-        k,
-        v,
-        o,
-        stats,
-        ctx.attn_scale,
-        ctx.is_causal,
-        ctx.diagonal_alignment,
-        ctx.left_bound,
-        ctx.right_bound,
-        seq_len_q,
-        seq_len_kv,
-        cum_q,
-        cum_kv,
-    )
+    is_d256 = q.shape[-1] == 256
+    use_d256_oss_bwd = is_d256 and seq_len_q is None and seq_len_kv is None and cum_q is None and cum_kv is None
+
+    if is_d256:
+        if use_d256_oss_bwd:
+            dQ, dK, dV = sdpa_bwd_d256(
+                dO,
+                q,
+                k,
+                v,
+                o,
+                stats,
+                ctx.attn_scale,
+                ctx.is_causal,
+                ctx.diagonal_alignment,
+                ctx.left_bound,
+                ctx.right_bound,
+                seq_len_q,
+                seq_len_kv,
+                cum_q,
+                cum_kv,
+            )
+        else:
+            raise NotImplementedError("d=256 backward path does not support seq_len_q/seq_len_kv/cum_q/cum_kv")
+    else:
+        dQ, dK, dV = torch.ops.cudnn.sdpa_bwd(
+            dO,
+            q,
+            k,
+            v,
+            o,
+            stats,
+            ctx.attn_scale,
+            ctx.is_causal,
+            ctx.diagonal_alignment,
+            ctx.left_bound,
+            ctx.right_bound,
+            seq_len_q,
+            seq_len_kv,
+            cum_q,
+            cum_kv,
+        )
 
     # Return gradients for: q, k, v, attn_scale, is_causal, diagonal_alignment,
     # left_bound, right_bound, seq_len_q, seq_len_kv, cum_q, cum_kv
@@ -876,6 +1044,11 @@ def scaled_dot_product_attention(
         cumulative_seq_len_q: cuDNN extension. Ragged offset for Q ``(B+1, 1, 1, 1)`` INT32.
         cumulative_seq_len_kv: cuDNN extension. Ragged offset for KV ``(B+1, 1, 1, 1)`` INT32.
 
+    Note:
+        For head dimension ``256``, the specialized backward path currently supports
+        only plain BHSD tensors and does not support ``seq_len_q``, ``seq_len_kv``,
+        ``cumulative_seq_len_q``, or ``cumulative_seq_len_kv``.
+
     Returns:
         Output tensor ``(B, H_q, S_q, D_v)``.
     """
@@ -887,9 +1060,6 @@ def scaled_dot_product_attention(
         raise ValueError(f"query has {query.shape[1]} heads but key has {key.shape[1]} heads. " f"Set enable_gqa=True for grouped-query attention.")
 
     d = query.shape[-1]
-    if d == 256:
-        raise NotImplementedError("d=256 is not supported by cuDNN SDPA op")
-
     attn_scale = scale if scale is not None else (1.0 / math.sqrt(d))
 
     o, _stats = torch.ops.cudnn.sdpa(

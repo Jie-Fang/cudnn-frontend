@@ -101,7 +101,7 @@ def pytest_addoption(parser):
 
     parser.addoption("--implementation", action="store", default=None, type=str, choices=["AUTO", "COMPOSITE", "UNIFIED"], help="[test_mhas_v2.py], overwrites implementation")
 
-    parser.addoption("--skip-ref", action="store_true", help="[NSA, gemm_swiglu, gemm_amax, grouped_gemm_swiglu] Skip reference computation for performance testing")
+    parser.addoption("--skip-ref", action="store_true", help="[NSA, gemm_swiglu, gemm_amax, grouped_gemm_swiglu, sdpa_bwd] Skip reference computation for performance testing")
 
     # NSA (Native Sparse Attention) command line options for test_NSA_selection_attention.py, test_NSA_swa.py
     parser.addoption("--nsa-b", action="store", default=None, type=int, help="[NSA] Batch size")
