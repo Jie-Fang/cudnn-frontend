@@ -8,6 +8,7 @@ activation (SwiGLU/GeGLU) for MoE (Mixture of Experts) workloads.
 import torch
 import pytest
 from test_utils import torch_fork_set_rng
+from fe_api.test_fe_api_utils import DYNAMIC_SHAPES_M_VALUES
 from fe_api.test_discrete_grouped_gemm_swiglu_utils import (
     discrete_grouped_gemm_init,
     with_discrete_grouped_gemm_params_fp4,
@@ -781,3 +782,101 @@ def test_discrete_grouped_gemm_wrapper_rejects_invalid_pointer_tensors(request):
             b_major=cfg["b_major"],
             current_stream=stream,
         )
+
+
+@pytest.mark.L0
+@torch_fork_set_rng(seed=8)
+def test_discrete_grouped_gemm_wrapper_cache_dynamic_m_smoke(request, monkeypatch):
+    compile_count, cache_entries = _test_discrete_grouped_gemm_wrapper_dynamic_m_cache_behavior(
+        request=request,
+        monkeypatch=monkeypatch,
+    )
+
+    assert compile_count == 1
+    assert cache_entries == 1
+
+
+def _test_discrete_grouped_gemm_wrapper_dynamic_m_cache_behavior(request, monkeypatch):
+    try:
+        from cudnn import discrete_grouped_gemm_swiglu_wrapper_sm100
+        from cudnn.discrete_grouped_gemm.discrete_grouped_gemm_swiglu import api as discrete_grouped_gemm_swiglu_api
+        from cuda.bindings import driver as cuda
+    except ImportError:
+        pytest.skip("Environment not supported: cudnn optional dependencies not installed")
+
+    discrete_grouped_gemm_swiglu_api._cache_of_DiscreteGroupedGemmSwigluSm100Objects.clear()
+
+    compile_count = {"value": 0}
+    original_compile = discrete_grouped_gemm_swiglu_api.DiscreteGroupedGemmSwigluSm100.compile
+
+    def counted_compile(self):
+        compile_count["value"] += 1
+        return original_compile(self)
+
+    monkeypatch.setattr(discrete_grouped_gemm_swiglu_api.DiscreteGroupedGemmSwigluSm100, "compile", counted_compile)
+
+    cfg = discrete_grouped_gemm_init(
+        request=request,
+        ab_dtype=torch.float4_e2m1fn_x2,
+        c_dtype=torch.bfloat16,
+        d_dtype=torch.bfloat16,
+        cd_major="n",
+        acc_dtype=torch.float32,
+        mma_tiler_mn=(256, 256),
+        cluster_shape_mn=(2, 1),
+        sf_vec_size=32,
+        sf_dtype=torch.float8_e8m0fnu,
+        vector_f32=False,
+        discrete_col_sfd=False,
+        act_func="swiglu",
+        b_major="k",
+    )
+    stream = cuda.CUstream(torch.cuda.current_stream().cuda_stream)
+
+    try:
+        for group_m in DYNAMIC_SHAPES_M_VALUES:
+            inputs = allocate_discrete_input_tensors(
+                n=cfg["n"],
+                k=cfg["k"],
+                num_experts=cfg["l"],
+                group_m_list=[group_m] * cfg["l"],
+                ab_dtype=cfg["ab_dtype"],
+                sf_dtype=cfg["sf_dtype"],
+                sf_vec_size=cfg["sf_vec_size"],
+                m_aligned=cfg["m_aligned"],
+                b_major=cfg["b_major"],
+            )
+
+            discrete_grouped_gemm_swiglu_wrapper_sm100(
+                a_tensor=inputs["a_tensor"],
+                b_ptrs=inputs["b_ptrs_tensor"],
+                sfa_tensor=inputs["sfa_tensor"],
+                sfb_ptrs=inputs["sfb_ptrs_tensor"],
+                padded_offsets=inputs["padded_offsets_tensor"],
+                alpha_tensor=inputs["alpha_tensor"],
+                n=cfg["n"],
+                b_dtype=cfg["ab_dtype"],
+                norm_const_tensor=inputs.get("norm_const_tensor"),
+                prob_tensor=inputs.get("prob_tensor"),
+                acc_dtype=cfg["acc_dtype"],
+                c_dtype=cfg["c_dtype"],
+                d_dtype=cfg["d_dtype"],
+                cd_major=cfg["cd_major"],
+                mma_tiler_mn=cfg["mma_tiler_mn"],
+                cluster_shape_mn=cfg["cluster_shape_mn"],
+                sf_vec_size=cfg["sf_vec_size"],
+                vector_f32=cfg["vector_f32"],
+                m_aligned=cfg["m_aligned"],
+                discrete_col_sfd=cfg["discrete_col_sfd"],
+                act_func=cfg["act_func"],
+                b_major=cfg["b_major"],
+                current_stream=stream,
+            )
+            torch.cuda.synchronize()
+    except (ValueError, NotImplementedError) as e:
+        pytest.skip(f"Unsupported testcase: {e}")
+    finally:
+        cache_entries = len(discrete_grouped_gemm_swiglu_api._cache_of_DiscreteGroupedGemmSwigluSm100Objects)
+        discrete_grouped_gemm_swiglu_api._cache_of_DiscreteGroupedGemmSwigluSm100Objects.clear()
+
+    return compile_count["value"], cache_entries
