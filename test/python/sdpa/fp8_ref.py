@@ -11,7 +11,8 @@ def compute_ref(q, k, v, attn_scale,
                 s_scale, s_descale, torch_itype,
                 torch_otype,
                 padding=None, bias=None,
-                left_bound=None, right_bound=None, diag_align=None, sink_token=None):
+                left_bound=None, right_bound=None, diag_align=None, sink_token=None,
+                rescale_threshold=0.0):
     """Compute forward pass reference with online softmax tiling.
     Returns (o_quant, stats, o_amax)."""
     b, s_q, h_q, d_qk = q.shape
@@ -77,9 +78,18 @@ def compute_ref(q, k, v, attn_scale,
             s_block = s_block.masked_fill(kv_mask.unsqueeze(1).unsqueeze(2), float('-inf'))
 
         m_block = s_block.max(dim=-1, keepdim=True).values
-        m_new = torch.maximum(m_old, m_block)
 
-        correction = torch.exp(m_old - m_new).nan_to_num()
+        NEG_INF = float('-inf')
+        is_first = (m_old == NEG_INF)
+        exceeds_threshold = (m_block - m_old > rescale_threshold)
+        should_update = is_first | exceeds_threshold
+        m_new = torch.where(should_update, m_block, m_old)
+
+        exp_input = m_old - m_new
+        needs_correction = (exp_input < -rescale_threshold)
+        correction = torch.where(needs_correction, torch.exp(exp_input), torch.ones_like(exp_input))
+        correction = correction.nan_to_num()
+
         o = o * correction
         l_old = l_old * correction
 
@@ -87,9 +97,11 @@ def compute_ref(q, k, v, attn_scale,
         l_new = l_old + p_block.sum(dim=-1, keepdim=True)
 
         # P (FP32) -> P (FP8)
-        p_block_quant = ((p_block * s_scale).to(torch_itype)).float()
+        s_scale_effective = s_scale * (2.0 ** (-rescale_threshold))
+        s_descale_effective = s_descale * (2.0 ** rescale_threshold)
+        p_block_quant = ((p_block * s_scale_effective).to(torch_itype)).float()
 
-        o = o + torch.einsum("bhqk,bhkd->bhqd", p_block_quant, v_block.float()) * v_descale * s_descale
+        o = o + torch.einsum("bhqk,bhkd->bhqd", p_block_quant, v_block.float()) * v_descale * s_descale_effective
         m_old = m_new
         l_old = l_new
 

@@ -632,19 +632,29 @@ def test_sdpa_fp8_fwd_L0(env_info, test_no, request, cudnn_handle):
 
     # Randomly enable unfuse_fma via environment variable for SM100
     unfuse_fma = rng.choice([True, False])
+    test.cfg.with_unfuse_fma = unfuse_fma
     if unfuse_fma:
         os.environ["CUDNN_UNFUSE_FMA"] = "1"
     elif "CUDNN_UNFUSE_FMA" in os.environ:
         del os.environ["CUDNN_UNFUSE_FMA"]
+
+    compute_capability = torch.cuda.get_device_capability()
+    if compute_capability[0] == 10:
+        rescale_threshold = rng.choice([0.0, 2.0, 4.0])
+    else:
+        rescale_threshold = 0.0
+    test.cfg.rescale_threshold = rescale_threshold
+    os.environ["CUDNN_RESCALE_THRESHOLD"] = str(test.cfg.rescale_threshold)
 
     if request.node.name in test.blocked_tests:
         pytest.skip(f"blocked test: {request.node.name}")
     try:
         exec_sdpa_fp8(test.cfg, request, cudnn_handle)
     finally:
-        # Clean up environment variable
         if "CUDNN_UNFUSE_FMA" in os.environ:
             del os.environ["CUDNN_UNFUSE_FMA"]
+        if "CUDNN_RESCALE_THRESHOLD" in os.environ:
+            del os.environ["CUDNN_RESCALE_THRESHOLD"]
 
 
 # # ==================================
@@ -680,9 +690,16 @@ def test_sdpa_fp8_bwd_L0(env_info, test_no, request, cudnn_handle):
     test.cfg.is_infer = False
     test.showConfig(test_no, request)
 
+    test.cfg.rescale_threshold = 0.0
+    os.environ["CUDNN_RESCALE_THRESHOLD"] = str(test.cfg.rescale_threshold)
+
     if request.node.name in test.blocked_tests:
         pytest.skip(f"blocked test: {request.node.name}")
-    exec_sdpa_fp8(test.cfg, request, cudnn_handle)
+    try:
+        exec_sdpa_fp8(test.cfg, request, cudnn_handle)
+    finally:
+        if "CUDNN_RESCALE_THRESHOLD" in os.environ:
+            del os.environ["CUDNN_RESCALE_THRESHOLD"]
 
 
 # # ==================================
@@ -716,9 +733,21 @@ def test_sdpa_fp8_fwd_paged_L0(env_info, test_no, request, cudnn_handle):
         test.cfg.is_paged = True
     test.showConfig(test_no, request)
 
+    compute_capability = torch.cuda.get_device_capability()
+    if compute_capability[0] == 10:
+        rescale_threshold = rng.choice([0.0, 2.0, 4.0])
+    else:
+        rescale_threshold = 0.0
+    test.cfg.rescale_threshold = rescale_threshold
+    os.environ["CUDNN_RESCALE_THRESHOLD"] = str(test.cfg.rescale_threshold)
+
     if request.node.name in test.blocked_tests:
         pytest.skip(f"blocked test: {request.node.name}")
-    exec_sdpa_fp8(test.cfg, request, cudnn_handle)
+    try:
+        exec_sdpa_fp8(test.cfg, request, cudnn_handle)
+    finally:
+        if "CUDNN_RESCALE_THRESHOLD" in os.environ:
+            del os.environ["CUDNN_RESCALE_THRESHOLD"]
 
 
 # # ==================================
@@ -750,9 +779,21 @@ def test_sdpa_fp8_fwd_ragged_L0(env_info, test_no, request, cudnn_handle):
         test.cfg = randomization_ctx(rng, data_seed, geom_seed)
     test.showConfig(test_no, request)
 
+    compute_capability = torch.cuda.get_device_capability()
+    if compute_capability[0] == 10:
+        rescale_threshold = rng.choice([0.0, 2.0, 4.0])
+    else:
+        rescale_threshold = 0.0
+    test.cfg.rescale_threshold = rescale_threshold
+    os.environ["CUDNN_RESCALE_THRESHOLD"] = str(test.cfg.rescale_threshold)
+
     if request.node.name in test.blocked_tests:
         pytest.skip(f"blocked test: {request.node.name}")
-    exec_sdpa_fp8(test.cfg, request, cudnn_handle)
+    try:
+        exec_sdpa_fp8(test.cfg, request, cudnn_handle)
+    finally:
+        if "CUDNN_RESCALE_THRESHOLD" in os.environ:
+            del os.environ["CUDNN_RESCALE_THRESHOLD"]
 
 
 # # ==================================
@@ -787,9 +828,16 @@ def test_sdpa_fp8_bwd_ragged_L0(env_info, test_no, request, cudnn_handle):
     test.cfg.is_infer = False
     test.showConfig(test_no, request)
 
+    test.cfg.rescale_threshold = 0.0
+    os.environ["CUDNN_RESCALE_THRESHOLD"] = str(test.cfg.rescale_threshold)
+
     if request.node.name in test.blocked_tests:
         pytest.skip(f"blocked test: {request.node.name}")
-    exec_sdpa_fp8(test.cfg, request, cudnn_handle)
+    try:
+        exec_sdpa_fp8(test.cfg, request, cudnn_handle)
+    finally:
+        if "CUDNN_RESCALE_THRESHOLD" in os.environ:
+            del os.environ["CUDNN_RESCALE_THRESHOLD"]
 
 
 # # ===================
@@ -808,12 +856,31 @@ def test_repro(env_info, request, cudnn_handle):
     cfg = SDPATestConfig(**env_info, implementation=cudnn.attention_implementation.AUTO)
     cfg.cfg = ExecConfig.deserialize(ast.literal_eval(repro_str))
     cfg.showConfig((1,1), request)
-    if cfg.cfg.is_mxfp8:
-        exec_sdpa_mxfp8(cfg.cfg, request, cudnn_handle)
-    elif cfg.cfg.data_type in (torch.float8_e4m3fn, torch.float8_e5m2):
-        exec_sdpa_fp8(cfg.cfg, request, cudnn_handle)
-    else:
-        exec_sdpa(cfg.cfg, request, cudnn_handle)
+
+    # Set environment variables from config
+    if hasattr(cfg.cfg, 'with_unfuse_fma') and cfg.cfg.with_unfuse_fma:
+        os.environ["CUDNN_UNFUSE_FMA"] = "1"
+    elif "CUDNN_UNFUSE_FMA" in os.environ:
+        del os.environ["CUDNN_UNFUSE_FMA"]
+
+    if hasattr(cfg.cfg, 'rescale_threshold') and cfg.cfg.rescale_threshold is not None:
+        os.environ["CUDNN_RESCALE_THRESHOLD"] = str(cfg.cfg.rescale_threshold)
+    elif "CUDNN_RESCALE_THRESHOLD" in os.environ:
+        del os.environ["CUDNN_RESCALE_THRESHOLD"]
+
+    try:
+        if cfg.cfg.is_mxfp8:
+            exec_sdpa_mxfp8(cfg.cfg, request, cudnn_handle)
+        elif cfg.cfg.data_type in (torch.float8_e4m3fn, torch.float8_e5m2):
+            exec_sdpa_fp8(cfg.cfg, request, cudnn_handle)
+        else:
+            exec_sdpa(cfg.cfg, request, cudnn_handle)
+    finally:
+        # Clean up environment variables
+        if "CUDNN_UNFUSE_FMA" in os.environ:
+            del os.environ["CUDNN_UNFUSE_FMA"]
+        if "CUDNN_RESCALE_THRESHOLD" in os.environ:
+            del os.environ["CUDNN_RESCALE_THRESHOLD"]
 
 
 # # ==================================
@@ -850,19 +917,29 @@ def test_sdpa_mxfp8_fwd_L0(env_info, test_no, request, cudnn_handle):
 
     # Randomly enable unfuse_fma via environment variable for SM100
     unfuse_fma = rng.choice([True, False])
+    test.cfg.with_unfuse_fma = unfuse_fma
     if unfuse_fma:
         os.environ["CUDNN_UNFUSE_FMA"] = "1"
     elif "CUDNN_UNFUSE_FMA" in os.environ:
         del os.environ["CUDNN_UNFUSE_FMA"]
+
+    compute_capability = torch.cuda.get_device_capability()
+    if compute_capability[0] == 10:
+        rescale_threshold = rng.choice([0.0, 2.0, 4.0])
+    else:
+        rescale_threshold = 0.0
+    test.cfg.rescale_threshold = rescale_threshold
+    os.environ["CUDNN_RESCALE_THRESHOLD"] = str(test.cfg.rescale_threshold)
 
     if request.node.name in test.blocked_tests:
         pytest.skip(f"blocked test: {request.node.name}")
     try:
         exec_sdpa_mxfp8(test.cfg, request, cudnn_handle)
     finally:
-        # Clean up environment variable
         if "CUDNN_UNFUSE_FMA" in os.environ:
             del os.environ["CUDNN_UNFUSE_FMA"]
+        if "CUDNN_RESCALE_THRESHOLD" in os.environ:
+            del os.environ["CUDNN_RESCALE_THRESHOLD"]
 
 # # ==================================
 # # L0 MXFP8 bprop tests
@@ -899,6 +976,13 @@ def test_sdpa_mxfp8_bwd_L0(env_info, test_no, request, cudnn_handle):
     test.cfg.is_infer = False
     test.showConfig(test_no, request)
 
+    test.cfg.rescale_threshold = 0.0
+    os.environ["CUDNN_RESCALE_THRESHOLD"] = str(test.cfg.rescale_threshold)
+
     if request.node.name in test.blocked_tests:
         pytest.skip(f"blocked test: {request.node.name}")
-    exec_sdpa_mxfp8(test.cfg, request, cudnn_handle)
+    try:
+        exec_sdpa_mxfp8(test.cfg, request, cudnn_handle)
+    finally:
+        if "CUDNN_RESCALE_THRESHOLD" in os.environ:
+            del os.environ["CUDNN_RESCALE_THRESHOLD"]
