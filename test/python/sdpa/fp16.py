@@ -510,6 +510,7 @@ def execute_graph(graph, variant_pack, allocs, tensors, cudnn_handle, request, l
         else:
             times_ms = time_execution(graph.execute, variant_pack, workspace[0], cudnn_handle)
         print(f"@@@@ {label} graph.execute median_time_ms={times_ms.median().item():.3f} ({timing_method})")
+        profile_execution(graph.execute, variant_pack, workspace[0], cudnn_handle)
 
     graph.execute(variant_pack, workspace[0], cudnn_handle)
     torch.cuda.synchronize()
