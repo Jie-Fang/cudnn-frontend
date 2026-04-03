@@ -7,7 +7,7 @@ import pytest
 # TE requires specific CUDA library versions that conflict if cudnn is loaded first
 try:
     import transformer_engine
-except ImportError:
+except (ImportError, OSError):
     pass
 
 import cudnn
