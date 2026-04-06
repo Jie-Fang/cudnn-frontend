@@ -536,16 +536,6 @@ class BlackwellFusedAttentionDQKernel:
         sum_odo_smem_layout: cute.Layout,
         tile_sched_params: FmhaStaticTileSchedulerParams | FmhaClcDynamicTileSchedulerParams,
     ):
-        # llvm.inline_asm(
-        #     None,
-        #     [],
-        #     '.pragma "global knob CommonIntoMultiBlockLoop=1";',
-        #     "",
-        #     has_side_effects=True,
-        #     is_align_stack=False,
-        #     asm_dialect=llvm.AsmDialect.AD_ATT,
-        # )
-
         warp_idx = cute.arch.make_warp_uniform(cute.arch.warp_idx())
         #
         # Prefetch tma desc

@@ -1621,8 +1621,6 @@ class BlockScaledDiscreteWeightDgluDbiasGroupedGemmKernel:
         """Merged dy1+dy2 dbias reduction via SMEM transpose.
 
         sDbias layout: (N=64, M=32, W=4):(32, 1, N*M) FP32
-        STS: plain 3D indexing, zero bank conflict.
-        LDS: LDS.128 with zero bank conflict by swizzle_128B.
         Each lane reduces 2 adjacent N-columns → BF16x2 atomicAdd.
         """
         epi_n = self.epi_tile[1]
@@ -2861,7 +2859,6 @@ class BlockScaledDiscreteWeightDgluDbiasGroupedGemmKernel:
                     # SFD Row: tile_atom_to_shape_SF layout, same path as SFA
                     real_sfd_row, _ = epi_ext.get_gmem_tensor("sfd", mSFDRow_mnl, padded_offsets, epi_work_tile_info)
                     gSFDRow_mnl = cute.local_tile(real_sfd_row, sfd_row_tile, (None, None, None))
-                    # Don't ask why, AST is shit tracking the constexpr values to loop args.
                     tiled_copy_t2r_local, _, _ = self.epilog_tmem_copy_and_partition(epi_tidx, tCtAcc_base, epi_tile, use_2cta_instrs)
                     thr_copy_t2r_local = tiled_copy_t2r_local.get_slice(tidx)
                     tCgSFDRow_mnl = thr_copy_t2r_local.partition_D(gSFDRow_mnl)
@@ -2939,7 +2936,6 @@ class BlockScaledDiscreteWeightDgluDbiasGroupedGemmKernel:
                     #
                     # Load accumulator from tensor memory buffer to register
                     #
-                    # Don't ask why, AST is shit tracking the constexpr values to loop args.
                     copy_atom_t2r = sm100_utils.get_tmem_load_op(
                         self.cta_tile_shape_mnk,
                         self.d_layout,
