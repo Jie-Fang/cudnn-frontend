@@ -39,6 +39,7 @@ symbols_to_import = [
     "cudnnGraphNotSupportedError",
     "diagonal_alignment",
     "attention_implementation",
+    "moe_grouped_matmul_mode",
 ]
 
 for symbol_name in symbols_to_import:

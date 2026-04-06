@@ -37,3 +37,25 @@ set_compute_data_type(DataType_t value)
 Moe_grouped_matmul&
 set_top_k(int32_t top_k_value)
 ```
+
+# MoE Grouped Matmul Bwd
+
+The MoE Grouped Matmul Bwd operation computes the backward propagation for weight of a grouped matmul operation
+
+transposed(dOutput) ([1, N, S]) @ token ([1, S, K]) -> transposed(dWeight) ([E, N, K])
+
+## C++ API
+
+```
+std::shared_ptr<Tensor_attributes>
+moe_grouped_matmul_bwd(std::shared_ptr<Tensor_attributes> doutput, std::shared_ptr<Tensor_attributes> token, std::shared_ptr<Tensor_attributes> first_token_offset, moe_grouped_matmul_bwd_attribute);
+```
+
+Moe_grouped_matmul_bwd attributes is a lightweight structure with setters:  
+```
+Moe_grouped_matmul_bwd&
+set_name(std::string const&)
+
+Moe_grouped_matmul_bwd&
+set_compute_data_type(DataType_t value)
+```
