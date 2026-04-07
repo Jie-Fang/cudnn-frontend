@@ -31,14 +31,47 @@ def get_cublaslt_version() -> int:
 def test_bf16_moe_grouped_matmul_fwd(cudnn_handle):
     # problem size
     num_experts = 36
-    token_num   = 2000
+    token_num = 2000
     weight_size = 248
     hidden_size = 520
 
     first_token_offset_values = [
-          0,   1,   2,   3,    4,    5,    6,    7,    8,    9,   10,   11,
-         12,  13,  14,  15,   16,   17,   18,  127,  255,  383,  483,  515,
-        643, 718, 924, 1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900,
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        127,
+        255,
+        383,
+        483,
+        515,
+        643,
+        718,
+        924,
+        1100,
+        1200,
+        1300,
+        1400,
+        1500,
+        1600,
+        1700,
+        1800,
+        1900,
     ]
 
     graph = cudnn.pygraph(
@@ -90,19 +123,11 @@ def test_bf16_moe_grouped_matmul_fwd(cudnn_handle):
     graph.build_plans()
 
     # allocate device buffers
-    token_data = torch.randn(
-        token_num * hidden_size, dtype=torch.bfloat16, device="cuda"
-    )
+    token_data = torch.randn(token_num * hidden_size, dtype=torch.bfloat16, device="cuda")
     # weight: [E, H, N] column-major → total elements = E * H * N
-    weight_data = torch.randn(
-        num_experts * hidden_size * weight_size, dtype=torch.bfloat16, device="cuda"
-    )
-    first_token_offset_data = torch.tensor(
-        first_token_offset_values, dtype=torch.int32, device="cuda"
-    )
-    output_data = torch.empty(
-        token_num * weight_size, dtype=torch.bfloat16, device="cuda"
-    )
+    weight_data = torch.randn(num_experts * hidden_size * weight_size, dtype=torch.bfloat16, device="cuda")
+    first_token_offset_data = torch.tensor(first_token_offset_values, dtype=torch.int32, device="cuda")
+    output_data = torch.empty(token_num * weight_size, dtype=torch.bfloat16, device="cuda")
 
     workspace = torch.empty(graph.get_workspace_size(), dtype=torch.uint8, device="cuda")
 
@@ -135,14 +160,47 @@ def test_bf16_moe_grouped_matmul_bwd(cudnn_handle):
     """
     # problem size
     num_experts = 36
-    token_num   = 2000
+    token_num = 2000
     weight_size = 248
     hidden_size = 520
 
     first_token_offset_values = [
-          0,   1,   2,   3,    4,    5,    6,    7,    8,    9,   10,   11,
-         12,  13,  14,  15,   16,   17,   18,  127,  255,  383,  483,  515,
-        643, 718, 924, 1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900,
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        127,
+        255,
+        383,
+        483,
+        515,
+        643,
+        718,
+        924,
+        1100,
+        1200,
+        1300,
+        1400,
+        1500,
+        1600,
+        1700,
+        1800,
+        1900,
     ]
 
     graph = cudnn.pygraph(
@@ -193,19 +251,11 @@ def test_bf16_moe_grouped_matmul_bwd(cudnn_handle):
     graph.build_plans()
 
     # allocate device buffers
-    doutput_data = torch.randn(
-        token_num * weight_size, dtype=torch.bfloat16, device="cuda"
-    )
-    token_data = torch.randn(
-        token_num * hidden_size, dtype=torch.bfloat16, device="cuda"
-    )
-    first_token_offset_data = torch.tensor(
-        first_token_offset_values, dtype=torch.int32, device="cuda"
-    )
+    doutput_data = torch.randn(token_num * weight_size, dtype=torch.bfloat16, device="cuda")
+    token_data = torch.randn(token_num * hidden_size, dtype=torch.bfloat16, device="cuda")
+    first_token_offset_data = torch.tensor(first_token_offset_values, dtype=torch.int32, device="cuda")
     # dweight: [E, H, N] column-major → total elements = E * H * N
-    dweight_data = torch.empty(
-        num_experts * hidden_size * weight_size, dtype=torch.bfloat16, device="cuda"
-    )
+    dweight_data = torch.empty(num_experts * hidden_size * weight_size, dtype=torch.bfloat16, device="cuda")
 
     workspace = torch.empty(graph.get_workspace_size(), dtype=torch.uint8, device="cuda")
 

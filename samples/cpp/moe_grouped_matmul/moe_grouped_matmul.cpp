@@ -160,7 +160,7 @@ TEST_CASE("WoQ MoeGroupedMatmul", "[MoeGroupedMatmul][graph]") {
 }
 
 TEST_CASE("BF16 MoeGroupedMatmulBwd", "[MoeGroupedMatmulBwd][graph]") {
-#if (CUDNN_VERSION < 92200)
+#if (CUDNN_VERSION < 92200) || (CUDNN_VERSION >= 99900)
     SKIP("MoE is not supported in cudnn versions prior to 9.22.0");
 #endif
 

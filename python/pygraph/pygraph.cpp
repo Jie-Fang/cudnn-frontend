@@ -383,9 +383,8 @@ PyGraph::moe_grouped_matmul_bwd(std::shared_ptr<cudnn_frontend::graph::Tensor_at
                                 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& first_token_offset,
                                 cudnn_frontend::DataType_t const& compute_data_type,
                                 std::string const& name) {
-    auto attributes = cudnn_frontend::graph::Moe_grouped_matmul_bwd_attributes()
-                          .set_name(name)
-                          .set_compute_data_type(compute_data_type);
+    auto attributes = cudnn_frontend::graph::Moe_grouped_matmul_bwd_attributes().set_name(name).set_compute_data_type(
+        compute_data_type);
 
     auto dweight = graph->moe_grouped_matmul_bwd(doutput, token, first_token_offset, attributes);
     return dweight;
