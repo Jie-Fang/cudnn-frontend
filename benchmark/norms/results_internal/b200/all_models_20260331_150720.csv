@@ -1,0 +1,98 @@
+config_name,norm_name,norm_type,backend,data_type,N,C,epsilon,has_bias,profile_pass,fwd_time_ms,bwd_time_ms,fwd_gbps,bwd_gbps,num_iterations,success,error_message,gpu_name,cudnn_version,cudnn_backend_version
+all_models,llama3-8b,rms_norm,cudnn,bfloat16,16384,4096,0.000,False,both,0.043,0.067,6313.900,5970.400,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,llama3-8b,rms_norm,quack,bfloat16,16384,4096,0.000,False,both,0.046,0.092,5863.800,4385.200,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,llama3-8b,rms_norm,pytorch,bfloat16,16384,4096,0.000,False,both,0.053,0.184,5063.800,2193.400,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,llama3-8b,rms_norm,torch_compile,bfloat16,16384,4096,0.000,False,both,0.061,0.113,4404.800,3554.300,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,llama3-70b,rms_norm,cudnn,bfloat16,8192,8192,0.000,False,both,0.048,0.079,5631.100,5095.200,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,llama3-70b,rms_norm,quack,bfloat16,8192,8192,0.000,False,both,0.046,0.102,5859.300,3931.600,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,llama3-70b,rms_norm,pytorch,bfloat16,8192,8192,0.000,False,both,0.056,0.182,4775.400,2216.800,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,llama3-70b,rms_norm,torch_compile,bfloat16,8192,8192,0.000,False,both,0.046,0.196,5830.700,2051.700,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,llama31-405b,rms_norm,cudnn,bfloat16,4096,16384,0.000,False,both,0.046,0.087,5830.400,4605.200,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,llama31-405b,rms_norm,quack,bfloat16,4096,16384,0.000,False,both,0.044,0.136,6124.200,2959.900,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,llama31-405b,rms_norm,pytorch,bfloat16,4096,16384,0.000,False,both,0.072,0.197,3748.900,2040.100,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,llama31-405b,rms_norm,torch_compile,bfloat16,4096,16384,0.000,False,both,0.044,0.131,6133.100,3080.100,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,llama4-e16,rms_norm,cudnn,bfloat16,8192,5120,0.000,False,both,0.030,0.051,5688.100,4944.100,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,llama4-e16,rms_norm,quack,bfloat16,8192,5120,0.000,False,both,0.033,0.070,5111.300,3583.600,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,llama4-e16,rms_norm,pytorch,bfloat16,8192,5120,0.000,False,both,0.038,0.131,4392.100,1915.300,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,llama4-e16,rms_norm,torch_compile,bfloat16,8192,5120,0.000,False,both,0.039,0.131,4312.600,1917.600,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,gpt3-175b,layer_norm,cudnn,bfloat16,1024,12288,0.000,True,both,0.013,0.028,3785.500,2656.900,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,gpt3-175b,layer_norm,quack,bfloat16,1024,12288,0.000,True,both,inf,inf,0.000,0.000,20,False,"Benchmark failed with return code 1.
+stderr: Traceback (most recent call last):
+  File ""/home/scratch.vtombari_gpu/experiments/norm-frontend-bench/cudnn_frontend/benchmark/norms/benchmark_single_norm.py"", line 334, in <module>
+    assert norm_type == ""rms_norm"", ""Quack backend only supports rms_norm""
+           ^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Quack backend only supports rms_norm
+
+stdout: ",,,
+all_models,gpt3-175b,layer_norm,pytorch,bfloat16,1024,12288,0.000,True,both,0.031,0.043,1621.700,1758.600,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,gpt3-175b,layer_norm,torch_compile,bfloat16,1024,12288,0.000,True,both,0.018,0.039,2842.300,1931.200,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,mixtral-8x7b,rms_norm,cudnn,bfloat16,8192,4096,0.000,False,both,0.024,0.037,5631.900,5425.100,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,mixtral-8x7b,rms_norm,quack,bfloat16,8192,4096,0.000,False,both,0.025,0.054,5365.200,3759.400,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,mixtral-8x7b,rms_norm,pytorch,bfloat16,8192,4096,0.000,False,both,0.030,0.098,4435.100,2058.000,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,mixtral-8x7b,rms_norm,torch_compile,bfloat16,8192,4096,0.000,False,both,0.033,0.072,4046.000,2813.200,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,mixtral-8x22b,rms_norm,cudnn,bfloat16,4096,6144,0.000,False,both,0.018,0.038,5579.400,3976.300,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,mixtral-8x22b,rms_norm,quack,bfloat16,4096,6144,0.000,False,both,0.021,0.056,4901.300,2711.000,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,mixtral-8x22b,rms_norm,pytorch,bfloat16,4096,6144,0.000,False,both,0.025,0.079,4008.400,1919.500,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,mixtral-8x22b,rms_norm,torch_compile,bfloat16,4096,6144,0.000,False,both,0.022,0.070,4501.400,2149.300,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,nemotronh-56b,rms_norm,cudnn,bfloat16,4096,8192,0.000,False,both,0.024,0.042,5708.200,4760.300,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,nemotronh-56b,rms_norm,quack,bfloat16,4096,8192,0.000,False,both,0.025,0.058,5351.200,3463.300,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,nemotronh-56b,rms_norm,pytorch,bfloat16,4096,8192,0.000,False,both,0.033,0.097,4069.200,2068.100,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,nemotronh-56b,rms_norm,torch_compile,bfloat16,4096,8192,0.000,False,both,0.025,0.085,5290.700,2369.400,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,deepseek-v3-2048x4096,rms_norm,cudnn,bfloat16,2048,4096,0.000,False,both,0.009,0.015,3733.400,3362.500,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,deepseek-v3-2048x4096,rms_norm,quack,bfloat16,2048,4096,0.000,False,both,0.009,0.023,3773.700,2222.600,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,deepseek-v3-2048x4096,rms_norm,pytorch,bfloat16,2048,4096,0.000,False,both,0.010,0.022,3395.100,2304.000,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,deepseek-v3-2048x4096,rms_norm,torch_compile,bfloat16,2048,4096,0.000,False,both,0.011,0.029,3179.100,1729.300,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,deepseek-v3-131072x128,rms_norm,cudnn,bfloat16,131072,128,0.000,False,both,0.017,0.028,3973.100,3672.600,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,deepseek-v3-131072x128,rms_norm,quack,bfloat16,131072,128,0.000,False,both,0.014,0.031,4869.900,3263.300,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,deepseek-v3-131072x128,rms_norm,pytorch,bfloat16,131072,128,0.000,False,both,inf,inf,0.000,0.000,20,False,"Benchmark failed with return code 1.
+stderr: /home/scratch.vtombari_gpu/experiments/norm-frontend-bench/venvs/b200/lib/python3.12/site-packages/torch/profiler/profiler.py:224: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/home/scratch.vtombari_gpu/experiments/norm-frontend-bench/cudnn_frontend/benchmark/norms/benchmark_single_norm.py"", line 544, in <module>
+    output.backward(dy_gpu)
+  File ""/home/scratch.vtombari_gpu/experiments/norm-frontend-bench/venvs/b200/lib/python3.12/site-packages/torch/_tensor.py"", line 631, in backward
+    torch.autograd.backward(
+  File ""/home/scratch.vtombari_gpu/experiments/norm-frontend-bench/venvs/b200/lib/python3.12/site-packages/torch/autograd/__init__.py"", line 381, in backward
+    _engine_run_backward(
+  File ""/home/scratch.vtombari_gpu/experiments/norm-frontend-bench/venvs/b200/lib/python3.12/site-packages/torch/autograd/graph.py"", line 869, in _engine_run_backward
+    return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: Function FusedRmsNormBackward0 returned an invalid gradient at index 1 - got [1] but expected shape compatible with [128, 1, 1]
+
+stdout: ",,,
+all_models,deepseek-v3-131072x128,rms_norm,torch_compile,bfloat16,131072,128,0.000,False,both,0.012,0.043,5489.300,2377.500,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,deepseek-v3-8192x128,rms_norm,cudnn,bfloat16,8192,128,0.000,False,both,0.003,0.009,1246.600,737.600,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,deepseek-v3-8192x128,rms_norm,quack,bfloat16,8192,128,0.000,False,both,0.003,0.016,1518.400,400.900,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,deepseek-v3-8192x128,rms_norm,pytorch,bfloat16,8192,128,0.000,False,both,0.009,0.031,480.400,204.800,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,deepseek-v3-8192x128,rms_norm,torch_compile,bfloat16,8192,128,0.000,False,both,0.003,0.011,1554.200,571.200,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,qwen3-235b,rms_norm,cudnn,bfloat16,8192,5120,0.000,False,both,0.030,0.052,5657.400,4855.500,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,qwen3-235b,rms_norm,quack,bfloat16,8192,5120,0.000,False,both,0.033,0.070,5096.400,3590.200,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,qwen3-235b,rms_norm,pytorch,bfloat16,8192,5120,0.000,False,both,0.038,0.131,4381.100,1914.900,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,qwen3-235b,rms_norm,torch_compile,bfloat16,8192,5120,0.000,False,both,0.039,0.132,4305.600,1913.400,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,qwen3-30b-4096x2048,rms_norm,cudnn,bfloat16,4096,2048,0.000,False,both,0.007,0.014,4747.600,3544.200,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,qwen3-30b-4096x2048,rms_norm,quack,bfloat16,4096,2048,0.000,False,both,0.009,0.026,3900.400,1969.500,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,qwen3-30b-4096x2048,rms_norm,pytorch,bfloat16,4096,2048,0.000,False,both,0.011,0.028,3141.400,1782.100,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,qwen3-30b-4096x2048,rms_norm,torch_compile,bfloat16,4096,2048,0.000,False,both,0.010,0.024,3362.900,2073.400,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,qwen3-30b-131072x128,rms_norm,cudnn,bfloat16,131072,128,0.000,False,both,0.017,0.028,3965.600,3660.000,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,qwen3-30b-131072x128,rms_norm,quack,bfloat16,131072,128,0.000,False,both,0.014,0.031,4858.700,3304.300,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,qwen3-30b-131072x128,rms_norm,pytorch,bfloat16,131072,128,0.000,False,both,inf,inf,0.000,0.000,20,False,"Benchmark failed with return code 1.
+stderr: /home/scratch.vtombari_gpu/experiments/norm-frontend-bench/venvs/b200/lib/python3.12/site-packages/torch/profiler/profiler.py:224: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/home/scratch.vtombari_gpu/experiments/norm-frontend-bench/cudnn_frontend/benchmark/norms/benchmark_single_norm.py"", line 544, in <module>
+    output.backward(dy_gpu)
+  File ""/home/scratch.vtombari_gpu/experiments/norm-frontend-bench/venvs/b200/lib/python3.12/site-packages/torch/_tensor.py"", line 631, in backward
+    torch.autograd.backward(
+  File ""/home/scratch.vtombari_gpu/experiments/norm-frontend-bench/venvs/b200/lib/python3.12/site-packages/torch/autograd/__init__.py"", line 381, in backward
+    _engine_run_backward(
+  File ""/home/scratch.vtombari_gpu/experiments/norm-frontend-bench/venvs/b200/lib/python3.12/site-packages/torch/autograd/graph.py"", line 869, in _engine_run_backward
+    return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: Function FusedRmsNormBackward0 returned an invalid gradient at index 1 - got [1] but expected shape compatible with [128, 1, 1]
+
+stdout: ",,,
+all_models,qwen3-30b-131072x128,rms_norm,torch_compile,bfloat16,131072,128,0.000,False,both,0.012,0.042,5461.400,2386.600,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,qwen3-30b-16384x128,rms_norm,cudnn,bfloat16,16384,128,0.000,False,both,0.005,0.011,1834.300,1155.800,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,qwen3-30b-16384x128,rms_norm,quack,bfloat16,16384,128,0.000,False,both,0.003,0.017,2446.300,760.200,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,qwen3-30b-16384x128,rms_norm,pytorch,bfloat16,16384,128,0.000,False,both,0.015,0.057,563.300,222.200,20,True,,NVIDIA B200,1.21.0,92100.000
+all_models,qwen3-30b-16384x128,rms_norm,torch_compile,bfloat16,16384,128,0.000,False,both,0.010,0.013,830.800,995.700,20,True,,NVIDIA B200,1.21.0,92100.000

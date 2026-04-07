@@ -1,0 +1,67 @@
+config_name,norm_name,norm_type,backend,data_type,N,C,epsilon,has_bias,profile_pass,fwd_time_ms,bwd_time_ms,fwd_gbps,bwd_gbps,num_iterations,success,error_message,gpu_name,cudnn_version,cudnn_backend_version
+all_models,llama3-8b,rms_norm,cudnn,bfloat16,16384,4096,0.000,False,both,0.091,0.141,2941.100,2846.700,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,llama3-8b,rms_norm,quack,bfloat16,16384,4096,0.000,False,both,0.091,0.151,2953.500,2658.500,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,llama3-8b,rms_norm,pytorch,bfloat16,16384,4096,0.000,False,both,0.332,0.788,809.000,511.100,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,llama3-8b,rms_norm,torch_compile,bfloat16,16384,4096,0.000,False,both,0.094,0.088,2867.700,4592.100,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,llama3-70b,rms_norm,cudnn,bfloat16,8192,8192,0.000,False,both,0.092,0.141,2925.500,2864.800,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,llama3-70b,rms_norm,quack,bfloat16,8192,8192,0.000,False,both,0.091,0.158,2960.500,2548.100,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,llama3-70b,rms_norm,pytorch,bfloat16,8192,8192,0.000,False,both,0.346,0.798,776.400,504.500,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,llama3-70b,rms_norm,torch_compile,bfloat16,8192,8192,0.000,False,both,0.091,0.089,2956.500,4529.700,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,llama31-405b,rms_norm,cudnn,bfloat16,4096,16384,0.000,False,both,0.092,0.146,2928.500,2760.000,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,llama31-405b,rms_norm,quack,bfloat16,4096,16384,0.000,False,both,0.089,0.174,3001.900,2319.500,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,llama31-405b,rms_norm,pytorch,bfloat16,4096,16384,0.000,False,both,0.338,0.789,794.000,510.100,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,llama31-405b,rms_norm,torch_compile,bfloat16,4096,16384,0.000,False,both,0.094,0.123,2844.100,3280.400,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,llama4-e16,rms_norm,cudnn,bfloat16,8192,5120,0.000,False,both,0.058,0.094,2884.700,2666.400,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,llama4-e16,rms_norm,quack,bfloat16,8192,5120,0.000,False,both,0.059,0.101,2865.700,2490.000,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,llama4-e16,rms_norm,pytorch,bfloat16,8192,5120,0.000,False,both,0.212,0.510,793.100,493.200,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,llama4-e16,rms_norm,torch_compile,bfloat16,8192,5120,0.000,False,both,0.058,0.064,2894.200,3942.200,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,gpt3-175b,layer_norm,cudnn,bfloat16,1024,12288,0.000,True,both,0.020,0.040,2573.000,1900.100,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,gpt3-175b,layer_norm,quack,bfloat16,1024,12288,0.000,True,both,inf,inf,0.000,0.000,20,False,"Benchmark failed with return code 1.
+stderr: Traceback (most recent call last):
+  File ""/workspace/mount/experiments/norm-frontend-bench/cudnn_frontend/benchmark/norms/benchmark_single_norm.py"", line 334, in <module>
+    assert norm_type == ""rms_norm"", ""Quack backend only supports rms_norm""
+AssertionError: Quack backend only supports rms_norm
+
+stdout: ",,,
+all_models,gpt3-175b,layer_norm,pytorch,bfloat16,1024,12288,0.000,True,both,0.035,0.075,1434.100,1007.200,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,gpt3-175b,layer_norm,torch_compile,bfloat16,1024,12288,0.000,True,both,0.027,0.028,1897.200,2708.600,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,mixtral-8x7b,rms_norm,cudnn,bfloat16,8192,4096,0.000,False,both,0.047,0.076,2867.900,2650.800,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,mixtral-8x7b,rms_norm,quack,bfloat16,8192,4096,0.000,False,both,0.047,0.084,2865.800,2401.000,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,mixtral-8x7b,rms_norm,pytorch,bfloat16,8192,4096,0.000,False,both,0.172,0.417,781.000,482.700,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,mixtral-8x7b,rms_norm,torch_compile,bfloat16,8192,4096,0.000,False,both,0.048,0.045,2789.600,4479.000,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,mixtral-8x22b,rms_norm,cudnn,bfloat16,4096,6144,0.000,False,both,0.036,0.059,2774.800,2561.000,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,mixtral-8x22b,rms_norm,quack,bfloat16,4096,6144,0.000,False,both,0.036,0.078,2777.200,1937.600,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,mixtral-8x22b,rms_norm,pytorch,bfloat16,4096,6144,0.000,False,both,0.138,0.329,728.200,458.500,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,mixtral-8x22b,rms_norm,torch_compile,bfloat16,4096,6144,0.000,False,both,0.036,0.039,2804.500,3864.500,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,nemotronh-56b,rms_norm,cudnn,bfloat16,4096,8192,0.000,False,both,0.049,0.075,2760.000,2689.300,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,nemotronh-56b,rms_norm,quack,bfloat16,4096,8192,0.000,False,both,0.047,0.087,2867.600,2317.000,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,nemotronh-56b,rms_norm,pytorch,bfloat16,4096,8192,0.000,False,both,0.183,0.423,732.400,475.800,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,nemotronh-56b,rms_norm,torch_compile,bfloat16,4096,8192,0.000,False,both,0.047,0.046,2873.500,4420.300,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,deepseek-v3-2048x4096,rms_norm,cudnn,bfloat16,2048,4096,0.000,False,both,0.013,0.022,2516.000,2280.600,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,deepseek-v3-2048x4096,rms_norm,quack,bfloat16,2048,4096,0.000,False,both,0.014,0.030,2368.300,1658.200,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,deepseek-v3-2048x4096,rms_norm,pytorch,bfloat16,2048,4096,0.000,False,both,0.051,0.127,663.200,396.000,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,deepseek-v3-2048x4096,rms_norm,torch_compile,bfloat16,2048,4096,0.000,False,both,0.014,0.013,2384.100,3914.500,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,deepseek-v3-131072x128,rms_norm,cudnn,bfloat16,131072,128,0.000,False,both,0.027,0.045,2528.200,2273.300,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,deepseek-v3-131072x128,rms_norm,quack,bfloat16,131072,128,0.000,False,both,0.026,0.048,2615.800,2106.700,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,deepseek-v3-131072x128,rms_norm,pytorch,bfloat16,131072,128,0.000,False,both,0.112,0.349,601.900,290.100,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,deepseek-v3-131072x128,rms_norm,torch_compile,bfloat16,131072,128,0.000,False,both,0.024,0.022,2784.600,4504.500,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,deepseek-v3-8192x128,rms_norm,cudnn,bfloat16,8192,128,0.000,False,both,0.004,0.010,1169.100,615.800,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,deepseek-v3-8192x128,rms_norm,quack,bfloat16,8192,128,0.000,False,both,0.003,0.016,1308.400,387.500,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,deepseek-v3-8192x128,rms_norm,pytorch,bfloat16,8192,128,0.000,False,both,0.015,0.041,284.400,153.700,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,deepseek-v3-8192x128,rms_norm,torch_compile,bfloat16,8192,128,0.000,False,both,0.003,0.006,1420.500,1008.400,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,qwen3-235b,rms_norm,cudnn,bfloat16,8192,5120,0.000,False,both,0.058,0.095,2899.000,2660.100,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,qwen3-235b,rms_norm,quack,bfloat16,8192,5120,0.000,False,both,0.058,0.101,2868.800,2480.600,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,qwen3-235b,rms_norm,pytorch,bfloat16,8192,5120,0.000,False,both,0.211,0.511,794.600,492.800,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,qwen3-235b,rms_norm,torch_compile,bfloat16,8192,5120,0.000,False,both,0.058,0.064,2881.400,3963.400,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,qwen3-30b-4096x2048,rms_norm,cudnn,bfloat16,4096,2048,0.000,False,both,0.014,0.023,2457.200,2207.000,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,qwen3-30b-4096x2048,rms_norm,quack,bfloat16,4096,2048,0.000,False,both,0.014,0.033,2390.000,1548.800,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,qwen3-30b-4096x2048,rms_norm,pytorch,bfloat16,4096,2048,0.000,False,both,0.048,0.123,704.700,408.400,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,qwen3-30b-4096x2048,rms_norm,torch_compile,bfloat16,4096,2048,0.000,False,both,0.017,0.014,1968.600,3717.300,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,qwen3-30b-131072x128,rms_norm,cudnn,bfloat16,131072,128,0.000,False,both,0.027,0.044,2525.100,2284.800,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,qwen3-30b-131072x128,rms_norm,quack,bfloat16,131072,128,0.000,False,both,0.025,0.048,2665.300,2110.900,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,qwen3-30b-131072x128,rms_norm,pytorch,bfloat16,131072,128,0.000,False,both,0.112,0.349,603.100,289.600,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,qwen3-30b-131072x128,rms_norm,torch_compile,bfloat16,131072,128,0.000,False,both,0.024,0.022,2781.000,4500.300,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,qwen3-30b-16384x128,rms_norm,cudnn,bfloat16,16384,128,0.000,False,both,0.005,0.013,1591.600,990.700,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,qwen3-30b-16384x128,rms_norm,quack,bfloat16,16384,128,0.000,False,both,0.004,0.018,1942.600,700.900,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,qwen3-30b-16384x128,rms_norm,pytorch,bfloat16,16384,128,0.000,False,both,0.021,0.059,395.500,216.200,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000
+all_models,qwen3-30b-16384x128,rms_norm,torch_compile,bfloat16,16384,128,0.000,False,both,0.004,0.007,2001.500,1882.300,20,True,,NVIDIA H100 80GB HBM3,1.21.0,92100.000

@@ -1,0 +1,98 @@
+config_name,norm_name,norm_type,backend,data_type,N,C,epsilon,has_bias,profile_pass,fwd_time_ms,bwd_time_ms,fwd_gbps,bwd_gbps,num_iterations,success,error_message,gpu_name,cudnn_version,cudnn_backend_version
+all_models,llama3-8b,rms_norm,cudnn,bfloat16,16384,4096,0.000,False,both,0.043,0.067,6280.200,5973.200,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,llama3-8b,rms_norm,quack,bfloat16,16384,4096,0.000,False,both,0.046,0.091,5880.100,4431.500,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,llama3-8b,rms_norm,pytorch,bfloat16,16384,4096,0.000,False,both,0.052,0.179,5198.800,2249.800,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,llama3-8b,rms_norm,torch_compile,bfloat16,16384,4096,0.000,False,both,0.060,0.111,4484.600,3614.500,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,llama3-70b,rms_norm,cudnn,bfloat16,8192,8192,0.000,False,both,0.047,0.078,5703.800,5172.600,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,llama3-70b,rms_norm,quack,bfloat16,8192,8192,0.000,False,both,0.046,0.101,5867.200,3991.300,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,llama3-70b,rms_norm,pytorch,bfloat16,8192,8192,0.000,False,both,0.054,0.178,4938.300,2267.900,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,llama3-70b,rms_norm,torch_compile,bfloat16,8192,8192,0.000,False,both,0.045,0.196,5929.700,2057.000,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,llama31-405b,rms_norm,cudnn,bfloat16,4096,16384,0.000,False,both,0.047,0.085,5684.300,4718.900,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,llama31-405b,rms_norm,quack,bfloat16,4096,16384,0.000,False,both,0.044,0.136,6106.200,2950.900,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,llama31-405b,rms_norm,pytorch,bfloat16,4096,16384,0.000,False,both,0.071,0.194,3799.800,2072.700,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,llama31-405b,rms_norm,torch_compile,bfloat16,4096,16384,0.000,False,both,0.044,0.130,6119.700,3097.600,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,llama4-e16,rms_norm,cudnn,bfloat16,8192,5120,0.000,False,both,0.030,0.050,5608.600,5035.800,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,llama4-e16,rms_norm,quack,bfloat16,8192,5120,0.000,False,both,0.032,0.068,5172.100,3719.100,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,llama4-e16,rms_norm,pytorch,bfloat16,8192,5120,0.000,False,both,0.037,0.128,4501.500,1968.900,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,llama4-e16,rms_norm,torch_compile,bfloat16,8192,5120,0.000,False,both,0.038,0.129,4377.500,1954.300,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,gpt3-175b,layer_norm,cudnn,bfloat16,1024,12288,0.000,True,both,0.013,0.028,3794.400,2736.800,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,gpt3-175b,layer_norm,quack,bfloat16,1024,12288,0.000,True,both,inf,inf,0.000,0.000,20,False,"Benchmark failed with return code 1.
+stderr: Traceback (most recent call last):
+  File ""/home/scratch.vtombari_gpu/experiments/norm-frontend-bench/cudnn_frontend/benchmark/norms/benchmark_single_norm.py"", line 334, in <module>
+    assert norm_type == ""rms_norm"", ""Quack backend only supports rms_norm""
+           ^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Quack backend only supports rms_norm
+
+stdout: ",,,
+all_models,gpt3-175b,layer_norm,pytorch,bfloat16,1024,12288,0.000,True,both,0.030,0.042,1661.000,1801.500,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,gpt3-175b,layer_norm,torch_compile,bfloat16,1024,12288,0.000,True,both,0.017,0.038,2937.800,1994.800,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,mixtral-8x7b,rms_norm,cudnn,bfloat16,8192,4096,0.000,False,both,0.024,0.037,5700.500,5496.200,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,mixtral-8x7b,rms_norm,quack,bfloat16,8192,4096,0.000,False,both,0.025,0.053,5413.700,3811.700,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,mixtral-8x7b,rms_norm,pytorch,bfloat16,8192,4096,0.000,False,both,0.029,0.096,4580.200,2099.700,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,mixtral-8x7b,rms_norm,torch_compile,bfloat16,8192,4096,0.000,False,both,0.032,0.070,4178.900,2877.500,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,mixtral-8x22b,rms_norm,cudnn,bfloat16,4096,6144,0.000,False,both,0.018,0.037,5619.000,4075.900,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,mixtral-8x22b,rms_norm,quack,bfloat16,4096,6144,0.000,False,both,0.020,0.054,4986.700,2787.900,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,mixtral-8x22b,rms_norm,pytorch,bfloat16,4096,6144,0.000,False,both,0.025,0.076,4097.000,1974.800,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,mixtral-8x22b,rms_norm,torch_compile,bfloat16,4096,6144,0.000,False,both,0.022,0.070,4593.600,2173.100,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,nemotronh-56b,rms_norm,cudnn,bfloat16,4096,8192,0.000,False,both,0.024,0.042,5707.700,4811.000,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,nemotronh-56b,rms_norm,quack,bfloat16,4096,8192,0.000,False,both,0.025,0.058,5399.400,3501.900,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,nemotronh-56b,rms_norm,pytorch,bfloat16,4096,8192,0.000,False,both,0.032,0.095,4178.600,2118.100,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,nemotronh-56b,rms_norm,torch_compile,bfloat16,4096,8192,0.000,False,both,0.025,0.084,5297.100,2403.700,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,deepseek-v3-2048x4096,rms_norm,cudnn,bfloat16,2048,4096,0.000,False,both,0.009,0.015,3814.900,3420.900,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,deepseek-v3-2048x4096,rms_norm,quack,bfloat16,2048,4096,0.000,False,both,0.009,0.022,3828.800,2264.200,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,deepseek-v3-2048x4096,rms_norm,pytorch,bfloat16,2048,4096,0.000,False,both,0.010,0.021,3406.500,2377.100,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,deepseek-v3-2048x4096,rms_norm,torch_compile,bfloat16,2048,4096,0.000,False,both,0.010,0.028,3258.000,1768.200,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,deepseek-v3-131072x128,rms_norm,cudnn,bfloat16,131072,128,0.000,False,both,0.016,0.027,4136.100,3711.700,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,deepseek-v3-131072x128,rms_norm,quack,bfloat16,131072,128,0.000,False,both,0.014,0.030,4961.700,3349.700,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,deepseek-v3-131072x128,rms_norm,pytorch,bfloat16,131072,128,0.000,False,both,inf,inf,0.000,0.000,20,False,"Benchmark failed with return code 1.
+stderr: /home/scratch.vtombari_gpu/experiments/norm-frontend-bench/venvs/b300/lib/python3.12/site-packages/torch/profiler/profiler.py:224: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/home/scratch.vtombari_gpu/experiments/norm-frontend-bench/cudnn_frontend/benchmark/norms/benchmark_single_norm.py"", line 544, in <module>
+    output.backward(dy_gpu)
+  File ""/home/scratch.vtombari_gpu/experiments/norm-frontend-bench/venvs/b300/lib/python3.12/site-packages/torch/_tensor.py"", line 631, in backward
+    torch.autograd.backward(
+  File ""/home/scratch.vtombari_gpu/experiments/norm-frontend-bench/venvs/b300/lib/python3.12/site-packages/torch/autograd/__init__.py"", line 381, in backward
+    _engine_run_backward(
+  File ""/home/scratch.vtombari_gpu/experiments/norm-frontend-bench/venvs/b300/lib/python3.12/site-packages/torch/autograd/graph.py"", line 869, in _engine_run_backward
+    return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: Function FusedRmsNormBackward0 returned an invalid gradient at index 1 - got [1] but expected shape compatible with [128, 1, 1]
+
+stdout: ",,,
+all_models,deepseek-v3-131072x128,rms_norm,torch_compile,bfloat16,131072,128,0.000,False,both,0.012,0.041,5590.900,2451.300,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,deepseek-v3-8192x128,rms_norm,cudnn,bfloat16,8192,128,0.000,False,both,0.003,0.008,1270.200,748.700,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,deepseek-v3-8192x128,rms_norm,quack,bfloat16,8192,128,0.000,False,both,0.003,0.015,1518.400,411.800,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,deepseek-v3-8192x128,rms_norm,pytorch,bfloat16,8192,128,0.000,False,both,0.009,0.030,487.500,209.600,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,deepseek-v3-8192x128,rms_norm,torch_compile,bfloat16,8192,128,0.000,False,both,0.003,0.011,1484.300,581.300,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,qwen3-235b,rms_norm,cudnn,bfloat16,8192,5120,0.000,False,both,0.030,0.050,5675.400,5039.100,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,qwen3-235b,rms_norm,quack,bfloat16,8192,5120,0.000,False,both,0.032,0.067,5182.000,3729.700,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,qwen3-235b,rms_norm,pytorch,bfloat16,8192,5120,0.000,False,both,0.037,0.128,4497.500,1969.400,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,qwen3-235b,rms_norm,torch_compile,bfloat16,8192,5120,0.000,False,both,0.038,0.129,4425.400,1945.100,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,qwen3-30b-4096x2048,rms_norm,cudnn,bfloat16,4096,2048,0.000,False,both,0.007,0.014,4726.200,3626.400,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,qwen3-30b-4096x2048,rms_norm,quack,bfloat16,4096,2048,0.000,False,both,0.008,0.025,3959.300,1991.900,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,qwen3-30b-4096x2048,rms_norm,pytorch,bfloat16,4096,2048,0.000,False,both,0.010,0.027,3228.400,1844.800,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,qwen3-30b-4096x2048,rms_norm,torch_compile,bfloat16,4096,2048,0.000,False,both,0.010,0.023,3395.500,2146.700,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,qwen3-30b-131072x128,rms_norm,cudnn,bfloat16,131072,128,0.000,False,both,0.016,0.027,4128.000,3768.900,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,qwen3-30b-131072x128,rms_norm,quack,bfloat16,131072,128,0.000,False,both,0.014,0.030,4973.000,3339.100,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,qwen3-30b-131072x128,rms_norm,pytorch,bfloat16,131072,128,0.000,False,both,inf,inf,0.000,0.000,20,False,"Benchmark failed with return code 1.
+stderr: /home/scratch.vtombari_gpu/experiments/norm-frontend-bench/venvs/b300/lib/python3.12/site-packages/torch/profiler/profiler.py:224: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/home/scratch.vtombari_gpu/experiments/norm-frontend-bench/cudnn_frontend/benchmark/norms/benchmark_single_norm.py"", line 544, in <module>
+    output.backward(dy_gpu)
+  File ""/home/scratch.vtombari_gpu/experiments/norm-frontend-bench/venvs/b300/lib/python3.12/site-packages/torch/_tensor.py"", line 631, in backward
+    torch.autograd.backward(
+  File ""/home/scratch.vtombari_gpu/experiments/norm-frontend-bench/venvs/b300/lib/python3.12/site-packages/torch/autograd/__init__.py"", line 381, in backward
+    _engine_run_backward(
+  File ""/home/scratch.vtombari_gpu/experiments/norm-frontend-bench/venvs/b300/lib/python3.12/site-packages/torch/autograd/graph.py"", line 869, in _engine_run_backward
+    return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: Function FusedRmsNormBackward0 returned an invalid gradient at index 1 - got [1] but expected shape compatible with [128, 1, 1]
+
+stdout: ",,,
+all_models,qwen3-30b-131072x128,rms_norm,torch_compile,bfloat16,131072,128,0.000,False,both,0.012,0.041,5547.400,2453.100,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,qwen3-30b-16384x128,rms_norm,cudnn,bfloat16,16384,128,0.000,False,both,0.005,0.011,1822.100,1152.400,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,qwen3-30b-16384x128,rms_norm,quack,bfloat16,16384,128,0.000,False,both,0.003,0.016,2469.200,776.600,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,qwen3-30b-16384x128,rms_norm,pytorch,bfloat16,16384,128,0.000,False,both,0.015,0.056,579.400,225.400,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
+all_models,qwen3-30b-16384x128,rms_norm,torch_compile,bfloat16,16384,128,0.000,False,both,0.004,0.013,2380.200,1010.900,20,True,,NVIDIA B300 SXM6 AC,1.21.0,92100.000
