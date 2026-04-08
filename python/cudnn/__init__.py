@@ -430,6 +430,26 @@ def __getattr__(name: str) -> Any:
                 f"grouped_gemm_dglu_wrapper_sm100 requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]': {e}"
             ) from e
 
+    elif name == "GroupedGemmWgradSm100":
+        try:
+            from .grouped_gemm import GroupedGemmWgradSm100 as _GroupedGemmWgradSm100
+
+            return _GroupedGemmWgradSm100
+        except Exception as e:
+            raise ImportError(f"GroupedGemmWgradSm100 requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]': {e}") from e
+
+    elif name == "grouped_gemm_wgrad_wrapper_sm100":
+        try:
+            from .grouped_gemm import (
+                grouped_gemm_wgrad_wrapper_sm100 as _grouped_gemm_wgrad_wrapper_sm100,
+            )
+
+            return _grouped_gemm_wgrad_wrapper_sm100
+        except Exception as e:
+            raise ImportError(
+                f"grouped_gemm_wgrad_wrapper_sm100 requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]': {e}"
+            ) from e
+
     # Discrete-weight Grouped GEMM GLU module
     elif name == "discrete_grouped_gemm":
         try:
