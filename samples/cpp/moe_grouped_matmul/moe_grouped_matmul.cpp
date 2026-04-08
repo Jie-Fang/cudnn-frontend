@@ -52,28 +52,22 @@ TEST_CASE("WoQ MoeGroupedMatmul", "[MoeGroupedMatmul][graph]") {
     Surface<int8_t> token_gpu(
         div_up(batch_size * token_num * top_k * hidden_size *
                    cudnn_frontend::detail::get_element_size_in_bits(cudnn_frontend::DataType_t::HALF),
-               8),
-        false);
+               8));
     Surface<int8_t> weight_gpu(
         div_up(num_experts * hidden_size * weight_size *
                    cudnn_frontend::detail::get_element_size_in_bits(cudnn_frontend::DataType_t::INT4),
-               8),
-        false);
+               8));
     Surface<int8_t> block_scale_gpu(
         div_up(num_experts * div_up(hidden_size, block_size) * weight_size *
                    cudnn_frontend::detail::get_element_size_in_bits(cudnn_frontend::DataType_t::HALF),
-               8),
-        false);
-    Surface<int8_t> first_token_offset_gpu(
-        div_up(batch_size * num_experts *
-                   cudnn_frontend::detail::get_element_size_in_bits(cudnn_frontend::DataType_t::INT32),
-               8),
-        false);
+               8));
+    Surface<int8_t> first_token_offset_gpu(div_up(
+        batch_size * num_experts * cudnn_frontend::detail::get_element_size_in_bits(cudnn_frontend::DataType_t::INT32),
+        8));
     Surface<int8_t> moe_grouped_matmul_gpu(
         div_up(batch_size * token_num * top_k * weight_size *
                    cudnn_frontend::detail::get_element_size_in_bits(cudnn_frontend::DataType_t::HALF),
-               8),
-        false);
+               8));
 
     std::vector<int32_t> first_token_offset_cpu({0, 128, 512, 768, 1152, 1536});
     CUDA_CHECK(cudaMemcpy(first_token_offset_gpu.devPtr,
@@ -148,7 +142,7 @@ TEST_CASE("WoQ MoeGroupedMatmul", "[MoeGroupedMatmul][graph]") {
     // Run cudnn graph
     int64_t workspace_size = 0;
     REQUIRE(graph.get_workspace_size(workspace_size).is_good());
-    Surface<int8_t> workspace(workspace_size, false);
+    Surface<int8_t> workspace(workspace_size);
 
     std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
         {tensor_token, token_gpu.devPtr},
@@ -186,21 +180,17 @@ TEST_CASE("BF16 MoeGroupedMatmulBwd", "[MoeGroupedMatmulBwd][graph]") {
     Surface<int8_t> doutput_gpu(
         div_up(token_num * weight_size *
                    cudnn_frontend::detail::get_element_size_in_bits(cudnn_frontend::DataType_t::BFLOAT16),
-               8),
-        false);
+               8));
     Surface<int8_t> token_gpu(
         div_up(token_num * hidden_size *
                    cudnn_frontend::detail::get_element_size_in_bits(cudnn_frontend::DataType_t::BFLOAT16),
-               8),
-        false);
+               8));
     Surface<int8_t> first_token_offset_gpu(
-        div_up(num_experts * cudnn_frontend::detail::get_element_size_in_bits(cudnn_frontend::DataType_t::INT32), 8),
-        false);
+        div_up(num_experts * cudnn_frontend::detail::get_element_size_in_bits(cudnn_frontend::DataType_t::INT32), 8));
     Surface<int8_t> dweight_gpu(
         div_up(num_experts * hidden_size * weight_size *
                    cudnn_frontend::detail::get_element_size_in_bits(cudnn_frontend::DataType_t::BFLOAT16),
-               8),
-        false);
+               8));
 
     CUDA_CHECK(cudaMemcpy(first_token_offset_gpu.devPtr,
                           first_token_offset_cpu.data(),
@@ -257,7 +247,7 @@ TEST_CASE("BF16 MoeGroupedMatmulBwd", "[MoeGroupedMatmulBwd][graph]") {
     // Run cudnn graph
     int64_t workspace_size = 0;
     REQUIRE(graph.get_workspace_size(workspace_size).is_good());
-    Surface<int8_t> workspace(workspace_size, false);
+    Surface<int8_t> workspace(workspace_size);
 
     std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
         {tensor_doutput, doutput_gpu.devPtr},
