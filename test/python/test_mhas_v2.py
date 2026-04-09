@@ -818,6 +818,10 @@ def test_sdpa_fp8_fwd_ragged_L0(env_info, test_no, request, cudnn_handle):
 # # L0 FP8 THD (ragged) bprop tests
 # # ==================================
 
+@pytest.mark.skipif(
+    cudnn.backend_version() <= 92100,
+    reason="ragged FP8 backward requires cuDNN > 9.21.0",
+)
 @pytest.mark.parametrize("test_no", generate_test_seeds(num_tests=32, rng_seed=995), ids=lambda p: f"test{p[0]}")
 @pytest.mark.L1
 def test_sdpa_fp8_bwd_ragged_L0(env_info, test_no, request, cudnn_handle):
