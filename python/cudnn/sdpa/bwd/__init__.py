@@ -1,5 +1,5 @@
 # Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-# SPDX-License-Identifier: BSD-3-Clause
+# SPDX-License-Identifier: MIT
 
 from .api import SdpabwdSm100D256, sdpa_bwd_wrapper_sm100_d256
 
