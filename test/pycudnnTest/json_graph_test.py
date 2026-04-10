@@ -105,6 +105,7 @@ def replace_abstract_test_params(json_test_def, abstract_params):
 def run_tensor_ir_from_legacy_args(parent_args, unknown_args):
     from test_tensor_ir import (
         get_element_bits,
+        get_default_cubin_chip,
         generate_tensorir_compilation_configs,
         get_tensorir_compilation_config,
         is_float_dtype,
@@ -117,7 +118,7 @@ def run_tensor_ir_from_legacy_args(parent_args, unknown_args):
     tensorir_parser.add_argument("-cluster_shape", action="store")
     tensorir_parser.add_argument("-cta_count", action="store")
     tensorir_parser.add_argument("-stream_k", action="store_true")
-    tensorir_parser.add_argument("-cubin_chip", action="store", default="sm_100a")
+    tensorir_parser.add_argument("-cubin_chip", action="store", default=get_default_cubin_chip())
     tensorir_parser.add_argument("-sweep_tile_configs", action="store_true")
     tensorir_parser.add_argument("-random_sweep_tile_configs", action="store", type=int, default=0)
     tensorir_parser.add_argument("-dump_ir_path", action="store", default="")

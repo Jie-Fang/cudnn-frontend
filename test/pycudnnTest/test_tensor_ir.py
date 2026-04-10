@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from collections import namedtuple
 import inspect
+from functools import lru_cache
 import random
 import string
 from tensor_ir_utils import CompilerWithKernelCacheSingleton
@@ -21,6 +22,26 @@ import sys
 
 # Redirect stderr to stdout to preserve chronological order of output
 sys.stderr = sys.stdout
+
+
+_DEFAULT_CUBIN_CHIP_FALLBACK = "sm_100a"
+_SUPPORTED_CUBIN_CHIP = {100: _DEFAULT_CUBIN_CHIP_FALLBACK, 107: "sm_107a"}
+
+
+def _get_cubin_chip_for_compute_capability(compute_capability):
+    return _SUPPORTED_CUBIN_CHIP.get(compute_capability, _DEFAULT_CUBIN_CHIP_FALLBACK)
+
+
+@lru_cache(maxsize=1)
+def get_default_cubin_chip():
+    """Detect cubin_chip from the current GPU's compute capability."""
+    try:
+        cask_context = nv_tensor_ir.create_cask_context()
+        cask_context.initialize_cuda_device()
+        cc = cask_context.get_compute_capability()
+        return _get_cubin_chip_for_compute_capability(cc)
+    except Exception:
+        return _DEFAULT_CUBIN_CHIP_FALLBACK
 
 
 def get_element_bits(data_type):
@@ -203,7 +224,7 @@ class TensorIRArguments:
         self.cluster_shape = _get_arg_from_tensorir_args(tensorir_args, "cluster_shape", _parse_comma_separated_ints)
         self.cta_count = _get_arg_from_tensorir_args(tensorir_args, "cta_count", int)
         self.stream_k = _get_arg_from_tensorir_args(tensorir_args, "stream_k", bool, False)
-        self.cubin_chip = _get_arg_from_tensorir_args(tensorir_args, "cubin_chip", default="sm_100a")
+        self.cubin_chip = _get_arg_from_tensorir_args(tensorir_args, "cubin_chip", default=get_default_cubin_chip())
 
     def has_all_required(self):
         """Check if all required arguments are provided."""
@@ -398,7 +419,7 @@ def get_tensorir_compilation_config(m, n, k, matmul_element_bits, tensorir_args)
         "cluster_shape": [1, 1, 1],
         "cta_count": 1,
         "stream_k": False,
-        "cubin_chip": "sm_100a",
+        "cubin_chip": get_default_cubin_chip(),
     }
 
     # Override defaults with user-provided arguments
@@ -1087,7 +1108,7 @@ class test_tensor_ir:
         ConvFpropNode: ["conv_fprop"],
     }
     # Compute capability to cubin chip mapping
-    SUPPORTED_CUBIN_CHIP = {100: "sm_100a", 107: "sm_107f"}
+    SUPPORTED_CUBIN_CHIP = _SUPPORTED_CUBIN_CHIP
 
     # Map of operation names to node classes - built from the operation groups
     NODE_CLASS_MAP = {}
@@ -1383,8 +1404,9 @@ class test_tensor_ir:
                     print(f"\n#### Valid configuration: {tile_size}, {mma_shape}, {cluster_shape}, {cta_count}")
 
                     # TODO: Add enum to support more cubin_chip
-                    if self.SUPPORTED_CUBIN_CHIP[cc] != cubin_chip:
-                        print(f"#### cubin_chip={cubin_chip} is not supported for cc={cc}")
+                    expected_cubin_chip = _get_cubin_chip_for_compute_capability(cc)
+                    if expected_cubin_chip != cubin_chip:
+                        print(f"#### cubin_chip={cubin_chip} is not supported for cc={cc}; expected {expected_cubin_chip}")
                         print(f"#### Skip this config")
                         continue
                     cc = nv_tensor_ir.ComputeCapability(cc)
@@ -1487,7 +1509,7 @@ class test_tensor_ir:
                         return StatusCode.WAIVED
 
                 tile_cc = self.compiler_with_kernel_cache.get_compute_capability()
-                tile_cubin_chip = self.SUPPORTED_CUBIN_CHIP.get(tile_cc, "sm_100a")
+                tile_cubin_chip = _get_cubin_chip_for_compute_capability(tile_cc)
                 for config in kernel_configs:
                     tile_size = config[0]  # Extract first value from the config list
                     cloned_module = ir.Module.parse(str(module))
