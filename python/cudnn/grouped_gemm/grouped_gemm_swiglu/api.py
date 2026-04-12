@@ -1,5 +1,5 @@
 # Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: MIT 
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -910,11 +910,10 @@ def grouped_gemm_swiglu_wrapper_sm100(
         )
         sfd_col_tensor = torch.empty(mma_shape_col, dtype=sf_dtype, device=a_tensor.device).permute(mma_permute_order)
 
-    if d_dtype in [torch.bfloat16, torch.float16]:
-        _logger.debug("grouped_gemm_swiglu_wrapper_sm100: Detected bf16/float16 d_dtype, constructing amax_tensor")
-        amax_tensor = torch.full((l, 1), float("-inf"), dtype=torch.float32, device=a_tensor.device)
-
     if valid_m == 0:
+        if d_dtype in [torch.bfloat16, torch.float16]:
+            amax_tensor = torch.empty((l, 1), dtype=torch.float32, device=a_tensor.device)
+
         _logger.debug("grouped_gemm_swiglu_wrapper_sm100: valid_m is zero, skipping kernel execution")
         return TupleDict(
             c_tensor=c_tensor,
@@ -962,7 +961,10 @@ def grouped_gemm_swiglu_wrapper_sm100(
 
     if cache_key in _cache_of_GroupedGemmSwigluSm100Objects:
         _logger.debug("group_gemm_swiglu_wrapper_sm100: Using previously cached GroupedGemmSwigluSm100 object")
-        grouped_gemm_swiglu = _cache_of_GroupedGemmSwigluSm100Objects[cache_key]
+        grouped_gemm_swiglu, amax_tensor = _cache_of_GroupedGemmSwigluSm100Objects[cache_key]
+        # The cuDNN graph API binds data pointers at execute time, not plan-build time.
+        # During CUDA graph capture, padded_offsets is allocated in the graph pool
+        # (stable address across replays), so passing it directly is graph-safe.
         grouped_gemm_swiglu.execute(
             a_tensor=a_tensor,
             b_tensor=b_tensor,
@@ -982,6 +984,10 @@ def grouped_gemm_swiglu_wrapper_sm100(
         )
     else:
         _logger.debug("group_gemm_swiglu_wrapper_sm100: No previously cached GroupedGemmSwigluSm100 object found, creating new GroupedGemmSwigluSm100 object")
+        # Allocate amax_tensor once here; cache-hit calls reuse this buffer so
+        # the FillFunctor (torch.full) only fires during warmup, not every step.
+        if d_dtype in [torch.bfloat16, torch.float16]:
+            amax_tensor = torch.full((l, 1), float("-inf"), dtype=torch.float32, device=a_tensor.device)
         grouped_gemm_swiglu = GroupedGemmSwigluSm100(
             sample_a=a_tensor,
             sample_b=b_tensor,
@@ -1025,7 +1031,7 @@ def grouped_gemm_swiglu_wrapper_sm100(
             prob_tensor=prob_tensor,
             current_stream=current_stream,
         )
-        _cache_of_GroupedGemmSwigluSm100Objects[cache_key] = grouped_gemm_swiglu
+        _cache_of_GroupedGemmSwigluSm100Objects[cache_key] = (grouped_gemm_swiglu, amax_tensor)
 
     return TupleDict(
         c_tensor=c_tensor,
