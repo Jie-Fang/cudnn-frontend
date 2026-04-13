@@ -806,6 +806,20 @@ def grouped_gemm_dswiglu_wrapper_sm100(
     d_col_tensor = torch.empty_strided((valid_m, n * 2, 1), (n * 2, 1, valid_m * n * 2), dtype=d_dtype, device=a_tensor.device)
     dprob_tensor = dprob_tensor_buf.zero_() if dprob_tensor_buf is not None else torch.zeros((valid_m, 1, 1), dtype=torch.float32, device=a_tensor.device)
 
+    if valid_m == 0:
+        amax_tensor = None
+        if d_dtype in [torch.bfloat16, torch.float16]:
+            amax_tensor = torch.full((l, 2, 1), float("-inf"), dtype=torch.float32, device=a_tensor.device)
+        _logger.debug("grouped_gemm_dswiglu_wrapper_sm100: valid_m is zero, skipping kernel execution")
+        return TupleDict(
+            d_row_tensor=d_row_tensor,
+            d_col_tensor=d_col_tensor,
+            dprob_tensor=dprob_tensor,
+            amax_tensor=amax_tensor,
+            sfd_row_tensor=None,
+            sfd_col_tensor=None,
+        )
+
     sfd_row_tensor = None
     sfd_col_tensor = None
     if a_tensor.dtype in [torch.float8_e4m3fn, torch.float8_e5m2] and sfa_tensor.dtype in [torch.float8_e8m0fnu, torch.float8_e4m3fn]:
