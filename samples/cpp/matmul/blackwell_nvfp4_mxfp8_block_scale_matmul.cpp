@@ -71,6 +71,8 @@ struct TestParams {
     }
 };
 
+// Note: For nvfp4/mxfp8 block scale matmul, scale factors need to be organized in 128x4 layout for best performance.
+//       Details of the layout can be found https://docs.nvidia.com/cuda/cublas/#d-block-scaling-factors-layout
 TEST_CASE("Blackwell Block Scale Matmul", "[matmul][graph][FP4]") {
 #if (CUDNN_VERSION < 90700)
     SKIP("Matmul with block scaling is not supported in cudnn versions prior to 9.7.0");
@@ -361,7 +363,7 @@ TEST_CASE("Blackwell Block Scale Matmul", "[matmul][graph][FP4]") {
                                             .set_name("block_descale_b")
                                             .set_data_type(datatype_block_scale)
                                             .set_dim({b, block_scale_dim_k, block_scale_dim_n})
-                                            .set_stride({block_scale_dim_m * block_scale_dim_k, 1, block_scale_dim_k})
+                                            .set_stride({block_scale_dim_n * block_scale_dim_k, 1, block_scale_dim_k})
                                             .set_reordering_type(cudnn_frontend::TensorReordering_t::F8_128x4));
 
     auto dequantize_attr_a = fe::graph::Block_scale_dequantize_attributes().set_block_size({1, block_size});
@@ -498,7 +500,7 @@ TEST_CASE("Blackwell Block Scale Matmul Quantize", "[matmul][graph][FP4]") {
                                             .set_name("block_descale_b")
                                             .set_data_type(datatype_block_scale)
                                             .set_dim({b, block_scale_dim_k, block_scale_dim_n})
-                                            .set_stride({block_scale_dim_m * block_scale_dim_k, 1, block_scale_dim_k})
+                                            .set_stride({block_scale_dim_n * block_scale_dim_k, 1, block_scale_dim_k})
                                             .set_reordering_type(cudnn_frontend::TensorReordering_t::F8_128x4));
 
     auto dequantize_attr_a = fe::graph::Block_scale_dequantize_attributes().set_block_size({1, block_size});
@@ -648,14 +650,14 @@ TEST_CASE("Block Scale Matmul Swiglu", "[matmul][graph][FP4]") {
                                              .set_name("block_descale_b")
                                              .set_data_type(datatype_block_scale)
                                              .set_dim({b, block_scale_dim_k, block_scale_dim_n})
-                                             .set_stride({block_scale_dim_m * block_scale_dim_k, 1, block_scale_dim_k})
+                                             .set_stride({block_scale_dim_n * block_scale_dim_k, 1, block_scale_dim_k})
                                              .set_reordering_type(cudnn_frontend::TensorReordering_t::F8_128x4));
 
     auto block_descale_b1 = graph.tensor(fe::graph::Tensor_attributes()
                                              .set_name("block_descale_b")
                                              .set_data_type(datatype_block_scale)
                                              .set_dim({b, block_scale_dim_k, block_scale_dim_n})
-                                             .set_stride({block_scale_dim_m * block_scale_dim_k, 1, block_scale_dim_k})
+                                             .set_stride({block_scale_dim_n * block_scale_dim_k, 1, block_scale_dim_k})
                                              .set_reordering_type(cudnn_frontend::TensorReordering_t::F8_128x4));
 
     auto dequantize_attr_a = fe::graph::Block_scale_dequantize_attributes().set_block_size({1, block_size});
