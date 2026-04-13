@@ -912,7 +912,7 @@ def grouped_gemm_swiglu_wrapper_sm100(
 
     if valid_m == 0:
         if d_dtype in [torch.bfloat16, torch.float16]:
-            amax_tensor = torch.empty((l, 1), dtype=torch.float32, device=a_tensor.device)
+            amax_tensor = torch.full((l, 1), float("-inf"), dtype=torch.float32, device=a_tensor.device)
 
         _logger.debug("grouped_gemm_swiglu_wrapper_sm100: valid_m is zero, skipping kernel execution")
         return TupleDict(
