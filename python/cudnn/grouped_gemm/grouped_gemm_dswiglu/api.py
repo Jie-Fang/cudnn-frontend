@@ -816,9 +816,14 @@ def grouped_gemm_dswiglu_wrapper_sm100(
         _logger.debug("group_gemm_dswiglu_wrapper_sm100: Using previously cached GroupedGemmDswigluSm100 object")
         grouped_gemm_dswiglu, cached_amax_tensor, cached_beta_tensor = _cache_of_GroupedGemmDswigluSm100Objects[cache_key]
         amax_tensor = amax_tensor_buf if amax_tensor_buf is not None else cached_amax_tensor
-        # Use cached beta when caller passes None (NVFP4 path: beta is constant ones).
-        # Use caller's beta directly when provided (non-NVFP4 path: beta equals alpha, changes each step).
-        effective_beta = cached_beta_tensor if beta_tensor is None else beta_tensor
+        if beta_tensor is not None:
+            effective_beta = beta_tensor
+        elif cached_beta_tensor is not None:
+            effective_beta = cached_beta_tensor
+        else:
+            # Fallback: cache was populated without beta caching (non-NVFP4 path),
+            # but caller now passes None (NVFP4 path). Create ones tensor on-the-fly.
+            effective_beta = torch.ones(l, dtype=torch.float32, device=a_tensor.device)
     else:
         _logger.debug(
             "group_gemm_dswiglu_wrapper_sm100: No previously cached GroupedGemmDswigluSm100 object found, creating new GroupedGemmDswigluSm100 object"
