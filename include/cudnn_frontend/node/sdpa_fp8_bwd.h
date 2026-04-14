@@ -1102,7 +1102,15 @@ class SDPAFP8BackwardNode : public NodeCRTP<SDPAFP8BackwardNode> {
     virtual void
     serialize(json& j) const override final {
         j = attributes;
-        j.update(R"({"tag": "SDPA_FP8_BWD"})"_json);
+        j["is_mxfp8"] = is_mxfp8_scaling();
+        if (auto const rescale_threshold = get_rescale_threshold_from_env(); rescale_threshold.has_value()) {
+            j["rescale_threshold"] = rescale_threshold.value();
+        }
+        if (is_mxfp8_scaling()) {
+            j.update(R"({"tag": "SDPA_MXFP8_BWD"})"_json);
+        } else {
+            j.update(R"({"tag": "SDPA_FP8_BWD"})"_json);
+        }
     }
 #endif
 };

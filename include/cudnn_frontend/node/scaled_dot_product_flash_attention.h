@@ -512,8 +512,16 @@ class SDPANodeBase : public NodeCRTP<DerivedT> {
 #ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
     virtual void
     serialize(json& j) const override final {
-        j = attributes;
-        if (attributes.mma_core_mode == DataType_t::FP8_E4M3 || attributes.mma_core_mode == DataType_t::FP8_E5M2) {
+        j               = attributes;
+        j["is_mxfp8"]   = is_mxfp8_scaling();
+        j["unfuse_fma"] = attributes.unfuse_fma;
+        if (auto const rescale_threshold = get_rescale_threshold_from_env(); rescale_threshold.has_value()) {
+            j["rescale_threshold"] = rescale_threshold.value();
+        }
+        if (is_mxfp8_scaling()) {
+            j.update(R"({"tag": "SDPA_MXFP8_FWD"})"_json);
+        } else if (attributes.mma_core_mode == DataType_t::FP8_E4M3 ||
+                   attributes.mma_core_mode == DataType_t::FP8_E5M2) {
             j.update(R"({"tag": "SDPA_FP8_FWD"})"_json);
         } else {
             j.update(R"({"tag": "SDPA"})"_json);

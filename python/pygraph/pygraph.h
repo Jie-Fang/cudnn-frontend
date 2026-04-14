@@ -495,7 +495,8 @@ class PyGraph {
                cudnn_frontend::DataType_t const& compute_data_type,
                std::string const& name,
                py::object const& generate_stats,
-               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> sink_token);
+               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> sink_token,
+               bool const unfuse_fma);
 
     // return [dQ, dK, dV, amax_dQ, amax_dK, amax_dV, amax_dP]
     // dSink_token is an optional output set via set_dsink_token() attribute

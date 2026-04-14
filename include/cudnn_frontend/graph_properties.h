@@ -1,6 +1,8 @@
 
 #pragma once
 
+#include <cerrno>
+#include <cstdlib>
 #include <iostream>
 #include <memory>
 #include <numeric>
@@ -16,6 +18,23 @@
 namespace cudnn_frontend {
 
 namespace graph {
+
+inline std::optional<float>
+get_rescale_threshold_from_env() {
+    auto const* env_value = std::getenv("CUDNN_RESCALE_THRESHOLD");
+    if (env_value == nullptr || env_value[0] == '\0') {
+        return std::nullopt;
+    }
+
+    errno      = 0;
+    char* end  = nullptr;
+    auto value = std::strtof(env_value, &end);
+    if (env_value == end || (end != nullptr && *end != '\0') || errno == ERANGE) {
+        return std::nullopt;
+    }
+
+    return value;
+}
 
 using managed_backend_descriptor_t = std::vector<ManagedOpaqueDescriptor>;
 

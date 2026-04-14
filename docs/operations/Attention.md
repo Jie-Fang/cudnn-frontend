@@ -262,6 +262,9 @@ SDPA_attributes& set_rng_dump(std::shared_ptr<Tensor_attributes> value);
 // ========================== BEGIN   experimental options ================
 // Sets the underlying SDPA implementation to use (default is AUTO).
 SDPA_attributes& set_implementation(AttentionImplementation_t value);
+
+// Use unfused mul/add in the softmax computation.
+SDPA_attributes& set_unfuse_fma(bool const value);
 // ==========================  END    experimental options ================
 
 SDPA_attributes& set_compute_data_type(DataType_t value);
@@ -291,6 +294,7 @@ graph.sdpa(
     paged_attention_max_seq_len_kv=None,  # Max KV sequence length for paged attention
     generate_stats=None,                  # Output softmax stats for training (True/False)
     implementation=AUTO,                  # SDPA implementation: AUTO, COMPOSITE, UNIFIED
+    unfuse_fma=False,                     # Use unfused mul/add in the softmax computation
     compute_data_type=NOT_SET,            # Computation data type
     name=None,                            # Operation name
 )
@@ -317,6 +321,7 @@ graph.sdpa(
 - `paged_attention_max_seq_len_kv` (Optional[int]): Maximum sequence length for K/V caches. Recommended when using paged attention.
 - `generate_stats` (Optional[bool]): If True, output softmax statistics for backward pass. Required for training.
 - `implementation` (Optional[cudnn.attention_implementation]): SDPA implementation to use. `AUTO` (default), `COMPOSITE`, or `UNIFIED`.
+- `unfuse_fma` (Optional[bool]): Use unfused mul/add in the softmax computation.
 - `compute_data_type` (Optional[cudnn.data_type]): Data type for internal computation.
 - `name` (Optional[str]): Name for the operation.
 
@@ -367,6 +372,8 @@ graph.sdpa(
   - `AUTO` (default): Auto-selects the best implementation. Recommended for most users.
   - `COMPOSITE`: Standard cuDNN graph representing SDPA as distinct operations.
   - `UNIFIED`: Optimized fused SDPA operation (cuDNN 9.13.1+). Supports a subset of features including block masking.
+
+- **Unfuse FMA** (`unfuse_fma`): Uses unfused mul/add in the softmax computation.
 
 - **Generate stats** (`generate_stats`): When `True`, outputs softmax statistics needed for backward pass during training. Set to `True` for training, `False` for inference.
 
@@ -1149,6 +1156,9 @@ SDPA and SDPA backward operations now accept the functions `set_score_mod` and `
 ## cuDNN Version History for SDPA
 
 This section documents features and fixes introduced in each cuDNN version for SDPA operations.
+
+### Version 9.21.0
+- `set_unfuse_fma` / `unfuse_fma` support for Unified SDPA forward on SM100
 
 ### Version 9.19.0
 - FP8 deterministic algorithm support on Blackwell
