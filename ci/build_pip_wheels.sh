@@ -4,15 +4,15 @@ set -e
 
 DATE_FOLDER=`echo $(date '+%Y-%m-%d')`
 
-for version in cp314t cp314 cp313 cp312 cp311 cp310 cp39
+for python_tag in cp314-cp314t cp314-cp314 cp313-cp313 cp312-cp312 cp311-cp311 cp310-cp310 cp39-cp39
 do
-    echo "Building for ${version}"
-    /opt/python/${version}-${version}/bin/python -m venv ${version}_env
-    source ${version}_env/bin/activate
-    CMAKE_BUILD_PARALLEL_LEVEL=8 /opt/python/${version}-${version}/bin/python -m pip wheel --no-deps . -w /wheels/${version} -v
+    echo "Building for ${python_tag}"
+    /opt/python/${python_tag}/bin/python -m venv ${python_tag}_env
+    source ${python_tag}_env/bin/activate
+    CMAKE_BUILD_PARALLEL_LEVEL=8 /opt/python/${python_tag}/bin/python -m pip wheel --no-deps . -w /wheels/${python_tag} -v
     deactivate
-    auditwheel repair /wheels/${version}/*.whl -w many_linux_wheels/
-    wheel=`ls many_linux_wheels/*${version}*.whl`
+    auditwheel repair /wheels/${python_tag}/*.whl -w many_linux_wheels/
+    wheel=`ls many_linux_wheels/*${python_tag}*.whl`
     wheel_name=`echo ${wheel} | cut -d / -f2`
     if [[ $CI_COMMIT_BRANCH == "main" ]]; then
         echo "main branch" 
