@@ -1,71 +1,131 @@
 import argparse
+import json
 import re
 import os
 import subprocess
-import time
 from pathlib import Path
-
 # should be in pytorch container
 import requests
 
-JFROG_API_KEY = os.getenv("JFROG_API_KEY")
+# <a*>x.y.w.z[-{hex}-{hex}]/</a> DD-month-YYYY HH:MM, [] is optional
+PATTERN = re.compile(
+    r"<a.*?>v(\d+\.\d+\.\d+\.\d+(?:-[a-f0-9]+-[a-f0-9]+)?)/</a>\s+(\d{2}-[A-Za-z]+-\d{4} \d{2}:\d{2})\s"
+)
 
-# matches
-# <a*>x.y.w.z/</a> DD-month-YYYY HH:MM
-PATTERN = re.compile(r"<a.*?>v(\d+\.\d+\.\d+\.\d+)/</a>\s+(\d{2}-[A-Za-z]+-\d{4} \d{2}:\d{2})\s")
+
+def _auth():
+    u, t = os.getenv("URM_USER"), os.getenv("URM_TOKEN")
+    return (u, t) if u and t else None
+
+
+def _parse_artifactory_base_url(base_url):
+    """Parse base_url (e.g. https://host/artifactory/repo_key/path) into api_base, repo_key, path_in_repo."""
+    from urllib.parse import urlparse
+    parsed = urlparse(base_url)
+    api_base = f"{parsed.scheme}://{parsed.netloc}/artifactory"
+    path_after = parsed.path.split("/artifactory/", 1)[-1].strip("/") if "/artifactory/" in parsed.path else parsed.path.strip("/")
+    path_parts = path_after.split("/")
+    if not path_parts:
+        raise ValueError(f"Cannot parse repo from base_url: {base_url}")
+    repo_key = path_parts[0]
+    path_in_repo = "/".join(path_parts[1:]) if len(path_parts) > 1 else ""
+    return api_base, repo_key, path_in_repo
+
+
+def _tarball_path(version, cuda_version):
+    """Relative path to tarball: v{version}/{cuda_version}/cudnn_debug-linux-x86_64-{version_num}.tar.gz."""
+    version_num = version.split("-")[0]
+    return f"v{version}/{cuda_version}/cudnn_debug-linux-x86_64-{version_num}.tar.gz"
+
+
+def get_artifact_properties(base_url, version, cuda_version, property_keys):
+    """Get Artifactory properties for the tarball at base_url/v{version}/{cuda_version}/cudnn_debug-linux-x86_64-{version}.tar.gz."""
+    api_base, repo_key, path_in_repo = _parse_artifactory_base_url(base_url)
+    rel = _tarball_path(version, cuda_version)
+    artifact_path = f"{path_in_repo}/{rel}" if path_in_repo else rel
+    url = f"{api_base}/api/storage/{repo_key}/{artifact_path}?properties={','.join(property_keys)}"
+    try:
+        r = requests.get(url, auth=_auth(), timeout=30)
+        r.raise_for_status()
+        return r.json().get("properties")
+    except (requests.RequestException, json.JSONDecodeError, KeyError):
+        return None
+
+
+def filter_matches_by_artifact_property(matches, base_url, cuda_version, cudnn_version, artifact_property_dict, max_count=3):
+    """Keep only matches for which the tarball two levels down has Artifactory properties passing predicate."""
+    result = []
+    for m in matches:
+        if len(result) >= max_count:
+            break
+        if not cudnn_version or m["version_num"] == cudnn_version:
+            props = get_artifact_properties(base_url, m["version"], cuda_version, artifact_property_dict.keys())
+            if not props:
+                continue
+            add_match = True
+            for k, v in artifact_property_dict.items():
+                if k not in props or v not in props[k]:
+                    add_match = False
+                    break
+            if add_match:
+                result.append(m)
+    return result
 
 
 def download_url(url, path):
-    # temporarily download to another location to avoid partial downloads
-    temp_path = Path(f"{path}.tmp")
+    """Download url to path via a .tmp file (no partial file left on failure)."""
+    tmp = Path(f"{path}.tmp")
     try:
-        with requests.get(url, auth=("", JFROG_API_KEY) if JFROG_API_KEY else None, stream=True) as r:
+        with requests.get(url, auth=_auth(), stream=True) as r:
             r.raise_for_status()
-            with temp_path.open("wb") as f:
+            with tmp.open("wb") as f:
                 for chunk in r.iter_content(chunk_size=8192):
                     f.write(chunk)
-        temp_path.rename(path)
-    except:
-        raise
+        tmp.rename(path)
     finally:
-        if temp_path.exists():
-            temp_path.unlink()
+        if tmp.exists():
+            tmp.unlink()
 
 
-def fetch_cudnn(base_url, cuda_version, download_dir, unzip_dir, output_dir, cudnn_version=None):
-    response = requests.get(base_url, auth=("", JFROG_API_KEY) if JFROG_API_KEY else None).text
+def fetch_cudnn(base_url, cuda_version, download_dir, unzip_dir, output_dir, cudnn_version=None, artifact_property_dict=None):
+    response = requests.get(base_url).text
     matches = PATTERN.findall(response)
-    matches = [{"version": a, "last_modified": b} for a, b in matches]
+    matches = [{"version": a, "version_num": a.split("-")[0], "last_modified": b} for a, b in matches]
 
-    # sort by version and filter out the requested version if provided
-    matches = sorted(matches, key=lambda x: tuple(map(int, x["version"].split("."))), reverse=True)
-    candidates = [{"version": cudnn_version, "last_modified": "requested"}] if cudnn_version is not None else matches[:3]
-    for match in candidates:
-        print(f"{match['version']} {match['last_modified']}")
+    # sort by version
+    matches = sorted(matches, key=lambda x: (tuple(map(int, x["version_num"].split("."))), x["last_modified"]), reverse=True)
 
-    # download if not exists
+    if artifact_property_dict:
+        matches = filter_matches_by_artifact_property(
+            matches, base_url, cuda_version, cudnn_version, artifact_property_dict, max_count=3
+        )
+        if not matches:
+            raise Exception("No version had tarball with required Artifactory properties")
+
+    candidates = matches[:3]
+    for m in candidates:
+        print(m["version"], m["last_modified"])
+
     # if it fails to download, try a lower version one
     downloads_dir = Path(download_dir)
     downloads_dir.mkdir(exist_ok=True)
     tarball_path = None
     for match in candidates:
-        version = match["version"]
-        tarball_path = downloads_dir / f"cudnn-{version}.tar.gz"
-        url = f"{base_url}/v{version}/{cuda_version}/cudnn_debug-linux-x86_64-{version}.tar.gz"
+        version_num = match["version_num"]
+        tarball_path = downloads_dir / f"cudnn-{version_num}.tar.gz"
+        url = f"{base_url}/{_tarball_path(match['version'], cuda_version)}"
 
         if tarball_path.exists():
-            print(f"Fetch skipped for {version}: File already exists at {tarball_path}")
+            print(f"Fetch skipped for {version_num}: File already exists at {tarball_path}")
             break
 
         try:
-            print(f"Fetching {version} from {url}")
+            print(f"Fetching {version_num} from {url}")
             download_url(url, tarball_path)
-            print(f"Fetching {version} complete")
+            print(f"Fetching {version_num} complete")
             break
         except requests.exceptions.RequestException as e:
-            print(f"WARNING: Fetching {version} from {url} failed: {e}")
-        except Exception as e:
-            raise Exception(f"ERROR: {e}")
+            print(f"WARNING: Fetching {version_num} from {url} failed: {e}")
 
     if tarball_path is None or not tarball_path.exists():
         raise Exception("ERROR: Failed to get any cuDNN build")
@@ -82,23 +142,34 @@ def fetch_cudnn(base_url, cuda_version, download_dir, unzip_dir, output_dir, cud
 
     print(f"fetch_cudnn complete")
 
-    # cleanup downloads older than 7 days
-    try:
-        current_time = time.time()
-        for filepath in downloads_dir.iterdir():
-            if filepath.is_file() and current_time - filepath.stat().st_mtime > 7 * 24 * 60 * 60:
-                print(f"Cleaning up: {filepath}")
-                filepath.unlink()
-    except Exception as e:
-        print(f"WARNING: Cleanup failed: {e}")
+
+def create_prop_dict(props):
+    """Parse KEY=VALUE list into dict (last value wins for repeated keys)."""
+    out = {}
+    for s in props:
+        k, _, v = s.partition("=")
+        if not k.strip():
+            raise ValueError(f"Invalid --require-artifact-prop: {s!r} (expected KEY=VALUE)")
+        out[k.strip()] = v.strip()
+    return out
+
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Fetch a cuDNN debug tarball from URM/JFrog, extract it to /debug_cudnn, and clean old cached downloads.")
-    parser.add_argument("--base-url", dest="base_url", required=True, help="Base repository URL containing versioned cuDNN folders, e.g. https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.21")
-    parser.add_argument("--cuda-version", dest="cuda_version", required=True, help="CUDA version subdirectory to fetch from, e.g. 13.2")
+    parser = argparse.ArgumentParser(description="Fetch cuDNN debug tarball from URM/JFrog, extract to /debug_cudnn, clean old cache.")
+    parser.add_argument("--base-url", dest="base_url", required=True, help="Base URL, e.g. https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.21")
+    parser.add_argument("--cuda-version", dest="cuda_version", required=True, help="CUDA version subdir, e.g. 13.2")
     parser.add_argument("--download-dir", dest="download_dir", default="downloads", help="Directory where downloaded tarballs are cached.")
     parser.add_argument("--unzip-dir", dest="unzip_dir", default="/", help="Directory where the tarball is extracted before moving cudnn/ into place.")
     parser.add_argument("--output-dir", dest="output_dir", default="/debug_cudnn", help="Directory where the extracted cudnn/ tree will be moved.")
-    parser.add_argument("--cudnn-version", dest="cudnn_version", help="Optional cuDNN version in x.y.w.z format, e.g. --cudnn-version 9.21.0.3")
+    parser.add_argument("--cudnn-version", dest="cudnn_version", help="Optional cuDNN version x.y.w.z")
+    parser.add_argument("--require-artifact-prop", action="append", metavar="KEY=VALUE",
+        help="Require Artifactory property (repeat for multiple). E.g. --require-artifact-prop pipeline_type=merge_train --require-artifact-prop arch=x86_64")
     args = parser.parse_args()
-    fetch_cudnn(args.base_url, args.cuda_version, args.download_dir, args.unzip_dir, args.output_dir, args.cudnn_version)
+
+    prop_dict = None
+
+    if args.require_artifact_prop:
+        prop_dict = create_prop_dict(args.require_artifact_prop)
+
+    fetch_cudnn(args.base_url, args.cuda_version, args.download_dir, args.unzip_dir, args.output_dir, args.cudnn_version,
+        artifact_property_dict=prop_dict)

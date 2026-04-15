@@ -43,7 +43,7 @@ default:
     before_script:
         - mkdir -p downloads
         - ls -1 downloads/
-        - python3 ci/fetch_cudnn.py --base-url https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.22 --cuda-version 13.2
+        - python3 ci/fetch_cudnn.py --base-url https://urm.nvidia.com/artifactory/hw-cudnn-generic-local/BLOSSOM/v9.22 --cuda-version 13.2 --require-artifact-prop pipeline_type=merge_train
         - find /debug_cudnn
         - export CUDNN_PATH=/debug_cudnn # This is required for source building FE
         - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/debug_cudnn/lib64 # This is required for dlopening BE
@@ -57,7 +57,7 @@ default:
     before_script:
         - mkdir -p downloads
         - ls -1 downloads
-        - python3 ci/fetch_cudnn.py --base-url https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.21 --cuda-version 13.2
+        - python3 ci/fetch_cudnn.py --base-url https://urm.nvidia.com/artifactory/hw-cudnn-generic-local/BLOSSOM/v9.21 --cuda-version 13.2 --require-artifact-prop pipeline_type=merge_train
         - find /debug_cudnn
         - export CUDNN_PATH=/debug_cudnn # This is required for source building FE
         - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/debug_cudnn/lib64 # This is required for dlopening BE
