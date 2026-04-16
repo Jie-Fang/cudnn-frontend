@@ -149,6 +149,7 @@ class INode {
         ADALAYERNORM,
         DADALAYERNORM,
         SDPA,
+        ROPE,
         MOE_GROUPED_MATMUL,
         MOE_GROUPED_MATMUL_BWD,
         DIAGONAL_BAND_MASK,

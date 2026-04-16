@@ -1703,6 +1703,29 @@ class Rmsnorm_attributes : public Attributes<Rmsnorm_attributes> {
     }
 };
 
+class RoPE_attributes : public Attributes<RoPE_attributes> {
+    friend class Attributes<RoPE_attributes>;
+    friend class RoPENode;
+    friend class Graph;
+
+   public:
+    enum class input_names { INPUT, COS, SIN };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+    enum class output_names { OUTPUT };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
+
+#ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
+    friend void to_json(nlohmann::json& j, const RoPE_attributes& a) {
+        j["name"]              = a.name;
+        j["compute_data_type"] = a.compute_data_type;
+    }
+    friend void from_json(const nlohmann::json& j, RoPE_attributes& a) {
+        j.at("name").get_to(a.name);
+        j.at("compute_data_type").get_to(a.compute_data_type);
+    }
+#endif
+};
+
 class Rmsnorm_backward_attributes : public Attributes<Rmsnorm_backward_attributes> {
     friend class Attributes<Rmsnorm_backward_attributes>;
     friend class DRMSNormNode;

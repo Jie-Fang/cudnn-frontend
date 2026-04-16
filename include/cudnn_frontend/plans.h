@@ -13,6 +13,7 @@
 #include "experimental/sm90_sdpa_prefill_engine.h"
 #include "experimental/sm100_sdpa_prefill_engine.h"
 #include "experimental/sm100_rms_norm_silu_engine.h"
+#include "experimental/oss_rope_engine.h"
 
 namespace cudnn_frontend {
 
@@ -695,6 +696,13 @@ class Execution_plan_list {
             return {error_code_t::OK, ""};
         }
 
+        // OSS RoPE engine path (standalone)
+        if (index == OSS_ROPE_ENGINE_CANDIDATE) {
+            RETURN_CUDNN_FRONTEND_ERROR_IF(
+                !oss_rope_built_, error_code_t::GRAPH_EXECUTION_FAILED, "OSS RoPE engine not built.");
+            return {error_code_t::OK, ""};
+        }
+
         RETURN_CUDNN_FRONTEND_ERROR_IF((index < 0) || (static_cast<int64_t>(execution_plans.size()) <= index),
                                        error_code_t::GRAPH_EXECUTION_FAILED,
                                        "Plan index " + std::to_string(index) + " is invalid.");
@@ -721,6 +729,18 @@ class Execution_plan_list {
         std::optional<float> attn_scale;
         // Pre-computed slot indices into the variant pack template (set by prepare_variant_pack_template)
         int q_slot = -1, k_slot = -1, v_slot = -1, o_slot = -1, max_slot = -1, sum_exp_slot = -1;
+
+        // Optional RoPE pre-processing (detected when RoPE nodes feed into SDPA Q/K)
+        bool has_rope_q = false;
+        bool has_rope_k = false;
+        int64_t cos_uid = -1, sin_uid = -1;
+        int64_t original_q_uid = -1;  // pre-RoPE Q tensor UID
+        int64_t original_k_uid = -1;  // pre-RoPE K tensor UID
+        std::vector<int64_t> original_q_stride, original_k_stride;
+        int64_t rope_num_heads_q = 0, rope_num_heads_k = 0;
+        int cos_slot = -1, sin_slot = -1;
+        int original_q_slot = -1, original_k_slot = -1;
+        bool rope_is_bf16 = true;
     };
 
     void
@@ -777,6 +797,22 @@ class Execution_plan_list {
         return status;
     }
 
+    // Set the RoPE engine used as SDPA pre-processing
+    void
+    set_oss_sdpa_rope_engine(std::shared_ptr<experimental::IOssRoPEEngine> engine) {
+        oss_sdpa_rope_engine_ = std::move(engine);
+    }
+
+    error_t
+    build_oss_sdpa_rope_engine() {
+        if (!oss_sdpa_rope_engine_) return {error_code_t::OK, ""};
+        auto status = oss_sdpa_rope_engine_->build();
+        if (status.is_good()) {
+            oss_sdpa_rope_built_ = true;
+        }
+        return status;
+    }
+
     // Flat-array execute: takes pre-indexed pointer array (from VariantPackTemplate)
     error_t
     execute_oss_sdpa_engine(void* const* ptrs, void* workspace, int device, cudaStream_t stream) const {
@@ -784,9 +820,52 @@ class Execution_plan_list {
             !oss_sdpa_engine_built_, error_code_t::GRAPH_EXECUTION_FAILED, "OSS engine not built");
         RETURN_CUDNN_FRONTEND_ERROR_IF(
             oss_sdpa_ctx_.q_slot < 0 || oss_sdpa_ctx_.k_slot < 0 || oss_sdpa_ctx_.v_slot < 0 ||
-                oss_sdpa_ctx_.o_slot < 0 || oss_sdpa_ctx_.max_slot < 0 || oss_sdpa_ctx_.sum_exp_slot < 0,
+                oss_sdpa_ctx_.o_slot < 0,
             error_code_t::INVALID_VARIANT_PACK,
             "OSS SDPA slot indices not initialized. Call prepare_variant_pack_template() first.");
+
+        // Pre-processing: Apply RoPE to Q and/or K if detected
+        // SDPA uses BHSD layout: strides are [batch, head, seq, d].
+        // RoPE kernel expects strides as [batch, seq, head] (BSH order).
+        // We reorder: BHSD strides [0]=batch, [1]=head, [2]=seq → BSH = [0], [2], [1].
+        if (oss_sdpa_rope_engine_ && oss_sdpa_rope_built_) {
+            void* cos_ptr = (oss_sdpa_ctx_.cos_slot >= 0) ? ptrs[oss_sdpa_ctx_.cos_slot] : nullptr;
+            void* sin_ptr = (oss_sdpa_ctx_.sin_slot >= 0) ? ptrs[oss_sdpa_ctx_.sin_slot] : nullptr;
+
+            if (oss_sdpa_ctx_.has_rope_q && cos_ptr && sin_ptr) {
+                void* orig_q = ptrs[oss_sdpa_ctx_.original_q_slot];
+                void* q_out  = ptrs[oss_sdpa_ctx_.q_slot];
+                // Reorder BHSD strides [B,H,S,D] to BSH order for RoPE kernel
+                auto const& si = oss_sdpa_ctx_.original_q_stride;
+                auto const& so = oss_sdpa_ctx_.q_stride;
+                std::vector<int64_t> in_strides  = {si[0], si[2], si[1]};  // batch, seq, head
+                std::vector<int64_t> out_strides = {so[0], so[2], so[1]};
+                CHECK_CUDNN_FRONTEND_ERROR(oss_sdpa_rope_engine_->execute(
+                    orig_q, cos_ptr, sin_ptr, q_out,
+                    static_cast<int>(oss_sdpa_ctx_.batch),
+                    static_cast<int>(oss_sdpa_ctx_.seq_q),
+                    static_cast<int>(oss_sdpa_ctx_.rope_num_heads_q),
+                    static_cast<int>(oss_sdpa_ctx_.d),
+                    in_strides, out_strides,
+                    device, stream));
+            }
+            if (oss_sdpa_ctx_.has_rope_k && cos_ptr && sin_ptr) {
+                void* orig_k = ptrs[oss_sdpa_ctx_.original_k_slot];
+                void* k_out  = ptrs[oss_sdpa_ctx_.k_slot];
+                auto const& si = oss_sdpa_ctx_.original_k_stride;
+                auto const& so = oss_sdpa_ctx_.k_stride;
+                std::vector<int64_t> in_strides  = {si[0], si[2], si[1]};
+                std::vector<int64_t> out_strides = {so[0], so[2], so[1]};
+                CHECK_CUDNN_FRONTEND_ERROR(oss_sdpa_rope_engine_->execute(
+                    orig_k, cos_ptr, sin_ptr, k_out,
+                    static_cast<int>(oss_sdpa_ctx_.batch),
+                    static_cast<int>(oss_sdpa_ctx_.seq_kv),
+                    static_cast<int>(oss_sdpa_ctx_.rope_num_heads_k),
+                    static_cast<int>(oss_sdpa_ctx_.d),
+                    in_strides, out_strides,
+                    device, stream));
+            }
+        }
 
         void* q_ptr       = ptrs[oss_sdpa_ctx_.q_slot];
         void* k_ptr       = ptrs[oss_sdpa_ctx_.k_slot];
@@ -881,7 +960,7 @@ class Execution_plan_list {
         // Validate slot indices
         RETURN_CUDNN_FRONTEND_ERROR_IF(
             oss_sdpa_ctx_.q_slot < 0 || oss_sdpa_ctx_.k_slot < 0 || oss_sdpa_ctx_.v_slot < 0 ||
-                oss_sdpa_ctx_.o_slot < 0 || oss_sdpa_ctx_.max_slot < 0 || oss_sdpa_ctx_.sum_exp_slot < 0,
+                oss_sdpa_ctx_.o_slot < 0,
             error_code_t::INVALID_VARIANT_PACK,
             "OSS SDPA slot indices not initialized. Call prepare_variant_pack_template() first.");
 
@@ -1032,6 +1111,20 @@ class Execution_plan_list {
             oss_rms_norm_silu_ctx_.fp8_amax_slot        = slot_for(oss_rms_norm_silu_ctx_.fp8_amax_uid);
             oss_rms_norm_silu_ctx_.nvfp4_scale_row_slot = slot_for(oss_rms_norm_silu_ctx_.nvfp4_scale_row_uid);
         }
+        if (is_oss_rope_candidate()) {
+            oss_rope_ctx_.input_slot  = slot_for(oss_rope_ctx_.input_uid);
+            oss_rope_ctx_.cos_slot    = slot_for(oss_rope_ctx_.cos_uid);
+            oss_rope_ctx_.sin_slot    = slot_for(oss_rope_ctx_.sin_uid);
+            oss_rope_ctx_.output_slot = slot_for(oss_rope_ctx_.output_uid);
+        }
+        if (is_oss_sdpa_candidate() && (oss_sdpa_ctx_.has_rope_q || oss_sdpa_ctx_.has_rope_k)) {
+            oss_sdpa_ctx_.cos_slot        = slot_for(oss_sdpa_ctx_.cos_uid);
+            oss_sdpa_ctx_.sin_slot        = slot_for(oss_sdpa_ctx_.sin_uid);
+            if (oss_sdpa_ctx_.has_rope_q)
+                oss_sdpa_ctx_.original_q_slot = slot_for(oss_sdpa_ctx_.original_q_uid);
+            if (oss_sdpa_ctx_.has_rope_k)
+                oss_sdpa_ctx_.original_k_slot = slot_for(oss_sdpa_ctx_.original_k_uid);
+        }
     }
 
     // Flat-array overload for RmsNorm+SiLU
@@ -1080,6 +1173,110 @@ class Execution_plan_list {
                                                   extra);
     }
 
+    // ================================================================
+    // Open-source NVRTC engine support: RoPE (standalone)
+    // ================================================================
+
+    static constexpr int64_t OSS_ROPE_ENGINE_CANDIDATE = -4;
+
+    struct OssRoPEContext {
+        int64_t batch = 0, seq_len = 0, num_heads = 0, head_dim = 0;
+        int64_t input_uid = -1, cos_uid = -1, sin_uid = -1, output_uid = -1;
+        std::vector<int64_t> in_stride, out_stride;
+        bool is_bf16 = true;
+        int input_slot = -1, cos_slot = -1, sin_slot = -1, output_slot = -1;
+    };
+
+    void
+    set_oss_rope_engine(std::shared_ptr<experimental::IOssRoPEEngine> engine) {
+        oss_rope_engine_ = std::move(engine);
+    }
+
+    void
+    set_oss_rope_context(OssRoPEContext ctx) {
+        oss_rope_ctx_ = std::move(ctx);
+    }
+
+    bool
+    has_oss_rope_engine() const {
+        return oss_rope_engine_ != nullptr;
+    }
+
+    bool
+    is_oss_rope_candidate() const {
+        return candidate == OSS_ROPE_ENGINE_CANDIDATE;
+    }
+
+    error_t
+    check_oss_rope_support(int64_t sm_version) {
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            !oss_rope_engine_, error_code_t::GRAPH_NOT_SUPPORTED, "No RoPE OSS engine registered");
+        experimental::RoPEShape_t shape;
+        shape.batch     = static_cast<int>(oss_rope_ctx_.batch);
+        shape.seq_len   = static_cast<int>(oss_rope_ctx_.seq_len);
+        shape.num_heads = static_cast<int>(oss_rope_ctx_.num_heads);
+        shape.head_dim  = static_cast<int>(oss_rope_ctx_.head_dim);
+        shape.is_bf16   = oss_rope_ctx_.is_bf16;
+        auto status     = oss_rope_engine_->check_support(shape, static_cast<int>(sm_version));
+        if (status.is_good()) {
+            oss_rope_supported_ = true;
+            candidate           = OSS_ROPE_ENGINE_CANDIDATE;
+        }
+        return status;
+    }
+
+    error_t
+    build_oss_rope_engine() {
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            !oss_rope_supported_, error_code_t::GRAPH_NOT_SUPPORTED, "RoPE OSS engine not supported");
+        auto status = oss_rope_engine_->build();
+        if (status.is_good()) {
+            oss_rope_built_ = true;
+            candidate       = OSS_ROPE_ENGINE_CANDIDATE;
+        }
+        return status;
+    }
+
+    int64_t
+    get_oss_rope_workspace_size() const {
+        if (!oss_rope_engine_) return 0;
+        return oss_rope_engine_->get_workspace_size();
+    }
+
+    error_t
+    execute_oss_rope_engine(void* const* ptrs, void* /*workspace*/, int device, cudaStream_t stream) const {
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            !oss_rope_built_, error_code_t::GRAPH_EXECUTION_FAILED, "RoPE OSS engine not built");
+
+        auto const& ctx = oss_rope_ctx_;
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            ctx.input_slot < 0 || ctx.cos_slot < 0 || ctx.sin_slot < 0 || ctx.output_slot < 0,
+            error_code_t::INVALID_VARIANT_PACK,
+            "OSS RoPE slot indices not initialized.");
+
+        void* input_ptr  = ptrs[ctx.input_slot];
+        void* cos_ptr    = ptrs[ctx.cos_slot];
+        void* sin_ptr    = ptrs[ctx.sin_slot];
+        void* output_ptr = ptrs[ctx.output_slot];
+
+        RETURN_CUDNN_FRONTEND_ERROR_IF(!input_ptr || !cos_ptr || !sin_ptr || !output_ptr,
+                                       error_code_t::INVALID_VARIANT_PACK,
+                                       "Missing input/cos/sin/output pointers for RoPE OSS engine");
+
+        return oss_rope_engine_->execute(input_ptr,
+                                          cos_ptr,
+                                          sin_ptr,
+                                          output_ptr,
+                                          static_cast<int>(ctx.batch),
+                                          static_cast<int>(ctx.seq_len),
+                                          static_cast<int>(ctx.num_heads),
+                                          static_cast<int>(ctx.head_dim),
+                                          ctx.in_stride,
+                                          ctx.out_stride,
+                                          device,
+                                          stream);
+    }
+
    private:
     std::shared_ptr<experimental::IOssSdpaEngine> oss_sdpa_engine_;
     bool oss_sdpa_engine_supported_ = false;
@@ -1090,6 +1287,15 @@ class Execution_plan_list {
     bool oss_rms_norm_silu_supported_ = false;
     bool oss_rms_norm_silu_built_     = false;
     OssRmsNormSiluContext oss_rms_norm_silu_ctx_;
+
+    std::shared_ptr<experimental::IOssRoPEEngine> oss_rope_engine_;
+    bool oss_rope_supported_ = false;
+    bool oss_rope_built_     = false;
+    OssRoPEContext oss_rope_ctx_;
+
+    // RoPE engine used as pre-processing for SDPA (shared with standalone engine)
+    std::shared_ptr<experimental::IOssRoPEEngine> oss_sdpa_rope_engine_;
+    bool oss_sdpa_rope_built_ = false;
 };
 
 }  // namespace graph

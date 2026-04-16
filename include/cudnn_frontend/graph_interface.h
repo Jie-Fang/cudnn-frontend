@@ -19,6 +19,7 @@
 #include "node/adaptive_layernorm.h"
 #include "node/instancenorm.h"
 #include "node/rmsnorm.h"
+#include "node/rope.h"
 #include "node/resample.h"
 #include "node/reshape.h"
 #include "node/slice.h"
@@ -432,6 +433,59 @@ class Graph : public ICudnn, public INode {
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "Could not find Q/K/V/O tensors in SDPA node for OPENSOURCE engine");
 
+        // Check if Q and/or K are produced by RoPE nodes (RoPE→SDPA fusion)
+        for (auto const &sub_node : sub_nodes) {
+            auto *rope_node = dynamic_cast<RoPENode *>(sub_node.get());
+            if (!rope_node) continue;
+
+            auto rope_out_it = rope_node->attributes.outputs.find(RoPE_attributes::output_names::OUTPUT);
+            if (rope_out_it == rope_node->attributes.outputs.end() || !rope_out_it->second) continue;
+            auto rope_out_uid = rope_out_it->second->get_uid();
+
+            auto rope_in_it = rope_node->attributes.inputs.find(RoPE_attributes::input_names::INPUT);
+            if (rope_in_it == rope_node->attributes.inputs.end() || !rope_in_it->second) continue;
+
+            if (rope_out_uid == ctx.q_uid) {
+                ctx.has_rope_q         = true;
+                ctx.original_q_uid     = rope_in_it->second->get_uid();
+                ctx.original_q_stride  = rope_in_it->second->get_stride();
+                ctx.rope_num_heads_q   = rope_in_it->second->get_dim()[1];  // BHSD: dim[1] = H
+
+                auto cos_it = rope_node->attributes.inputs.find(RoPE_attributes::input_names::COS);
+                auto sin_it = rope_node->attributes.inputs.find(RoPE_attributes::input_names::SIN);
+                if (cos_it != rope_node->attributes.inputs.end() && cos_it->second)
+                    ctx.cos_uid = cos_it->second->get_uid();
+                if (sin_it != rope_node->attributes.inputs.end() && sin_it->second)
+                    ctx.sin_uid = sin_it->second->get_uid();
+
+                // Detect dtype from input tensor
+                auto dtype = rope_in_it->second->get_data_type();
+                ctx.rope_is_bf16 = (dtype == DataType_t::BFLOAT16);
+
+                CUDNN_FE_LOG_LABEL_ENDL("INFO: Detected RoPE feeding into SDPA Q input");
+            }
+            if (rope_out_uid == ctx.k_uid) {
+                ctx.has_rope_k         = true;
+                ctx.original_k_uid     = rope_in_it->second->get_uid();
+                ctx.original_k_stride  = rope_in_it->second->get_stride();
+                // SDPA uses BHSD layout: dim = [B, H, S, D], so heads = dim[1]
+                ctx.rope_num_heads_k   = rope_in_it->second->get_dim()[1];
+
+                // cos/sin may already be set from Q RoPE detection
+                if (ctx.cos_uid == -1) {
+                    auto cos_it = rope_node->attributes.inputs.find(RoPE_attributes::input_names::COS);
+                    auto sin_it = rope_node->attributes.inputs.find(RoPE_attributes::input_names::SIN);
+                    if (cos_it != rope_node->attributes.inputs.end() && cos_it->second)
+                        ctx.cos_uid = cos_it->second->get_uid();
+                    if (sin_it != rope_node->attributes.inputs.end() && sin_it->second)
+                        ctx.sin_uid = sin_it->second->get_uid();
+                }
+                ctx.rope_is_bf16 = (rope_in_it->second->get_data_type() == DataType_t::BFLOAT16);
+
+                CUDNN_FE_LOG_LABEL_ENDL("INFO: Detected RoPE feeding into SDPA K input");
+            }
+        }
+
         // Detect SM version and instantiate the appropriate OSS engine
         int oss_device_ordinal = 0;
         experimental::detail::cuda_get_device(&oss_device_ordinal);
@@ -446,7 +500,115 @@ class Graph : public ICudnn, public INode {
             engine = std::make_shared<experimental::Sm90SdpaPrefillEngine>();
         }
         plans.set_oss_sdpa_engine(engine);
+
+        // If RoPE was detected, instantiate and register the RoPE pre-processing engine
+        if (ctx.has_rope_q || ctx.has_rope_k) {
+            auto rope_engine = std::make_shared<experimental::RoPEEngine>();
+            experimental::RoPEShape_t rope_shape;
+            rope_shape.batch     = static_cast<int>(ctx.batch);
+            rope_shape.seq_len   = static_cast<int>(ctx.seq_q);
+            rope_shape.num_heads = static_cast<int>(ctx.has_rope_q ? ctx.rope_num_heads_q : ctx.rope_num_heads_k);
+            rope_shape.head_dim  = static_cast<int>(ctx.d);
+            rope_shape.is_bf16   = ctx.rope_is_bf16;
+            auto rope_status     = rope_engine->check_support(rope_shape, oss_sm);
+            if (rope_status.is_good()) {
+                plans.set_oss_sdpa_rope_engine(rope_engine);
+                CUDNN_FE_LOG_LABEL_ENDL("INFO: Registered RoPE pre-processing for SDPA engine");
+            } else {
+                CUDNN_FE_LOG_LABEL_ENDL("WARN: RoPE pre-processing not supported: " << rope_status.get_message());
+                ctx.has_rope_q = false;
+                ctx.has_rope_k = false;
+            }
+        }
+
         plans.set_oss_sdpa_engine_context(std::move(ctx));
+
+        return {error_code_t::OK, ""};
+    }
+
+    // Register a standalone OSS RoPE engine for RoPE nodes that do NOT feed into SDPA.
+    error_t
+    register_oss_rope_engine_() {
+        // Find RoPE nodes whose outputs are NOT consumed by any SDPA node
+        RoPENode *standalone_rope = nullptr;
+        for (auto const &sub_node : sub_nodes) {
+            auto *rope_node = dynamic_cast<RoPENode *>(sub_node.get());
+            if (!rope_node) continue;
+
+            auto rope_out_it = rope_node->attributes.outputs.find(RoPE_attributes::output_names::OUTPUT);
+            if (rope_out_it == rope_node->attributes.outputs.end() || !rope_out_it->second) continue;
+            auto rope_out_uid = rope_out_it->second->get_uid();
+
+            // Check if this RoPE output feeds into any SDPA node
+            bool feeds_sdpa = false;
+            for (auto const &other : sub_nodes) {
+                SDPA_attributes const *sdpa_attrs = nullptr;
+                if (auto *composite = dynamic_cast<CompositeSDPANode *>(other.get()))
+                    sdpa_attrs = &composite->attributes;
+                if (auto *unified = dynamic_cast<UnifiedSDPANode *>(other.get()))
+                    sdpa_attrs = &unified->attributes;
+                if (!sdpa_attrs) continue;
+
+                auto q_it = sdpa_attrs->inputs.find(SDPA_attributes::input_names::Q);
+                auto k_it = sdpa_attrs->inputs.find(SDPA_attributes::input_names::K);
+                if ((q_it != sdpa_attrs->inputs.end() && q_it->second && q_it->second->get_uid() == rope_out_uid) ||
+                    (k_it != sdpa_attrs->inputs.end() && k_it->second && k_it->second->get_uid() == rope_out_uid)) {
+                    feeds_sdpa = true;
+                    break;
+                }
+            }
+
+            if (!feeds_sdpa) {
+                standalone_rope = rope_node;
+                break;
+            }
+        }
+
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            standalone_rope == nullptr, error_code_t::GRAPH_NOT_SUPPORTED, "No standalone RoPE node found");
+
+        auto const &attrs = standalone_rope->attributes;
+        auto input_it     = attrs.inputs.find(RoPE_attributes::input_names::INPUT);
+        auto cos_it       = attrs.inputs.find(RoPE_attributes::input_names::COS);
+        auto sin_it       = attrs.inputs.find(RoPE_attributes::input_names::SIN);
+        auto output_it    = attrs.outputs.find(RoPE_attributes::output_names::OUTPUT);
+
+        RETURN_CUDNN_FRONTEND_ERROR_IF(!input_it->second || !cos_it->second || !sin_it->second || !output_it->second,
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "Standalone RoPE node missing tensors");
+
+        graph::Execution_plan_list::OssRoPEContext ctx;
+        auto const &input_dims = input_it->second->get_dim();
+        // BSHD layout: [B, S, H, D]
+        ctx.batch     = input_dims[0];
+        ctx.seq_len   = input_dims[1];
+        ctx.num_heads = input_dims[2];
+        ctx.head_dim  = input_dims[3];
+        ctx.input_uid  = input_it->second->get_uid();
+        ctx.cos_uid    = cos_it->second->get_uid();
+        ctx.sin_uid    = sin_it->second->get_uid();
+        ctx.output_uid = output_it->second->get_uid();
+        ctx.in_stride  = input_it->second->get_stride();
+        ctx.out_stride = output_it->second->get_stride();
+        ctx.is_bf16    = (input_it->second->get_data_type() == DataType_t::BFLOAT16);
+
+        int oss_device_ordinal = 0;
+        experimental::detail::cuda_get_device(&oss_device_ordinal);
+        cudaDeviceProp oss_dev_prop;
+        experimental::detail::cuda_get_device_properties(&oss_dev_prop, oss_device_ordinal);
+        int oss_sm = oss_dev_prop.major * 10 + oss_dev_prop.minor;
+
+        auto engine = std::make_shared<experimental::RoPEEngine>();
+        experimental::RoPEShape_t shape;
+        shape.batch     = static_cast<int>(ctx.batch);
+        shape.seq_len   = static_cast<int>(ctx.seq_len);
+        shape.num_heads = static_cast<int>(ctx.num_heads);
+        shape.head_dim  = static_cast<int>(ctx.head_dim);
+        shape.is_bf16   = ctx.is_bf16;
+        CHECK_CUDNN_FRONTEND_ERROR(engine->check_support(shape, oss_sm));
+
+        plans.set_oss_rope_engine(engine);
+        plans.set_oss_rope_context(std::move(ctx));
 
         return {error_code_t::OK, ""};
     }
@@ -973,12 +1135,18 @@ class Graph : public ICudnn, public INode {
 
         CUDNN_FE_LOG_BANNER("  4/4 LOWERING TO BACKEND OPERATION GRAPH  ");
 
-        // The method here fuses all operations. There will be 1 operation graph in total.
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_operation_graph(handle));
+        // Skip backend operation graph creation if there are no backend operations
+        // (e.g., OSS-only graphs like standalone RoPE that have no cuDNN backend descriptors).
+        if (!operations.empty()) {
+            // The method here fuses all operations. There will be 1 operation graph in total.
+            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_operation_graph(handle));
 
-        if (context.get_dynamic_shape_enabled() && kernel_cache && !kernel_cache->is_finalized()) {
-            CUDNN_FE_LOG_BANNER("  BUILD KERNEL CACHE  ");
-            CHECK_CUDNN_FRONTEND_ERROR(kernel_cache->build(operation_graph->get_raw_desc()));
+            if (context.get_dynamic_shape_enabled() && kernel_cache && !kernel_cache->is_finalized()) {
+                CUDNN_FE_LOG_BANNER("  BUILD KERNEL CACHE  ");
+                CHECK_CUDNN_FRONTEND_ERROR(kernel_cache->build(operation_graph->get_raw_desc()));
+            }
+        } else {
+            CUDNN_FE_LOG_LABEL_ENDL("INFO: No backend operations — skipping operation graph (OSS-only graph)");
         }
 
         CUDNN_FE_LOG_BANNER("  BUILD OP GRAPH ALL OK === ");
@@ -1017,6 +1185,13 @@ class Graph : public ICudnn, public INode {
             cudnn_workspace_size = fe_workspace_size + plans.get_oss_rms_norm_silu_workspace_size();
             CUDNN_FE_LOG_LABEL_ENDL("INFO: get_workspace_size() is " << cudnn_workspace_size
                                                                      << " (OSS RmsNorm+SiLU engine)");
+            return {error_code_t::OK, ""};
+        }
+
+        // OSS RoPE engine workspace (standalone)
+        if (plan_index == graph::Execution_plan_list::OSS_ROPE_ENGINE_CANDIDATE) {
+            cudnn_workspace_size = fe_workspace_size + plans.get_oss_rope_workspace_size();
+            CUDNN_FE_LOG_LABEL_ENDL("INFO: get_workspace_size() is " << cudnn_workspace_size << " (OSS RoPE engine)");
             return {error_code_t::OK, ""};
         }
 
@@ -1319,6 +1494,16 @@ class Graph : public ICudnn, public INode {
             detail::cuda_get_device(&device_ordinal);
             CHECK_CUDNN_FRONTEND_ERROR(
                 plans.execute_oss_rms_norm_silu_engine(ptrs, engine_workspace, device_ordinal, stream));
+            return {error_code_t::OK, ""};
+        }
+
+        if (plan_index == graph::Execution_plan_list::OSS_ROPE_ENGINE_CANDIDATE) {
+            cudaStream_t stream = nullptr;
+            _CUDNN_CHECK_CUDNN_ERROR(detail::get_stream(handle, &stream));
+            int device_ordinal = 0;
+            detail::cuda_get_device(&device_ordinal);
+            CHECK_CUDNN_FRONTEND_ERROR(
+                plans.execute_oss_rope_engine(ptrs, engine_workspace, device_ordinal, stream));
             return {error_code_t::OK, ""};
         }
 
@@ -1714,6 +1899,11 @@ class Graph : public ICudnn, public INode {
                                                               std::shared_ptr<Tensor_attributes>,
                                                               Rmsnorm_attributes);
 
+    std::shared_ptr<Tensor_attributes> rope(std::shared_ptr<Tensor_attributes>,
+                                            std::shared_ptr<Tensor_attributes>,
+                                            std::shared_ptr<Tensor_attributes>,
+                                            RoPE_attributes);
+
     std::array<std::shared_ptr<Tensor_attributes>, 3> rmsnorm_backward(std::shared_ptr<Tensor_attributes>,
                                                                        std::shared_ptr<Tensor_attributes>,
                                                                        std::shared_ptr<Tensor_attributes>,
@@ -1885,6 +2075,15 @@ class Graph : public ICudnn, public INode {
                 return {error_code_t::OK, ""};
             }
             // Fall through to check cuDNN plans
+        }
+
+        // Check OSS RoPE engine (standalone) — only if SDPA is not already the candidate
+        // (when RoPE feeds into SDPA, it's handled as SDPA pre-processing, not standalone)
+        if (plans.has_oss_rope_engine() && !plans.is_oss_sdpa_candidate()) {
+            auto oss_status = plans.check_oss_rope_support(sm_version);
+            if (oss_status.is_good()) {
+                return {error_code_t::OK, ""};
+            }
         }
 
         CHECK_CUDNN_FRONTEND_ERROR(plans.check_support());
@@ -2541,19 +2740,30 @@ Graph::create_execution_plans(std::vector<HeurMode_t> const &mode) {
 
     // Register OSS engines if OPENSOURCE mode requested
     if (has_opensource) {
-        // Try SDPA OSS engine
+        bool any_oss_registered = false;
+
+        // Try SDPA OSS engine (also detects RoPE→SDPA fusion)
         auto oss_sdpa_status = register_oss_engine_();
         if (oss_sdpa_status.is_good()) {
             CUDNN_FE_LOG_LABEL_ENDL("INFO: Registered OSS SDPA prefill engine");
+            any_oss_registered = true;
         }
 
         // Try RmsNorm+SiLU OSS engine
         auto oss_norm_status = register_oss_rms_norm_silu_engine_();
         if (oss_norm_status.is_good()) {
             CUDNN_FE_LOG_LABEL_ENDL("INFO: Registered OSS RmsNorm+SiLU engine");
+            any_oss_registered = true;
         }
 
-        if (oss_sdpa_status.is_bad() && oss_norm_status.is_bad()) {
+        // Try standalone RoPE OSS engine (for RoPE nodes not feeding into SDPA)
+        auto oss_rope_status = register_oss_rope_engine_();
+        if (oss_rope_status.is_good()) {
+            CUDNN_FE_LOG_LABEL_ENDL("INFO: Registered OSS standalone RoPE engine");
+            any_oss_registered = true;
+        }
+
+        if (!any_oss_registered) {
             CUDNN_FE_LOG_LABEL_ENDL("WARN: No OSS engine matched the graph pattern");
         }
     }
@@ -2623,7 +2833,13 @@ Graph::build_plans(BuildPlanPolicy_t const policy, bool const do_multithreaded_b
         auto oss_status = plans.build_oss_sdpa_engine();
         if (oss_status.is_good()) {
             CUDNN_FE_LOG_LABEL_ENDL("INFO: OSS SDPA engine built successfully (NVRTC compilation done)");
+            // Also build RoPE pre-processing engine if registered
+            auto rope_status = plans.build_oss_sdpa_rope_engine();
+            if (rope_status.is_good()) {
+                CUDNN_FE_LOG_LABEL_ENDL("INFO: OSS RoPE pre-processing engine built for SDPA");
+            }
             if (policy == BuildPlanPolicy_t::HEURISTICS_CHOICE) {
+                CHECK_CUDNN_FRONTEND_ERROR(prepare_variant_pack_template());
                 CUDNN_FE_LOG_BANNER("  BUILD PLANS ALL OK (OSS SDPA engine)  ");
                 return {error_code_t::OK, ""};
             }
@@ -2643,6 +2859,22 @@ Graph::build_plans(BuildPlanPolicy_t const policy, bool const do_multithreaded_b
             }
         } else {
             CUDNN_FE_LOG_LABEL_ENDL("WARN: OSS RmsNorm+SiLU engine build failed: " << oss_status.get_message());
+        }
+    }
+
+    // Build OSS RoPE engine (standalone) if it passed check_support
+    if (plans.has_oss_rope_engine()) {
+        auto oss_status = plans.build_oss_rope_engine();
+        if (oss_status.is_good()) {
+            CUDNN_FE_LOG_LABEL_ENDL("INFO: OSS RoPE engine built successfully (NVRTC compilation done)");
+            if (policy == BuildPlanPolicy_t::HEURISTICS_CHOICE) {
+                CHECK_CUDNN_FRONTEND_ERROR(prepare_variant_pack_template());
+                CUDNN_FE_LOG_BANNER("  BUILD PLANS ALL OK (OSS RoPE engine)  ");
+                return {error_code_t::OK, ""};
+            }
+        } else {
+            CUDNN_FE_LOG_LABEL_ENDL("ERROR: OSS RoPE engine build (NVRTC) failed: " << oss_status.get_message());
+            return oss_status;
         }
     }
 
@@ -3224,6 +3456,25 @@ Graph::rmsnorm(std::shared_ptr<Tensor_attributes> x,
     sub_nodes.emplace_back(std::make_unique<RMSNormNode>(std::move(attributes), context));
 
     return {Y, INV_VARIANCE};
+}
+
+inline std::shared_ptr<Tensor_attributes>
+Graph::rope(std::shared_ptr<Tensor_attributes> input,
+            std::shared_ptr<Tensor_attributes> cos,
+            std::shared_ptr<Tensor_attributes> sin,
+            RoPE_attributes attributes) {
+    // Set output
+    auto OUTPUT = attributes.outputs[RoPE_attributes::output_names::OUTPUT] =
+        output_tensor(attributes.name + "::OUTPUT");
+
+    // Set inputs
+    attributes.inputs[RoPE_attributes::input_names::INPUT] = input;
+    attributes.inputs[RoPE_attributes::input_names::COS]   = cos;
+    attributes.inputs[RoPE_attributes::input_names::SIN]   = sin;
+
+    sub_nodes.emplace_back(std::make_unique<RoPENode>(std::move(attributes), context));
+
+    return OUTPUT;
 }
 
 inline std::array<std::shared_ptr<Tensor_attributes>, 3>

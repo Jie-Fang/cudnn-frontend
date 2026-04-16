@@ -373,6 +373,13 @@ class PyGraph {
             cudnn_frontend::DataType_t const& compute_data_type,
             std::string const& name);
 
+    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
+    rope(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input,
+         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& cos,
+         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& sin,
+         cudnn_frontend::DataType_t const& compute_data_type,
+         std::string const& name);
+
     std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>
     rmsnorm_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& dy,
                      std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& x,
