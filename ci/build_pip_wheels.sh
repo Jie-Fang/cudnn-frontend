@@ -3,6 +3,7 @@
 set -e
 
 DATE_FOLDER=`echo $(date '+%Y-%m-%d')`
+mkdir -p many_linux_wheels
 
 for python_tag in cp314-cp314t cp314-cp314 cp313-cp313 cp312-cp312 cp311-cp311 cp310-cp310 cp39-cp39
 do
@@ -11,15 +12,18 @@ do
     source ${python_tag}_env/bin/activate
     CMAKE_BUILD_PARALLEL_LEVEL=8 /opt/python/${python_tag}/bin/python -m pip wheel --no-deps . -w /wheels/${python_tag} -v
     deactivate
-    auditwheel repair /wheels/${python_tag}/*.whl -w many_linux_wheels/
-    wheel=`ls many_linux_wheels/*${python_tag}*.whl`
-    wheel_name=`echo ${wheel} | cut -d / -f2`
+    repair_dir=$(mktemp -d many_linux_wheels/${python_tag}.XXXXXX)
+    auditwheel repair /wheels/${python_tag}/*.whl -w ${repair_dir}/
+    wheel=`find ${repair_dir} -maxdepth 1 -name "*.whl" -print -quit`
+    wheel_name=`basename ${wheel}`
+    mv ${wheel} many_linux_wheels/${wheel_name}
+    wheel=many_linux_wheels/${wheel_name}
     if [[ $CI_COMMIT_BRANCH == "main" ]]; then
         echo "main branch" 
-        curl -u agopal:$JFROG_API_KEY -T  ${wheel} https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/cudnn_frontend/main/${DATE_FOLDER}/${wheel_name}
+        curl -fsS -u agopal:$JFROG_API_KEY -T "${wheel}" "https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/cudnn_frontend/main/${DATE_FOLDER}/${wheel_name}"
     elif [[ $CI_COMMIT_BRANCH == "develop" ]]; then 
         echo "develop branch"
-        curl -u agopal:${JFROG_API_KEY} -T  ${wheel} https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/cudnn_frontend/develop/latest/${wheel_name}
+        curl -fsS -u agopal:${JFROG_API_KEY} -T "${wheel}" "https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/cudnn_frontend/develop/latest/${wheel_name}"
     else 
        echo $CI_COMMIT_BRANCH
        echo "Not posting to artifactory"
