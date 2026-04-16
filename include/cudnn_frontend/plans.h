@@ -753,6 +753,11 @@ class Execution_plan_list {
         oss_sdpa_ctx_ = std::move(ctx);
     }
 
+    OssSdpaEngineContext&
+    get_oss_sdpa_context_mut() {
+        return oss_sdpa_ctx_;
+    }
+
     bool
     has_oss_sdpa_engine() const {
         return oss_sdpa_engine_ != nullptr;
@@ -803,6 +808,11 @@ class Execution_plan_list {
         oss_sdpa_rope_engine_ = std::move(engine);
     }
 
+    bool
+    has_rope_preprocessing() const {
+        return oss_sdpa_rope_engine_ != nullptr && (oss_sdpa_ctx_.has_rope_q || oss_sdpa_ctx_.has_rope_k);
+    }
+
     error_t
     build_oss_sdpa_rope_engine() {
         if (!oss_sdpa_rope_engine_) return {error_code_t::OK, ""};
@@ -811,6 +821,60 @@ class Execution_plan_list {
             oss_sdpa_rope_built_ = true;
         }
         return status;
+    }
+
+    // Run RoPE pre-processing if registered. Called before both OSS and backend SDPA.
+    // No-op if no RoPE pre-processing is registered.
+    error_t
+    execute_rope_preprocessing(void* const* ptrs, cudnnHandle_t handle) const {
+        if (!oss_sdpa_rope_engine_ || !oss_sdpa_rope_built_) return {error_code_t::OK, ""};
+        if (!oss_sdpa_ctx_.has_rope_q && !oss_sdpa_ctx_.has_rope_k) return {error_code_t::OK, ""};
+
+        cudaStream_t stream = nullptr;
+        _CUDNN_CHECK_CUDNN_ERROR(detail::get_stream(handle, &stream));
+        int device_ordinal = 0;
+        experimental::detail::cuda_get_device(&device_ordinal);
+
+        void* cos_ptr = (oss_sdpa_ctx_.cos_slot >= 0) ? ptrs[oss_sdpa_ctx_.cos_slot] : nullptr;
+        void* sin_ptr = (oss_sdpa_ctx_.sin_slot >= 0) ? ptrs[oss_sdpa_ctx_.sin_slot] : nullptr;
+        if (!cos_ptr || !sin_ptr) return {error_code_t::OK, ""};
+
+        // SDPA uses BHSD layout: strides are [batch, head, seq, d].
+        // RoPE kernel expects strides as [batch, seq, head] (BSH order).
+        // Reorder: BHSD strides [0]=batch, [1]=head, [2]=seq → BSH = [0], [2], [1].
+        if (oss_sdpa_ctx_.has_rope_q) {
+            void* orig_q = ptrs[oss_sdpa_ctx_.original_q_slot];
+            void* q_out  = ptrs[oss_sdpa_ctx_.q_slot];
+            auto const& si = oss_sdpa_ctx_.original_q_stride;
+            auto const& so = oss_sdpa_ctx_.q_stride;
+            std::vector<int64_t> in_strides  = {si[0], si[2], si[1]};
+            std::vector<int64_t> out_strides = {so[0], so[2], so[1]};
+            CHECK_CUDNN_FRONTEND_ERROR(oss_sdpa_rope_engine_->execute(
+                orig_q, cos_ptr, sin_ptr, q_out,
+                static_cast<int>(oss_sdpa_ctx_.batch),
+                static_cast<int>(oss_sdpa_ctx_.seq_q),
+                static_cast<int>(oss_sdpa_ctx_.rope_num_heads_q),
+                static_cast<int>(oss_sdpa_ctx_.d),
+                in_strides, out_strides,
+                device_ordinal, stream));
+        }
+        if (oss_sdpa_ctx_.has_rope_k) {
+            void* orig_k = ptrs[oss_sdpa_ctx_.original_k_slot];
+            void* k_out  = ptrs[oss_sdpa_ctx_.k_slot];
+            auto const& si = oss_sdpa_ctx_.original_k_stride;
+            auto const& so = oss_sdpa_ctx_.k_stride;
+            std::vector<int64_t> in_strides  = {si[0], si[2], si[1]};
+            std::vector<int64_t> out_strides = {so[0], so[2], so[1]};
+            CHECK_CUDNN_FRONTEND_ERROR(oss_sdpa_rope_engine_->execute(
+                orig_k, cos_ptr, sin_ptr, k_out,
+                static_cast<int>(oss_sdpa_ctx_.batch),
+                static_cast<int>(oss_sdpa_ctx_.seq_kv),
+                static_cast<int>(oss_sdpa_ctx_.rope_num_heads_k),
+                static_cast<int>(oss_sdpa_ctx_.d),
+                in_strides, out_strides,
+                device_ordinal, stream));
+        }
+        return {error_code_t::OK, ""};
     }
 
     // Flat-array execute: takes pre-indexed pointer array (from VariantPackTemplate)
@@ -824,48 +888,8 @@ class Execution_plan_list {
             error_code_t::INVALID_VARIANT_PACK,
             "OSS SDPA slot indices not initialized. Call prepare_variant_pack_template() first.");
 
-        // Pre-processing: Apply RoPE to Q and/or K if detected
-        // SDPA uses BHSD layout: strides are [batch, head, seq, d].
-        // RoPE kernel expects strides as [batch, seq, head] (BSH order).
-        // We reorder: BHSD strides [0]=batch, [1]=head, [2]=seq → BSH = [0], [2], [1].
-        if (oss_sdpa_rope_engine_ && oss_sdpa_rope_built_) {
-            void* cos_ptr = (oss_sdpa_ctx_.cos_slot >= 0) ? ptrs[oss_sdpa_ctx_.cos_slot] : nullptr;
-            void* sin_ptr = (oss_sdpa_ctx_.sin_slot >= 0) ? ptrs[oss_sdpa_ctx_.sin_slot] : nullptr;
-
-            if (oss_sdpa_ctx_.has_rope_q && cos_ptr && sin_ptr) {
-                void* orig_q = ptrs[oss_sdpa_ctx_.original_q_slot];
-                void* q_out  = ptrs[oss_sdpa_ctx_.q_slot];
-                // Reorder BHSD strides [B,H,S,D] to BSH order for RoPE kernel
-                auto const& si = oss_sdpa_ctx_.original_q_stride;
-                auto const& so = oss_sdpa_ctx_.q_stride;
-                std::vector<int64_t> in_strides  = {si[0], si[2], si[1]};  // batch, seq, head
-                std::vector<int64_t> out_strides = {so[0], so[2], so[1]};
-                CHECK_CUDNN_FRONTEND_ERROR(oss_sdpa_rope_engine_->execute(
-                    orig_q, cos_ptr, sin_ptr, q_out,
-                    static_cast<int>(oss_sdpa_ctx_.batch),
-                    static_cast<int>(oss_sdpa_ctx_.seq_q),
-                    static_cast<int>(oss_sdpa_ctx_.rope_num_heads_q),
-                    static_cast<int>(oss_sdpa_ctx_.d),
-                    in_strides, out_strides,
-                    device, stream));
-            }
-            if (oss_sdpa_ctx_.has_rope_k && cos_ptr && sin_ptr) {
-                void* orig_k = ptrs[oss_sdpa_ctx_.original_k_slot];
-                void* k_out  = ptrs[oss_sdpa_ctx_.k_slot];
-                auto const& si = oss_sdpa_ctx_.original_k_stride;
-                auto const& so = oss_sdpa_ctx_.k_stride;
-                std::vector<int64_t> in_strides  = {si[0], si[2], si[1]};
-                std::vector<int64_t> out_strides = {so[0], so[2], so[1]};
-                CHECK_CUDNN_FRONTEND_ERROR(oss_sdpa_rope_engine_->execute(
-                    orig_k, cos_ptr, sin_ptr, k_out,
-                    static_cast<int>(oss_sdpa_ctx_.batch),
-                    static_cast<int>(oss_sdpa_ctx_.seq_kv),
-                    static_cast<int>(oss_sdpa_ctx_.rope_num_heads_k),
-                    static_cast<int>(oss_sdpa_ctx_.d),
-                    in_strides, out_strides,
-                    device, stream));
-            }
-        }
+        // Note: RoPE pre-processing is handled by execute_rope_preprocessing()
+        // which is called from the execute dispatch before reaching this point.
 
         void* q_ptr       = ptrs[oss_sdpa_ctx_.q_slot];
         void* k_ptr       = ptrs[oss_sdpa_ctx_.k_slot];
