@@ -45,6 +45,10 @@ symbols_to_import = [
 for symbol_name in symbols_to_import:
     globals()[symbol_name] = getattr(_pybind_module, symbol_name)
 
+for _optional_symbol in ["causal_conv1d_forward", "causal_conv1d_backward"]:
+    if hasattr(_pybind_module, _optional_symbol):
+        globals()[_optional_symbol] = getattr(_pybind_module, _optional_symbol)
+
 from .datatypes import _library_type, _is_torch_tensor
 
 __version__ = "1.21.1"
@@ -506,6 +510,20 @@ def __getattr__(name: str) -> Any:
             raise ImportError(
                 f"discrete_grouped_gemm_dswiglu_wrapper_sm100 requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]': {e}"
             ) from e
+
+    elif name == "ops":
+        # Use importlib rather than "from . import ops" to avoid infinite
+        # recursion. The cycle:
+        #   1. cudnn.ops accessed → __getattr__("ops") fires
+        #   2. "from . import ops" → _handle_fromlist(cudnn, ["ops"], ...)
+        #   3. _handle_fromlist calls hasattr(cudnn, "ops")
+        #   4. "ops" not in __dict__ yet → __getattr__("ops") again → goto 1
+        # importlib.import_module bypasses _handle_fromlist entirely.
+        import importlib
+
+        _ops = importlib.import_module(".ops", __name__)
+        globals()["ops"] = _ops
+        return _ops
 
     elif name == "experimental":
         from . import experimental as _experimental

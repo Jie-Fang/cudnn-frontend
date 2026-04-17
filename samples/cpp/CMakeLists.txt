@@ -63,6 +63,8 @@ add_executable(
     misc/sm_carveout.cpp
     misc/cudagraphs.cpp
     misc/deviceless_aot_compilation.cpp
+
+    causal_conv1d/causal_conv1d.cpp
 )
 
 # target flags
@@ -99,6 +101,10 @@ target_link_libraries(
     CUDA::cudart
     CUDA::nvrtc
 )
+
+if(TARGET CUDNN::cudnn_ext)
+    target_link_libraries(samples PRIVATE CUDNN::cudnn_ext)
+endif()
 
 # target cmake properties
 set_target_properties(
