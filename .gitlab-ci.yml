@@ -26,7 +26,7 @@ default:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_13.2.0
 
 .cudnn_ga_image:template:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.20.0.48_13.2.0
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.21.0.82_13.2.0
 
 .device_matrix:template:
     parallel:
@@ -37,13 +37,13 @@ default:
 
 .fetch_cudnn_dev:template:
     cache:
-        - key: dev_cudnn_9_22_cuda_13_2
+        - key: dev_cudnn_9_23_cuda_13_2
           paths:
               - downloads
     before_script:
         - mkdir -p downloads
         - ls -1 downloads/
-        - python3 ci/fetch_cudnn.py --base-url https://urm.nvidia.com/artifactory/hw-cudnn-generic-local/BLOSSOM/v9.22 --cuda-version 13.2 --require-artifact-prop pipeline_type=merge_train
+        - python3 ci/fetch_cudnn.py --base-url https://urm.nvidia.com/artifactory/hw-cudnn-generic-local/BLOSSOM/v9.23 --cuda-version 13.2 --require-artifact-prop pipeline_type=merge_train
         - find /debug_cudnn
         - export CUDNN_PATH=/debug_cudnn # This is required for source building FE
         - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/debug_cudnn/lib64 # This is required for dlopening BE
@@ -51,13 +51,13 @@ default:
 
 .fetch_cudnn_rel:template:
     cache:
-        - key: rel_cudnn_9_21_cuda_13_2
+        - key: rel_cudnn_9_22_cuda_13_2
           paths:
               - downloads
     before_script:
         - mkdir -p downloads
         - ls -1 downloads
-        - python3 ci/fetch_cudnn.py --base-url https://urm.nvidia.com/artifactory/hw-cudnn-generic-local/BLOSSOM/v9.21 --cuda-version 13.2 --require-artifact-prop pipeline_type=merge_train
+        - python3 ci/fetch_cudnn.py --base-url https://urm.nvidia.com/artifactory/hw-cudnn-generic-local/BLOSSOM/v9.22 --cuda-version 13.2 --require-artifact-prop pipeline_type=merge_train
         - find /debug_cudnn
         - export CUDNN_PATH=/debug_cudnn # This is required for source building FE
         - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/debug_cudnn/lib64 # This is required for dlopening BE
@@ -324,7 +324,7 @@ py_samples:ga:
 backend:rel:
     trigger:
         project:  cudnn/cudnn
-        branch:   release/9.21.0
+        branch:   release/9.22.0
         strategy: depend
     inherit:
         variables: false
