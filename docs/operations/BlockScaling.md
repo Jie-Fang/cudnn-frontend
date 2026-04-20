@@ -28,7 +28,8 @@ Where:
 std::array<std::shared_ptr<Tensor_attributes>, 2> block_scale_quantize(std::shared_ptr<Tensor_attributes> x,
                                                                        Block_scale_quantize_attributes);
 ```
-where the output array is in the order of `[y, scale]`
+where the output array is in the order of `[y, scale]`.
+The `scale` tensor uses a 128x4 reordered layout (`TensorReordering_t::F8_128x4`). When the reordering type is set on the scale tensor, the frontend will automatically pad the inferred scale dimensions to align with the 128x4 block structure (non-batch, non-axis dimensions are padded to multiples of 128, and the quantize axis dimension is padded to multiples of 4).
 
 Block_scale_quantize_attributes is a lightweight structure with setters:
 ```

@@ -420,8 +420,8 @@ TEST_CASE("Blackwell Block Scale Matmul Quantize", "[matmul][graph][FP4]") {
     }
 
     auto test_params = GENERATE(TestParams(1,
-                                           256,
-                                           256,
+                                           137,
+                                           272,
                                            256,
                                            16,
                                            cudnn_frontend::DataType_t::FP4_E2M1,
