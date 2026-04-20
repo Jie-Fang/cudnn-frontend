@@ -1,0 +1,441 @@
+config_name,model_name,backend,data_type,attn_mask,batch_size,q_seqlen,kv_seqlen,num_q_heads,num_kv_heads,head_dim_qk,head_dim_vo,profile_pass,deterministic_bwd,fwd_time_ms,bwd_time_ms,fwd_tflops,bwd_tflops,max_diff,num_iterations,sliding_window_size,success,error_message,gpu_name,cudnn_version,cudnn_backend_version
+dsv3,dsv3,cudnn,bfloat16,top_left,2,32768,32768,128,128,192,128,both,True,48.145,203.970,1827.000,1121.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92100.000
+dsv3,dsv3,cudnn,bfloat16,no_mask,2,32768,32768,128,128,192,128,both,True,105.620,399.561,1666.000,1145.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92100.000
+dsv3,dsv3,cudnn,fp8,top_left,2,32768,32768,128,128,192,128,both,True,35.737,120.278,2461.000,1901.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92100.000
+dsv3,dsv3,cudnn,fp8,no_mask,2,32768,32768,128,128,192,128,both,True,67.763,229.593,2596.000,1992.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92100.000
+dsv3,dsv3,cudnn,mxfp8,top_left,2,32768,32768,128,128,192,128,both,True,36.093,148.836,2437.000,1537.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92100.000
+dsv3,dsv3,cudnn,mxfp8,no_mask,2,32768,32768,128,128,192,128,both,True,73.876,286.223,2381.000,1598.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92100.000
+dsv3,dsv3,flash_attention_4,bfloat16,top_left,2,32768,32768,128,128,192,128,both,True,inf,inf,0.000,0.000,0.000,10,,False,"Benchmark failed with return code 1.
+stderr: /usr/local/lib/python3.12/dist-packages/torch/profiler/profiler.py:217: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/lyris_home/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1507, in <module>
+    output.backward(dOutput)
+  File ""/usr/local/lib/python3.12/dist-packages/torch/_tensor.py"", line 631, in backward
+    torch.autograd.backward(
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/__init__.py"", line 374, in backward
+    grad_tensors_ = _make_grads(tensors, grad_tensors_, is_grads_batched=False)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/__init__.py"", line 169, in _make_grads
+    raise RuntimeError(
+RuntimeError: Mismatch in shape: grad_output[0] has a shape of torch.Size([2, 32768, 128, 192]) and output[0] has a shape of torch.Size([2, 32768, 128, 128]).
+
+stdout: ",,,
+dsv3,dsv3,flash_attention_4,bfloat16,no_mask,2,32768,32768,128,128,192,128,both,True,inf,inf,0.000,0.000,0.000,10,,False,"Benchmark failed with return code 1.
+stderr: /usr/local/lib/python3.12/dist-packages/torch/profiler/profiler.py:217: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/lyris_home/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1507, in <module>
+    output.backward(dOutput)
+  File ""/usr/local/lib/python3.12/dist-packages/torch/_tensor.py"", line 631, in backward
+    torch.autograd.backward(
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/__init__.py"", line 374, in backward
+    grad_tensors_ = _make_grads(tensors, grad_tensors_, is_grads_batched=False)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/__init__.py"", line 169, in _make_grads
+    raise RuntimeError(
+RuntimeError: Mismatch in shape: grad_output[0] has a shape of torch.Size([2, 32768, 128, 192]) and output[0] has a shape of torch.Size([2, 32768, 128, 128]).
+
+stdout: ",,,
+dsv3,dsv3,flash_attention_4,fp8,top_left,2,32768,32768,128,128,192,128,both,True,inf,inf,0.000,0.000,0.000,10,,False,"Benchmark failed with return code 1.
+stderr: /usr/local/lib/python3.12/dist-packages/torch/profiler/profiler.py:217: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/lyris_home/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1467, in <module>
+    output = sdpa_function(query, key, value)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/lyris_home/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1086, in flash_attention_4_sdpa
+    output, _ = flash_attn_interface.flash_attn_func(query, key, value, causal=args.attn_mask != ""no_mask"", window_size=window_size)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1514, in flash_attn_func
+    return FlashAttnFunc.apply(
+           ^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/function.py"", line 596, in apply
+    return super().apply(*args, **kwargs)  # type: ignore[misc]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1357, in forward
+    out, lse = _flash_attn_fwd(
+               ^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 192, in _flash_attn_fwd
+    assert q.dtype in [torch.float16, torch.bfloat16], ""inputs must be float16 or bfloat16""
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: inputs must be float16 or bfloat16
+
+stdout: ",,,
+dsv3,dsv3,flash_attention_4,fp8,no_mask,2,32768,32768,128,128,192,128,both,True,inf,inf,0.000,0.000,0.000,10,,False,"Benchmark failed with return code 1.
+stderr: /usr/local/lib/python3.12/dist-packages/torch/profiler/profiler.py:217: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/lyris_home/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1467, in <module>
+    output = sdpa_function(query, key, value)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/lyris_home/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1086, in flash_attention_4_sdpa
+    output, _ = flash_attn_interface.flash_attn_func(query, key, value, causal=args.attn_mask != ""no_mask"", window_size=window_size)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1514, in flash_attn_func
+    return FlashAttnFunc.apply(
+           ^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/function.py"", line 596, in apply
+    return super().apply(*args, **kwargs)  # type: ignore[misc]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1357, in forward
+    out, lse = _flash_attn_fwd(
+               ^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 192, in _flash_attn_fwd
+    assert q.dtype in [torch.float16, torch.bfloat16], ""inputs must be float16 or bfloat16""
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: inputs must be float16 or bfloat16
+
+stdout: ",,,
+dsv3,dsv3,cudnn,bfloat16,top_left,2,16384,16384,128,128,192,128,both,True,13.982,46.632,1573.000,1226.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92100.000
+dsv3,dsv3,cudnn,bfloat16,no_mask,2,16384,16384,128,128,192,128,both,True,27.483,98.034,1600.000,1166.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92100.000
+dsv3,dsv3,cudnn,fp8,top_left,2,16384,16384,128,128,192,128,both,True,8.989,27.855,2446.000,2053.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92100.000
+dsv3,dsv3,cudnn,fp8,no_mask,2,16384,16384,128,128,192,128,both,True,19.205,54.600,2290.000,2094.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92100.000
+dsv3,dsv3,cudnn,mxfp8,top_left,2,16384,16384,128,128,192,128,both,True,9.939,34.257,2213.000,1669.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92100.000
+dsv3,dsv3,cudnn,mxfp8,no_mask,2,16384,16384,128,128,192,128,both,True,20.223,67.785,2175.000,1687.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92100.000
+dsv3,dsv3,flash_attention_4,bfloat16,top_left,2,16384,16384,128,128,192,128,both,True,inf,inf,0.000,0.000,0.000,10,,False,"Benchmark failed with return code 1.
+stderr: /usr/local/lib/python3.12/dist-packages/torch/profiler/profiler.py:217: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/lyris_home/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1507, in <module>
+    output.backward(dOutput)
+  File ""/usr/local/lib/python3.12/dist-packages/torch/_tensor.py"", line 631, in backward
+    torch.autograd.backward(
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/__init__.py"", line 374, in backward
+    grad_tensors_ = _make_grads(tensors, grad_tensors_, is_grads_batched=False)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/__init__.py"", line 169, in _make_grads
+    raise RuntimeError(
+RuntimeError: Mismatch in shape: grad_output[0] has a shape of torch.Size([2, 16384, 128, 192]) and output[0] has a shape of torch.Size([2, 16384, 128, 128]).
+
+stdout: ",,,
+dsv3,dsv3,flash_attention_4,bfloat16,no_mask,2,16384,16384,128,128,192,128,both,True,inf,inf,0.000,0.000,0.000,10,,False,"Benchmark failed with return code 1.
+stderr: /usr/local/lib/python3.12/dist-packages/torch/profiler/profiler.py:217: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/lyris_home/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1507, in <module>
+    output.backward(dOutput)
+  File ""/usr/local/lib/python3.12/dist-packages/torch/_tensor.py"", line 631, in backward
+    torch.autograd.backward(
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/__init__.py"", line 374, in backward
+    grad_tensors_ = _make_grads(tensors, grad_tensors_, is_grads_batched=False)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/__init__.py"", line 169, in _make_grads
+    raise RuntimeError(
+RuntimeError: Mismatch in shape: grad_output[0] has a shape of torch.Size([2, 16384, 128, 192]) and output[0] has a shape of torch.Size([2, 16384, 128, 128]).
+
+stdout: ",,,
+dsv3,dsv3,flash_attention_4,fp8,top_left,2,16384,16384,128,128,192,128,both,True,inf,inf,0.000,0.000,0.000,10,,False,"Benchmark failed with return code 1.
+stderr: /usr/local/lib/python3.12/dist-packages/torch/profiler/profiler.py:217: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/lyris_home/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1467, in <module>
+    output = sdpa_function(query, key, value)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/lyris_home/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1086, in flash_attention_4_sdpa
+    output, _ = flash_attn_interface.flash_attn_func(query, key, value, causal=args.attn_mask != ""no_mask"", window_size=window_size)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1514, in flash_attn_func
+    return FlashAttnFunc.apply(
+           ^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/function.py"", line 596, in apply
+    return super().apply(*args, **kwargs)  # type: ignore[misc]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1357, in forward
+    out, lse = _flash_attn_fwd(
+               ^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 192, in _flash_attn_fwd
+    assert q.dtype in [torch.float16, torch.bfloat16], ""inputs must be float16 or bfloat16""
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: inputs must be float16 or bfloat16
+
+stdout: ",,,
+dsv3,dsv3,flash_attention_4,fp8,no_mask,2,16384,16384,128,128,192,128,both,True,inf,inf,0.000,0.000,0.000,10,,False,"Benchmark failed with return code 1.
+stderr: /usr/local/lib/python3.12/dist-packages/torch/profiler/profiler.py:217: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/lyris_home/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1467, in <module>
+    output = sdpa_function(query, key, value)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/lyris_home/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1086, in flash_attention_4_sdpa
+    output, _ = flash_attn_interface.flash_attn_func(query, key, value, causal=args.attn_mask != ""no_mask"", window_size=window_size)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1514, in flash_attn_func
+    return FlashAttnFunc.apply(
+           ^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/function.py"", line 596, in apply
+    return super().apply(*args, **kwargs)  # type: ignore[misc]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1357, in forward
+    out, lse = _flash_attn_fwd(
+               ^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 192, in _flash_attn_fwd
+    assert q.dtype in [torch.float16, torch.bfloat16], ""inputs must be float16 or bfloat16""
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: inputs must be float16 or bfloat16
+
+stdout: ",,,
+dsv3,dsv3,cudnn,bfloat16,top_left,2,8192,8192,128,128,192,128,both,True,3.342,11.645,1645.000,1228.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92100.000
+dsv3,dsv3,cudnn,bfloat16,no_mask,2,8192,8192,128,128,192,128,both,True,6.400,23.663,1718.000,1208.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92100.000
+dsv3,dsv3,cudnn,fp8,top_left,2,8192,8192,128,128,192,128,both,True,2.215,7.238,2482.000,1975.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92100.000
+dsv3,dsv3,cudnn,fp8,no_mask,2,8192,8192,128,128,192,128,both,True,4.151,12.288,2649.000,2326.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92100.000
+dsv3,dsv3,cudnn,mxfp8,top_left,2,8192,8192,128,128,192,128,both,True,2.431,8.942,2262.000,1599.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92100.000
+dsv3,dsv3,cudnn,mxfp8,no_mask,2,8192,8192,128,128,192,128,both,True,4.671,15.576,2354.000,1835.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92100.000
+dsv3,dsv3,flash_attention_4,bfloat16,top_left,2,8192,8192,128,128,192,128,both,True,inf,inf,0.000,0.000,0.000,10,,False,"Benchmark failed with return code 1.
+stderr: /usr/local/lib/python3.12/dist-packages/torch/profiler/profiler.py:217: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/lyris_home/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1507, in <module>
+    output.backward(dOutput)
+  File ""/usr/local/lib/python3.12/dist-packages/torch/_tensor.py"", line 631, in backward
+    torch.autograd.backward(
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/__init__.py"", line 374, in backward
+    grad_tensors_ = _make_grads(tensors, grad_tensors_, is_grads_batched=False)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/__init__.py"", line 169, in _make_grads
+    raise RuntimeError(
+RuntimeError: Mismatch in shape: grad_output[0] has a shape of torch.Size([2, 8192, 128, 192]) and output[0] has a shape of torch.Size([2, 8192, 128, 128]).
+
+stdout: ",,,
+dsv3,dsv3,flash_attention_4,bfloat16,no_mask,2,8192,8192,128,128,192,128,both,True,inf,inf,0.000,0.000,0.000,10,,False,"Benchmark failed with return code 1.
+stderr: /usr/local/lib/python3.12/dist-packages/torch/profiler/profiler.py:217: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/lyris_home/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1507, in <module>
+    output.backward(dOutput)
+  File ""/usr/local/lib/python3.12/dist-packages/torch/_tensor.py"", line 631, in backward
+    torch.autograd.backward(
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/__init__.py"", line 374, in backward
+    grad_tensors_ = _make_grads(tensors, grad_tensors_, is_grads_batched=False)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/__init__.py"", line 169, in _make_grads
+    raise RuntimeError(
+RuntimeError: Mismatch in shape: grad_output[0] has a shape of torch.Size([2, 8192, 128, 192]) and output[0] has a shape of torch.Size([2, 8192, 128, 128]).
+
+stdout: ",,,
+dsv3,dsv3,flash_attention_4,fp8,top_left,2,8192,8192,128,128,192,128,both,True,inf,inf,0.000,0.000,0.000,10,,False,"Benchmark failed with return code 1.
+stderr: /usr/local/lib/python3.12/dist-packages/torch/profiler/profiler.py:217: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/lyris_home/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1467, in <module>
+    output = sdpa_function(query, key, value)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/lyris_home/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1086, in flash_attention_4_sdpa
+    output, _ = flash_attn_interface.flash_attn_func(query, key, value, causal=args.attn_mask != ""no_mask"", window_size=window_size)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1514, in flash_attn_func
+    return FlashAttnFunc.apply(
+           ^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/function.py"", line 596, in apply
+    return super().apply(*args, **kwargs)  # type: ignore[misc]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1357, in forward
+    out, lse = _flash_attn_fwd(
+               ^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 192, in _flash_attn_fwd
+    assert q.dtype in [torch.float16, torch.bfloat16], ""inputs must be float16 or bfloat16""
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: inputs must be float16 or bfloat16
+
+stdout: ",,,
+dsv3,dsv3,flash_attention_4,fp8,no_mask,2,8192,8192,128,128,192,128,both,True,inf,inf,0.000,0.000,0.000,10,,False,"Benchmark failed with return code 1.
+stderr: /usr/local/lib/python3.12/dist-packages/torch/profiler/profiler.py:217: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/lyris_home/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1467, in <module>
+    output = sdpa_function(query, key, value)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/lyris_home/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1086, in flash_attention_4_sdpa
+    output, _ = flash_attn_interface.flash_attn_func(query, key, value, causal=args.attn_mask != ""no_mask"", window_size=window_size)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1514, in flash_attn_func
+    return FlashAttnFunc.apply(
+           ^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/function.py"", line 596, in apply
+    return super().apply(*args, **kwargs)  # type: ignore[misc]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1357, in forward
+    out, lse = _flash_attn_fwd(
+               ^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 192, in _flash_attn_fwd
+    assert q.dtype in [torch.float16, torch.bfloat16], ""inputs must be float16 or bfloat16""
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: inputs must be float16 or bfloat16
+
+stdout: ",,,
+dsv3,dsv3,cudnn,bfloat16,top_left,2,4096,4096,128,128,192,128,both,True,0.943,3.164,1458.000,1130.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92100.000
+dsv3,dsv3,cudnn,bfloat16,no_mask,2,4096,4096,128,128,192,128,both,True,1.544,5.803,1780.000,1232.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92100.000
+dsv3,dsv3,cudnn,fp8,top_left,2,4096,4096,128,128,192,128,both,True,0.628,2.086,2189.000,1714.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92100.000
+dsv3,dsv3,cudnn,fp8,no_mask,2,4096,4096,128,128,192,128,both,True,1.060,3.298,2594.000,2167.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92100.000
+dsv3,dsv3,cudnn,mxfp8,top_left,2,4096,4096,128,128,192,128,both,True,0.677,2.588,2030.000,1381.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92100.000
+dsv3,dsv3,cudnn,mxfp8,no_mask,2,4096,4096,128,128,192,128,both,True,1.144,4.111,2402.000,1738.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92100.000
+dsv3,dsv3,flash_attention_4,bfloat16,top_left,2,4096,4096,128,128,192,128,both,True,inf,inf,0.000,0.000,0.000,10,,False,"Benchmark failed with return code 1.
+stderr: /usr/local/lib/python3.12/dist-packages/torch/profiler/profiler.py:217: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/lyris_home/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1507, in <module>
+    output.backward(dOutput)
+  File ""/usr/local/lib/python3.12/dist-packages/torch/_tensor.py"", line 631, in backward
+    torch.autograd.backward(
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/__init__.py"", line 374, in backward
+    grad_tensors_ = _make_grads(tensors, grad_tensors_, is_grads_batched=False)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/__init__.py"", line 169, in _make_grads
+    raise RuntimeError(
+RuntimeError: Mismatch in shape: grad_output[0] has a shape of torch.Size([2, 4096, 128, 192]) and output[0] has a shape of torch.Size([2, 4096, 128, 128]).
+
+stdout: ",,,
+dsv3,dsv3,flash_attention_4,bfloat16,no_mask,2,4096,4096,128,128,192,128,both,True,inf,inf,0.000,0.000,0.000,10,,False,"Benchmark failed with return code 1.
+stderr: /usr/local/lib/python3.12/dist-packages/torch/profiler/profiler.py:217: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/lyris_home/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1507, in <module>
+    output.backward(dOutput)
+  File ""/usr/local/lib/python3.12/dist-packages/torch/_tensor.py"", line 631, in backward
+    torch.autograd.backward(
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/__init__.py"", line 374, in backward
+    grad_tensors_ = _make_grads(tensors, grad_tensors_, is_grads_batched=False)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/__init__.py"", line 169, in _make_grads
+    raise RuntimeError(
+RuntimeError: Mismatch in shape: grad_output[0] has a shape of torch.Size([2, 4096, 128, 192]) and output[0] has a shape of torch.Size([2, 4096, 128, 128]).
+
+stdout: ",,,
+dsv3,dsv3,flash_attention_4,fp8,top_left,2,4096,4096,128,128,192,128,both,True,inf,inf,0.000,0.000,0.000,10,,False,"Benchmark failed with return code 1.
+stderr: /usr/local/lib/python3.12/dist-packages/torch/profiler/profiler.py:217: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/lyris_home/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1467, in <module>
+    output = sdpa_function(query, key, value)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/lyris_home/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1086, in flash_attention_4_sdpa
+    output, _ = flash_attn_interface.flash_attn_func(query, key, value, causal=args.attn_mask != ""no_mask"", window_size=window_size)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1514, in flash_attn_func
+    return FlashAttnFunc.apply(
+           ^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/function.py"", line 596, in apply
+    return super().apply(*args, **kwargs)  # type: ignore[misc]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1357, in forward
+    out, lse = _flash_attn_fwd(
+               ^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 192, in _flash_attn_fwd
+    assert q.dtype in [torch.float16, torch.bfloat16], ""inputs must be float16 or bfloat16""
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: inputs must be float16 or bfloat16
+
+stdout: ",,,
+dsv3,dsv3,flash_attention_4,fp8,no_mask,2,4096,4096,128,128,192,128,both,True,inf,inf,0.000,0.000,0.000,10,,False,"Benchmark failed with return code 1.
+stderr: /usr/local/lib/python3.12/dist-packages/torch/profiler/profiler.py:217: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/lyris_home/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1467, in <module>
+    output = sdpa_function(query, key, value)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/lyris_home/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1086, in flash_attention_4_sdpa
+    output, _ = flash_attn_interface.flash_attn_func(query, key, value, causal=args.attn_mask != ""no_mask"", window_size=window_size)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1514, in flash_attn_func
+    return FlashAttnFunc.apply(
+           ^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/function.py"", line 596, in apply
+    return super().apply(*args, **kwargs)  # type: ignore[misc]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1357, in forward
+    out, lse = _flash_attn_fwd(
+               ^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 192, in _flash_attn_fwd
+    assert q.dtype in [torch.float16, torch.bfloat16], ""inputs must be float16 or bfloat16""
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: inputs must be float16 or bfloat16
+
+stdout: ",,,
+dsv3,dsv3,cudnn,bfloat16,top_left,2,2048,2048,128,128,192,128,both,True,0.308,0.981,1115.000,911.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92100.000
+dsv3,dsv3,cudnn,bfloat16,no_mask,2,2048,2048,128,128,192,128,both,True,0.439,1.623,1564.000,1101.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92100.000
+dsv3,dsv3,cudnn,fp8,top_left,2,2048,2048,128,128,192,128,both,True,0.201,0.670,1714.000,1333.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92100.000
+dsv3,dsv3,cudnn,fp8,no_mask,2,2048,2048,128,128,192,128,both,True,0.304,0.946,2260.000,1888.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92100.000
+dsv3,dsv3,cudnn,mxfp8,top_left,2,2048,2048,128,128,192,128,both,True,0.215,0.841,1600.000,1063.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92100.000
+dsv3,dsv3,cudnn,mxfp8,no_mask,2,2048,2048,128,128,192,128,both,True,0.326,1.181,2108.000,1512.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92100.000
+dsv3,dsv3,flash_attention_4,bfloat16,top_left,2,2048,2048,128,128,192,128,both,True,inf,inf,0.000,0.000,0.000,10,,False,"Benchmark failed with return code 1.
+stderr: /usr/local/lib/python3.12/dist-packages/torch/profiler/profiler.py:217: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/lyris_home/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1507, in <module>
+    output.backward(dOutput)
+  File ""/usr/local/lib/python3.12/dist-packages/torch/_tensor.py"", line 631, in backward
+    torch.autograd.backward(
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/__init__.py"", line 374, in backward
+    grad_tensors_ = _make_grads(tensors, grad_tensors_, is_grads_batched=False)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/__init__.py"", line 169, in _make_grads
+    raise RuntimeError(
+RuntimeError: Mismatch in shape: grad_output[0] has a shape of torch.Size([2, 2048, 128, 192]) and output[0] has a shape of torch.Size([2, 2048, 128, 128]).
+
+stdout: ",,,
+dsv3,dsv3,flash_attention_4,bfloat16,no_mask,2,2048,2048,128,128,192,128,both,True,inf,inf,0.000,0.000,0.000,10,,False,"Benchmark failed with return code 1.
+stderr: /usr/local/lib/python3.12/dist-packages/torch/profiler/profiler.py:217: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/lyris_home/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1507, in <module>
+    output.backward(dOutput)
+  File ""/usr/local/lib/python3.12/dist-packages/torch/_tensor.py"", line 631, in backward
+    torch.autograd.backward(
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/__init__.py"", line 374, in backward
+    grad_tensors_ = _make_grads(tensors, grad_tensors_, is_grads_batched=False)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/__init__.py"", line 169, in _make_grads
+    raise RuntimeError(
+RuntimeError: Mismatch in shape: grad_output[0] has a shape of torch.Size([2, 2048, 128, 192]) and output[0] has a shape of torch.Size([2, 2048, 128, 128]).
+
+stdout: ",,,
+dsv3,dsv3,flash_attention_4,fp8,top_left,2,2048,2048,128,128,192,128,both,True,inf,inf,0.000,0.000,0.000,10,,False,"Benchmark failed with return code 1.
+stderr: /usr/local/lib/python3.12/dist-packages/torch/profiler/profiler.py:217: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/lyris_home/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1467, in <module>
+    output = sdpa_function(query, key, value)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/lyris_home/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1086, in flash_attention_4_sdpa
+    output, _ = flash_attn_interface.flash_attn_func(query, key, value, causal=args.attn_mask != ""no_mask"", window_size=window_size)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1514, in flash_attn_func
+    return FlashAttnFunc.apply(
+           ^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/function.py"", line 596, in apply
+    return super().apply(*args, **kwargs)  # type: ignore[misc]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1357, in forward
+    out, lse = _flash_attn_fwd(
+               ^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 192, in _flash_attn_fwd
+    assert q.dtype in [torch.float16, torch.bfloat16], ""inputs must be float16 or bfloat16""
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: inputs must be float16 or bfloat16
+
+stdout: ",,,
+dsv3,dsv3,flash_attention_4,fp8,no_mask,2,2048,2048,128,128,192,128,both,True,inf,inf,0.000,0.000,0.000,10,,False,"Benchmark failed with return code 1.
+stderr: /usr/local/lib/python3.12/dist-packages/torch/profiler/profiler.py:217: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/lyris_home/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1467, in <module>
+    output = sdpa_function(query, key, value)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/lyris_home/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1086, in flash_attention_4_sdpa
+    output, _ = flash_attn_interface.flash_attn_func(query, key, value, causal=args.attn_mask != ""no_mask"", window_size=window_size)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1514, in flash_attn_func
+    return FlashAttnFunc.apply(
+           ^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/function.py"", line 596, in apply
+    return super().apply(*args, **kwargs)  # type: ignore[misc]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1357, in forward
+    out, lse = _flash_attn_fwd(
+               ^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 192, in _flash_attn_fwd
+    assert q.dtype in [torch.float16, torch.bfloat16], ""inputs must be float16 or bfloat16""
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: inputs must be float16 or bfloat16
+
+stdout: ",,,

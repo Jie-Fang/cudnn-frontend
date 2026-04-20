@@ -35,7 +35,7 @@ CONFIG = BenchmarkConfig(
     attn_masks=["top_left", "no_mask"],  # Causal only
     profile_pass="both",  # Forward and backward
     deterministic_bwd=[True],
-    batch_size=1,
+    batch_size=2,
     num_iterations=10,
     output_dir="results",
 )
