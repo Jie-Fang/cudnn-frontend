@@ -1,48 +1,29 @@
 """
-Tests for Grouped GEMM dSwiGLU Backward Kernel (SM100+)
+Tests for Grouped GEMM dSReLU Backward Kernel (SM100+)
 
 This module tests the contiguous grouped block-scaled GEMM backward pass
-with dSwiGLU activation gradient for MoE (Mixture of Experts) workloads.
+with dSReLU activation gradient for MoE (Mixture of Experts) workloads.
 """
 
 import torch
 import pytest
 from test_utils import torch_fork_set_rng
-from fe_api.test_grouped_gemm_swiglu_utils import (
-    grouped_gemm_swiglu_init,
-    allocate_grouped_gemm_input_tensors as allocate_grouped_gemm_input_tensors_base,
-)
-from fe_api.test_grouped_gemm_dswiglu_utils import (
-    with_grouped_gemm_dswiglu_params_fp4,
-    with_grouped_gemm_dswiglu_params_fp8,
-    allocate_grouped_gemm_dswiglu_tensors,
-    check_ref_grouped_gemm_dswiglu,
+from fe_api.test_grouped_gemm_dsrelu_utils import (
+    with_grouped_gemm_dsrelu_params_fp4,
+    with_grouped_gemm_dsrelu_params_fp8,
+    allocate_grouped_gemm_dsrelu_tensors,
+    allocate_grouped_gemm_input_tensors,
+    check_ref_grouped_gemm_dsrelu,
+    grouped_gemm_dsrelu_init,
 )
 
-GROUPED_GEMM_DSWIGLU_DYNAMIC_SHAPES_M_VALUES = [64, 320, 576, 832, 1088, 1344, 1600, 1856, 2112, 2368]
-
-
-def allocate_grouped_gemm_input_tensors(*args, **kwargs):
-    """Restore the upstream dSwiGLU test-input range for backward kernels."""
-
-    tensors = allocate_grouped_gemm_input_tensors_base(*args, **kwargs)
-
-    alpha_tensor = tensors["alpha_tensor"]
-    tensors["alpha_tensor"] = torch.randint(1, 2, alpha_tensor.shape, dtype=torch.float32, device=alpha_tensor.device)
-
-    beta_tensor = tensors["beta_tensor"]
-    tensors["beta_tensor"] = torch.randint(1, 2, beta_tensor.shape, dtype=torch.float32, device=beta_tensor.device)
-
-    prob_tensor = tensors["prob_tensor"]
-    tensors["prob_tensor"] = torch.randint(1, 2, prob_tensor.shape, dtype=torch.float32, device=prob_tensor.device)
-
-    return tensors
+GROUPED_GEMM_DSRELU_DYNAMIC_SHAPES_M_VALUES = [64, 320, 576, 832, 1088, 1344, 1600, 1856, 2112, 2368]
 
 
 @pytest.mark.L0
 @torch_fork_set_rng(seed=0)
-@with_grouped_gemm_dswiglu_params_fp4
-def test_grouped_gemm_dswiglu_compile_execute_fp4(
+@with_grouped_gemm_dsrelu_params_fp4
+def test_grouped_gemm_dsrelu_compile_execute_fp4(
     ab_dtype,
     c_dtype,
     d_dtype,
@@ -57,7 +38,7 @@ def test_grouped_gemm_dswiglu_compile_execute_fp4(
     discrete_col_sfd,
     request,
 ):
-    _test_grouped_gemm_dswiglu_compile_execute(
+    _test_grouped_gemm_dsrelu_compile_execute(
         ab_dtype=ab_dtype,
         c_dtype=c_dtype,
         d_dtype=d_dtype,
@@ -76,8 +57,8 @@ def test_grouped_gemm_dswiglu_compile_execute_fp4(
 
 @pytest.mark.L0
 @torch_fork_set_rng(seed=0)
-@with_grouped_gemm_dswiglu_params_fp8
-def test_grouped_gemm_dswiglu_compile_execute_fp8(
+@with_grouped_gemm_dsrelu_params_fp8
+def test_grouped_gemm_dsrelu_compile_execute_fp8(
     ab_dtype,
     c_dtype,
     d_dtype,
@@ -92,7 +73,7 @@ def test_grouped_gemm_dswiglu_compile_execute_fp8(
     discrete_col_sfd,
     request,
 ):
-    _test_grouped_gemm_dswiglu_compile_execute(
+    _test_grouped_gemm_dsrelu_compile_execute(
         ab_dtype=ab_dtype,
         c_dtype=c_dtype,
         d_dtype=d_dtype,
@@ -111,8 +92,8 @@ def test_grouped_gemm_dswiglu_compile_execute_fp8(
 
 @pytest.mark.L0
 @torch_fork_set_rng(seed=0)
-@with_grouped_gemm_dswiglu_params_fp4
-def test_grouped_gemm_dswiglu_wrapper_fp4(
+@with_grouped_gemm_dsrelu_params_fp4
+def test_grouped_gemm_dsrelu_wrapper_fp4(
     ab_dtype,
     c_dtype,
     d_dtype,
@@ -127,7 +108,7 @@ def test_grouped_gemm_dswiglu_wrapper_fp4(
     discrete_col_sfd,
     request,
 ):
-    _test_grouped_gemm_dswiglu_wrapper(
+    _test_grouped_gemm_dsrelu_wrapper(
         ab_dtype=ab_dtype,
         c_dtype=c_dtype,
         d_dtype=d_dtype,
@@ -146,8 +127,8 @@ def test_grouped_gemm_dswiglu_wrapper_fp4(
 
 @pytest.mark.L0
 @torch_fork_set_rng(seed=0)
-@with_grouped_gemm_dswiglu_params_fp8
-def test_grouped_gemm_dswiglu_wrapper_fp8(
+@with_grouped_gemm_dsrelu_params_fp8
+def test_grouped_gemm_dsrelu_wrapper_fp8(
     ab_dtype,
     c_dtype,
     d_dtype,
@@ -162,7 +143,7 @@ def test_grouped_gemm_dswiglu_wrapper_fp8(
     discrete_col_sfd,
     request,
 ):
-    _test_grouped_gemm_dswiglu_wrapper(
+    _test_grouped_gemm_dsrelu_wrapper(
         ab_dtype=ab_dtype,
         c_dtype=c_dtype,
         d_dtype=d_dtype,
@@ -188,8 +169,8 @@ def test_grouped_gemm_dswiglu_wrapper_fp8(
         pytest.param(torch.float8_e4m3fn, id="fp8"),
     ],
 )
-def test_grouped_gemm_dswiglu_wrapper_cache_partial_dynamic_smoke(request, monkeypatch, ab_dtype):
-    compile_count, cache_entries = _test_grouped_gemm_dswiglu_wrapper_dynamic_shape_cache_behavior(
+def test_grouped_gemm_dsrelu_wrapper_cache_partial_dynamic_smoke(request, monkeypatch, ab_dtype):
+    compile_count, cache_entries = _test_grouped_gemm_dsrelu_wrapper_dynamic_shape_cache_behavior(
         request=request,
         monkeypatch=monkeypatch,
         use_full_dynamic=False,
@@ -209,8 +190,8 @@ def test_grouped_gemm_dswiglu_wrapper_cache_partial_dynamic_smoke(request, monke
         pytest.param(torch.float8_e4m3fn, id="fp8"),
     ],
 )
-def test_grouped_gemm_dswiglu_wrapper_cache_full_dynamic_smoke(request, monkeypatch, ab_dtype):
-    compile_count, cache_entries = _test_grouped_gemm_dswiglu_wrapper_dynamic_shape_cache_behavior(
+def test_grouped_gemm_dsrelu_wrapper_cache_full_dynamic_smoke(request, monkeypatch, ab_dtype):
+    compile_count, cache_entries = _test_grouped_gemm_dsrelu_wrapper_dynamic_shape_cache_behavior(
         request=request,
         monkeypatch=monkeypatch,
         use_full_dynamic=True,
@@ -230,8 +211,8 @@ def test_grouped_gemm_dswiglu_wrapper_cache_full_dynamic_smoke(request, monkeypa
         pytest.param(torch.float8_e4m3fn, id="fp8"),
     ],
 )
-def test_grouped_gemm_dswiglu_wrapper_cache_zero_m_after_compile_partial_dynamic_smoke(request, monkeypatch, ab_dtype):
-    compile_count, cache_entries = _test_grouped_gemm_dswiglu_wrapper_zero_m_after_compile_cache_behavior(
+def test_grouped_gemm_dsrelu_wrapper_cache_zero_m_after_compile_partial_dynamic_smoke(request, monkeypatch, ab_dtype):
+    compile_count, cache_entries = _test_grouped_gemm_dsrelu_wrapper_zero_m_after_compile_cache_behavior(
         request=request,
         monkeypatch=monkeypatch,
         use_full_dynamic=False,
@@ -251,8 +232,8 @@ def test_grouped_gemm_dswiglu_wrapper_cache_zero_m_after_compile_partial_dynamic
         pytest.param(torch.float8_e4m3fn, id="fp8"),
     ],
 )
-def test_grouped_gemm_dswiglu_wrapper_cache_zero_m_after_compile_full_dynamic_smoke(request, monkeypatch, ab_dtype):
-    compile_count, cache_entries = _test_grouped_gemm_dswiglu_wrapper_zero_m_after_compile_cache_behavior(
+def test_grouped_gemm_dsrelu_wrapper_cache_zero_m_after_compile_full_dynamic_smoke(request, monkeypatch, ab_dtype):
+    compile_count, cache_entries = _test_grouped_gemm_dsrelu_wrapper_zero_m_after_compile_cache_behavior(
         request=request,
         monkeypatch=monkeypatch,
         use_full_dynamic=True,
@@ -272,8 +253,8 @@ def test_grouped_gemm_dswiglu_wrapper_cache_zero_m_after_compile_full_dynamic_sm
         pytest.param(torch.float8_e4m3fn, id="fp8"),
     ],
 )
-def test_grouped_gemm_dswiglu_wrapper_cache_zero_m_before_compile_partial_dynamic_smoke(request, monkeypatch, ab_dtype):
-    compile_count, cache_entries = _test_grouped_gemm_dswiglu_wrapper_zero_m_before_compile_cache_behavior(
+def test_grouped_gemm_dsrelu_wrapper_cache_zero_m_before_compile_partial_dynamic_smoke(request, monkeypatch, ab_dtype):
+    compile_count, cache_entries = _test_grouped_gemm_dsrelu_wrapper_zero_m_before_compile_cache_behavior(
         request=request,
         monkeypatch=monkeypatch,
         use_full_dynamic=False,
@@ -293,8 +274,8 @@ def test_grouped_gemm_dswiglu_wrapper_cache_zero_m_before_compile_partial_dynami
         pytest.param(torch.float8_e4m3fn, id="fp8"),
     ],
 )
-def test_grouped_gemm_dswiglu_wrapper_cache_zero_m_before_compile_full_dynamic_smoke(request, monkeypatch, ab_dtype):
-    compile_count, cache_entries = _test_grouped_gemm_dswiglu_wrapper_zero_m_before_compile_cache_behavior(
+def test_grouped_gemm_dsrelu_wrapper_cache_zero_m_before_compile_full_dynamic_smoke(request, monkeypatch, ab_dtype):
+    compile_count, cache_entries = _test_grouped_gemm_dsrelu_wrapper_zero_m_before_compile_cache_behavior(
         request=request,
         monkeypatch=monkeypatch,
         use_full_dynamic=True,
@@ -303,15 +284,91 @@ def test_grouped_gemm_dswiglu_wrapper_cache_zero_m_before_compile_full_dynamic_s
 
     assert compile_count == 1
     assert cache_entries == 1
+
+
+@pytest.mark.L0
+@torch_fork_set_rng(seed=7)
+def test_grouped_gemm_dsrelu_wrapper_uint8_raw_fp4_smoke(request):
+    try:
+        from cudnn import grouped_gemm_dsrelu_wrapper_sm100
+        from cuda.bindings import driver as cuda
+    except ImportError:
+        pytest.skip("Environment not supported: cudnn optional dependencies not installed")
+
+    cfg = grouped_gemm_dsrelu_init(
+        request=request,
+        ab_dtype=torch.uint8,
+        c_dtype=torch.bfloat16,
+        d_dtype=torch.bfloat16,
+        cd_major="n",
+        acc_dtype=torch.float32,
+        mma_tiler_mn=(256, 256),
+        cluster_shape_mn=(2, 1),
+        sf_vec_size=16,
+        sf_dtype=torch.float8_e8m0fnu,
+        vector_f32=True,
+        discrete_col_sfd=False,
+        b_major="k",
+    )
+
+    inputs = allocate_grouped_gemm_input_tensors(
+        n=cfg["n"],
+        k=cfg["k"],
+        l=cfg["l"],
+        group_m_list=cfg["group_m_list"],
+        ab_dtype=cfg["ab_dtype"],
+        b_major=cfg["b_major"],
+        sf_dtype=cfg["sf_dtype"],
+        sf_vec_size=cfg["sf_vec_size"],
+        m_aligned=cfg["m_aligned"],
+    )
+    inputs, _ = allocate_grouped_gemm_dsrelu_tensors(
+        tensor_m=inputs["tensor_m"],
+        n=cfg["n"],
+        l=cfg["l"],
+        ab_dtype=cfg["ab_dtype"],
+        c_dtype=cfg["c_dtype"],
+        d_dtype=cfg["d_dtype"],
+        cd_major=cfg["cd_major"],
+        sf_dtype=cfg["sf_dtype"],
+        sf_vec_size=cfg["sf_vec_size"],
+        input_tensors=inputs,
+    )
+
+    outputs = grouped_gemm_dsrelu_wrapper_sm100(
+        a_tensor=inputs["a_tensor"],
+        b_tensor=inputs["b_tensor"],
+        c_tensor=inputs["c_tensor"],
+        sfa_tensor=inputs["sfa_tensor"],
+        sfb_tensor=inputs["sfb_tensor"],
+        padded_offsets=inputs["padded_offsets_tensor"],
+        alpha_tensor=inputs["alpha_tensor"],
+        prob_tensor=inputs["prob_tensor"],
+        acc_dtype=cfg["acc_dtype"],
+        d_dtype=cfg["d_dtype"],
+        cd_major=cfg["cd_major"],
+        mma_tiler_mn=cfg["mma_tiler_mn"],
+        cluster_shape_mn=cfg["cluster_shape_mn"],
+        sf_vec_size=cfg["sf_vec_size"],
+        vector_f32=cfg["vector_f32"],
+        m_aligned=cfg["m_aligned"],
+        discrete_col_sfd=cfg["discrete_col_sfd"],
+        current_stream=cuda.CUstream(torch.cuda.current_stream().cuda_stream),
+    )
+
+    torch.cuda.synchronize()
+    assert torch.isfinite(outputs["d_row_tensor"].float()).all()
+    assert torch.isfinite(outputs["dprob_tensor"].float()).all()
+    assert torch.count_nonzero(outputs["d_row_tensor"]).item() > 0
 
 
 """
-GroupedGemmDswiglu API with explicit check_support, compile, and execute paths.
-Use this method when running one static configuration for each GroupedGemmDswiglu object.
+GroupedGemmDsrelu API with explicit check_support, compile, and execute paths.
+Use this method when running one static configuration for each GroupedGemmDsrelu object.
 """
 
 
-def _test_grouped_gemm_dswiglu_compile_execute(
+def _test_grouped_gemm_dsrelu_compile_execute(
     ab_dtype,
     c_dtype,
     d_dtype,
@@ -327,12 +384,12 @@ def _test_grouped_gemm_dswiglu_compile_execute(
     request,
 ):
     try:
-        from cudnn import GroupedGemmDswigluSm100
+        from cudnn import GroupedGemmDsreluSm100
         from cuda.bindings import driver as cuda
     except ImportError as e:
         pytest.skip("Environment not supported: cudnn optional dependencies not installed")
 
-    cfg = grouped_gemm_swiglu_init(
+    cfg = grouped_gemm_dsrelu_init(
         request=request,
         ab_dtype=ab_dtype,
         c_dtype=c_dtype,
@@ -362,7 +419,7 @@ def _test_grouped_gemm_dswiglu_compile_execute(
         m_aligned=cfg["m_aligned"],
     )
 
-    inputs, outputs = allocate_grouped_gemm_dswiglu_tensors(
+    inputs, outputs = allocate_grouped_gemm_dsrelu_tensors(
         tensor_m=inputs["tensor_m"],
         n=cfg["n"],
         l=cfg["l"],
@@ -375,7 +432,7 @@ def _test_grouped_gemm_dswiglu_compile_execute(
         input_tensors=inputs,
     )
 
-    api = GroupedGemmDswigluSm100(
+    api = GroupedGemmDsreluSm100(
         sample_a=inputs["a_tensor"],
         sample_b=inputs["b_tensor"],
         sample_c=inputs["c_tensor"],
@@ -385,7 +442,6 @@ def _test_grouped_gemm_dswiglu_compile_execute(
         sample_sfb=inputs["sfb_tensor"],
         sample_padded_offsets=inputs["padded_offsets_tensor"],
         sample_alpha=inputs["alpha_tensor"],
-        sample_beta=inputs["beta_tensor"],
         sample_prob=inputs["prob_tensor"],
         sample_dprob=outputs["dprob_tensor"],
         sample_amax=outputs.get("amax_tensor"),
@@ -417,7 +473,6 @@ def _test_grouped_gemm_dswiglu_compile_execute(
         sfb_tensor=inputs["sfb_tensor"],
         padded_offsets=inputs["padded_offsets_tensor"],
         alpha_tensor=inputs["alpha_tensor"],
-        beta_tensor=inputs["beta_tensor"],
         prob_tensor=inputs["prob_tensor"],
         dprob_tensor=outputs["dprob_tensor"],
         sfd_row_tensor=outputs.get("sfd_row_tensor"),
@@ -428,7 +483,7 @@ def _test_grouped_gemm_dswiglu_compile_execute(
     )
 
     torch.cuda.synchronize()
-    check_ref_grouped_gemm_dswiglu(
+    check_ref_grouped_gemm_dsrelu(
         inputs,
         outputs,
         cfg,
@@ -437,12 +492,12 @@ def _test_grouped_gemm_dswiglu_compile_execute(
 
 
 """
-GroupedGemmDswiglu API with grouped_gemm_dswiglu_wrapper:
-Use the wrapper to directly call GroupedGemmDswiglu without explicit setup and compilation.
+GroupedGemmDsrelu API with grouped_gemm_dsrelu_wrapper:
+Use the wrapper to directly call GroupedGemmDsrelu without explicit setup and compilation.
 """
 
 
-def _test_grouped_gemm_dswiglu_wrapper(
+def _test_grouped_gemm_dsrelu_wrapper(
     ab_dtype,
     c_dtype,
     d_dtype,
@@ -458,12 +513,12 @@ def _test_grouped_gemm_dswiglu_wrapper(
     request,
 ):
     try:
-        from cudnn import grouped_gemm_dswiglu_wrapper_sm100
+        from cudnn import grouped_gemm_dsrelu_wrapper_sm100
         from cuda.bindings import driver as cuda
     except ImportError as e:
         pytest.skip("Environment not supported: cudnn optional dependencies not installed")
 
-    cfg = grouped_gemm_swiglu_init(
+    cfg = grouped_gemm_dsrelu_init(
         request=request,
         ab_dtype=ab_dtype,
         c_dtype=c_dtype,
@@ -493,7 +548,7 @@ def _test_grouped_gemm_dswiglu_wrapper(
         m_aligned=cfg["m_aligned"],
     )
 
-    inputs, _ = allocate_grouped_gemm_dswiglu_tensors(
+    inputs, _ = allocate_grouped_gemm_dsrelu_tensors(
         tensor_m=inputs["tensor_m"],
         n=cfg["n"],
         l=cfg["l"],
@@ -508,7 +563,7 @@ def _test_grouped_gemm_dswiglu_wrapper(
 
     try:
         for _ in range(2):  # Run twice to test caching path
-            wrapper_outputs = grouped_gemm_dswiglu_wrapper_sm100(
+            wrapper_outputs = grouped_gemm_dsrelu_wrapper_sm100(
                 a_tensor=inputs["a_tensor"],
                 b_tensor=inputs["b_tensor"],
                 c_tensor=inputs["c_tensor"],
@@ -516,7 +571,6 @@ def _test_grouped_gemm_dswiglu_wrapper(
                 sfb_tensor=inputs["sfb_tensor"],
                 padded_offsets=inputs["padded_offsets_tensor"],
                 alpha_tensor=inputs["alpha_tensor"],
-                beta_tensor=inputs["beta_tensor"],
                 prob_tensor=inputs["prob_tensor"],
                 norm_const_tensor=inputs.get("norm_const_tensor"),
                 acc_dtype=cfg["acc_dtype"],
@@ -534,7 +588,7 @@ def _test_grouped_gemm_dswiglu_wrapper(
         pytest.skip(f"Unsupported testcase: {e}")
 
     torch.cuda.synchronize()
-    check_ref_grouped_gemm_dswiglu(
+    check_ref_grouped_gemm_dsrelu(
         inputs,
         wrapper_outputs,
         cfg,
@@ -542,15 +596,15 @@ def _test_grouped_gemm_dswiglu_wrapper(
     )
 
 
-def _test_grouped_gemm_dswiglu_wrapper_dynamic_shape_cache_behavior(
+def _test_grouped_gemm_dsrelu_wrapper_dynamic_shape_cache_behavior(
     request,
     monkeypatch,
     use_full_dynamic,
     ab_dtype,
 ):
     try:
-        from cudnn import grouped_gemm_dswiglu_wrapper_sm100
-        from cudnn.grouped_gemm.grouped_gemm_dswiglu import api as grouped_gemm_dswiglu_api
+        from cudnn import grouped_gemm_dsrelu_wrapper_sm100
+        from cudnn.grouped_gemm.grouped_gemm_dsrelu import api as grouped_gemm_dsrelu_api
         from cuda.bindings import driver as cuda
     except ImportError:
         pytest.skip("Environment not supported: cudnn optional dependencies not installed")
@@ -560,20 +614,20 @@ def _test_grouped_gemm_dswiglu_wrapper_dynamic_shape_cache_behavior(
     else:
         monkeypatch.delenv("CUDNN_FE_GROUPED_GEMM_DYNAMIC_MNKL", raising=False)
 
-    grouped_gemm_dswiglu_api._cache_of_GroupedGemmDswigluSm100Objects.clear()
+    grouped_gemm_dsrelu_api._cache_of_GroupedGemmDsreluSm100Objects.clear()
 
     compile_count = {"value": 0}
-    original_compile = grouped_gemm_dswiglu_api.GroupedGemmDswigluSm100.compile
+    original_compile = grouped_gemm_dsrelu_api.GroupedGemmDsreluSm100.compile
 
     def counted_compile(self):
         compile_count["value"] += 1
         return original_compile(self)
 
-    monkeypatch.setattr(grouped_gemm_dswiglu_api.GroupedGemmDswigluSm100, "compile", counted_compile)
+    monkeypatch.setattr(grouped_gemm_dsrelu_api.GroupedGemmDsreluSm100, "compile", counted_compile)
 
     d_dtype = torch.float8_e4m3fn if ab_dtype in [torch.float8_e4m3fn, torch.float8_e5m2] else torch.bfloat16
 
-    cfg = grouped_gemm_swiglu_init(
+    cfg = grouped_gemm_dsrelu_init(
         request=request,
         ab_dtype=ab_dtype,
         c_dtype=torch.bfloat16,
@@ -585,14 +639,14 @@ def _test_grouped_gemm_dswiglu_wrapper_dynamic_shape_cache_behavior(
         sf_vec_size=32,
         sf_dtype=torch.float8_e8m0fnu,
         vector_f32=False,
-        discrete_col_sfd=False,
+        discrete_col_sfd=ab_dtype in [torch.float8_e4m3fn, torch.float8_e5m2],
         b_major="k",
     )
 
     stream = cuda.CUstream(torch.cuda.current_stream().cuda_stream)
 
     try:
-        for group_m in GROUPED_GEMM_DSWIGLU_DYNAMIC_SHAPES_M_VALUES:
+        for group_m in GROUPED_GEMM_DSRELU_DYNAMIC_SHAPES_M_VALUES:
             group_m_list = [group_m] * cfg["l"]
             inputs = allocate_grouped_gemm_input_tensors(
                 n=cfg["n"],
@@ -606,7 +660,7 @@ def _test_grouped_gemm_dswiglu_wrapper_dynamic_shape_cache_behavior(
                 m_aligned=cfg["m_aligned"],
             )
 
-            inputs, _ = allocate_grouped_gemm_dswiglu_tensors(
+            inputs, _ = allocate_grouped_gemm_dsrelu_tensors(
                 tensor_m=inputs["tensor_m"],
                 n=cfg["n"],
                 l=cfg["l"],
@@ -619,7 +673,7 @@ def _test_grouped_gemm_dswiglu_wrapper_dynamic_shape_cache_behavior(
                 input_tensors=inputs,
             )
 
-            wrapper_outputs = grouped_gemm_dswiglu_wrapper_sm100(
+            wrapper_outputs = grouped_gemm_dsrelu_wrapper_sm100(
                 a_tensor=inputs["a_tensor"],
                 b_tensor=inputs["b_tensor"],
                 c_tensor=inputs["c_tensor"],
@@ -627,7 +681,6 @@ def _test_grouped_gemm_dswiglu_wrapper_dynamic_shape_cache_behavior(
                 sfb_tensor=inputs["sfb_tensor"],
                 padded_offsets=inputs["padded_offsets_tensor"],
                 alpha_tensor=inputs["alpha_tensor"],
-                beta_tensor=inputs["beta_tensor"],
                 prob_tensor=inputs["prob_tensor"],
                 norm_const_tensor=inputs.get("norm_const_tensor"),
                 acc_dtype=cfg["acc_dtype"],
@@ -642,7 +695,7 @@ def _test_grouped_gemm_dswiglu_wrapper_dynamic_shape_cache_behavior(
                 current_stream=stream,
             )
             torch.cuda.synchronize()
-            # check_ref_grouped_gemm_dswiglu(
+            # check_ref_grouped_gemm_dsrelu(
             #     inputs,
             #     wrapper_outputs,
             #     cfg,
@@ -651,19 +704,19 @@ def _test_grouped_gemm_dswiglu_wrapper_dynamic_shape_cache_behavior(
     except (ValueError, NotImplementedError) as e:
         pytest.skip(f"Unsupported testcase: {e}")
     finally:
-        cache_entries = len(grouped_gemm_dswiglu_api._cache_of_GroupedGemmDswigluSm100Objects)
-        grouped_gemm_dswiglu_api._cache_of_GroupedGemmDswigluSm100Objects.clear()
+        cache_entries = len(grouped_gemm_dsrelu_api._cache_of_GroupedGemmDsreluSm100Objects)
+        grouped_gemm_dsrelu_api._cache_of_GroupedGemmDsreluSm100Objects.clear()
 
     return compile_count["value"], cache_entries
 
 
-def _test_grouped_gemm_dswiglu_wrapper_zero_m_after_compile_cache_behavior(
+def _test_grouped_gemm_dsrelu_wrapper_zero_m_after_compile_cache_behavior(
     request,
     monkeypatch,
     use_full_dynamic,
     ab_dtype,
 ):
-    return _test_grouped_gemm_dswiglu_wrapper_zero_m_cache_behavior(
+    return _test_grouped_gemm_dsrelu_wrapper_zero_m_cache_behavior(
         request=request,
         monkeypatch=monkeypatch,
         use_full_dynamic=use_full_dynamic,
@@ -672,13 +725,13 @@ def _test_grouped_gemm_dswiglu_wrapper_zero_m_after_compile_cache_behavior(
     )
 
 
-def _test_grouped_gemm_dswiglu_wrapper_zero_m_before_compile_cache_behavior(
+def _test_grouped_gemm_dsrelu_wrapper_zero_m_before_compile_cache_behavior(
     request,
     monkeypatch,
     use_full_dynamic,
     ab_dtype,
 ):
-    return _test_grouped_gemm_dswiglu_wrapper_zero_m_cache_behavior(
+    return _test_grouped_gemm_dsrelu_wrapper_zero_m_cache_behavior(
         request=request,
         monkeypatch=monkeypatch,
         use_full_dynamic=use_full_dynamic,
@@ -687,7 +740,7 @@ def _test_grouped_gemm_dswiglu_wrapper_zero_m_before_compile_cache_behavior(
     )
 
 
-def _test_grouped_gemm_dswiglu_wrapper_zero_m_cache_behavior(
+def _test_grouped_gemm_dsrelu_wrapper_zero_m_cache_behavior(
     request,
     monkeypatch,
     use_full_dynamic,
@@ -695,8 +748,8 @@ def _test_grouped_gemm_dswiglu_wrapper_zero_m_cache_behavior(
     group_m_values,
 ):
     try:
-        from cudnn import grouped_gemm_dswiglu_wrapper_sm100
-        from cudnn.grouped_gemm.grouped_gemm_dswiglu import api as grouped_gemm_dswiglu_api
+        from cudnn import grouped_gemm_dsrelu_wrapper_sm100
+        from cudnn.grouped_gemm.grouped_gemm_dsrelu import api as grouped_gemm_dsrelu_api
         from cuda.bindings import driver as cuda
     except ImportError:
         pytest.skip("Environment not supported: cudnn optional dependencies not installed")
@@ -706,20 +759,20 @@ def _test_grouped_gemm_dswiglu_wrapper_zero_m_cache_behavior(
     else:
         monkeypatch.delenv("CUDNN_FE_GROUPED_GEMM_DYNAMIC_MNKL", raising=False)
 
-    grouped_gemm_dswiglu_api._cache_of_GroupedGemmDswigluSm100Objects.clear()
+    grouped_gemm_dsrelu_api._cache_of_GroupedGemmDsreluSm100Objects.clear()
 
     compile_count = {"value": 0}
-    original_compile = grouped_gemm_dswiglu_api.GroupedGemmDswigluSm100.compile
+    original_compile = grouped_gemm_dsrelu_api.GroupedGemmDsreluSm100.compile
 
     def counted_compile(self):
         compile_count["value"] += 1
         return original_compile(self)
 
-    monkeypatch.setattr(grouped_gemm_dswiglu_api.GroupedGemmDswigluSm100, "compile", counted_compile)
+    monkeypatch.setattr(grouped_gemm_dsrelu_api.GroupedGemmDsreluSm100, "compile", counted_compile)
 
     d_dtype = torch.float8_e4m3fn if ab_dtype in [torch.float8_e4m3fn, torch.float8_e5m2] else torch.bfloat16
 
-    cfg = grouped_gemm_swiglu_init(
+    cfg = grouped_gemm_dsrelu_init(
         request=request,
         ab_dtype=ab_dtype,
         c_dtype=torch.bfloat16,
@@ -731,7 +784,7 @@ def _test_grouped_gemm_dswiglu_wrapper_zero_m_cache_behavior(
         sf_vec_size=32,
         sf_dtype=torch.float8_e8m0fnu,
         vector_f32=False,
-        discrete_col_sfd=False,
+        discrete_col_sfd=ab_dtype in [torch.float8_e4m3fn, torch.float8_e5m2],
         b_major="k",
     )
 
@@ -752,7 +805,7 @@ def _test_grouped_gemm_dswiglu_wrapper_zero_m_cache_behavior(
                 m_aligned=cfg["m_aligned"],
             )
 
-            inputs, _ = allocate_grouped_gemm_dswiglu_tensors(
+            inputs, _ = allocate_grouped_gemm_dsrelu_tensors(
                 tensor_m=inputs["tensor_m"],
                 n=cfg["n"],
                 l=cfg["l"],
@@ -765,7 +818,7 @@ def _test_grouped_gemm_dswiglu_wrapper_zero_m_cache_behavior(
                 input_tensors=inputs,
             )
 
-            grouped_gemm_dswiglu_wrapper_sm100(
+            grouped_gemm_dsrelu_wrapper_sm100(
                 a_tensor=inputs["a_tensor"],
                 b_tensor=inputs["b_tensor"],
                 c_tensor=inputs["c_tensor"],
@@ -773,7 +826,6 @@ def _test_grouped_gemm_dswiglu_wrapper_zero_m_cache_behavior(
                 sfb_tensor=inputs["sfb_tensor"],
                 padded_offsets=inputs["padded_offsets_tensor"],
                 alpha_tensor=inputs["alpha_tensor"],
-                beta_tensor=inputs["beta_tensor"],
                 prob_tensor=inputs["prob_tensor"],
                 norm_const_tensor=inputs.get("norm_const_tensor"),
                 acc_dtype=cfg["acc_dtype"],
@@ -791,7 +843,7 @@ def _test_grouped_gemm_dswiglu_wrapper_zero_m_cache_behavior(
     except (ValueError, NotImplementedError) as e:
         pytest.skip(f"Unsupported testcase: {e}")
     finally:
-        cache_entries = len(grouped_gemm_dswiglu_api._cache_of_GroupedGemmDswigluSm100Objects)
-        grouped_gemm_dswiglu_api._cache_of_GroupedGemmDswigluSm100Objects.clear()
+        cache_entries = len(grouped_gemm_dsrelu_api._cache_of_GroupedGemmDsreluSm100Objects)
+        grouped_gemm_dsrelu_api._cache_of_GroupedGemmDsreluSm100Objects.clear()
 
     return compile_count["value"], cache_entries

@@ -40,6 +40,7 @@ class TensorDesc:
     stride: Tuple[int, ...]
     stride_order: Tuple[int, ...]
     device: torch.device
+    interpret_uint8_as_fp4x2: bool = False
     ndim: int = field(init=False)
     name: str = ""
 
@@ -156,6 +157,7 @@ class TensorDesc:
             stride=stride,
             stride_order=self._compute_stride_order(shape, stride),
             device=self.device,
+            interpret_uint8_as_fp4x2=self.interpret_uint8_as_fp4x2,
             name=self.name,
         )
 
@@ -571,8 +573,16 @@ class APIBase(ABC):
         """
         if tensor_or_dtype is None:
             return False
-        dtype = tensor_or_dtype.dtype if isinstance(tensor_or_dtype, (torch.Tensor, TensorDesc)) else tensor_or_dtype
-        return (dtype == torch.float4_e2m1fn_x2) or (self._interpret_uint8_as_fp4x2 and dtype == torch.uint8)
+        if isinstance(tensor_or_dtype, TensorDesc):
+            dtype = tensor_or_dtype.dtype
+            interpret_uint8_as_fp4x2 = tensor_or_dtype.interpret_uint8_as_fp4x2
+        elif isinstance(tensor_or_dtype, torch.Tensor):
+            dtype = tensor_or_dtype.dtype
+            interpret_uint8_as_fp4x2 = self._interpret_uint8_as_fp4x2
+        else:
+            dtype = tensor_or_dtype
+            interpret_uint8_as_fp4x2 = self._interpret_uint8_as_fp4x2
+        return (dtype == torch.float4_e2m1fn_x2) or (interpret_uint8_as_fp4x2 and dtype == torch.uint8)
 
     def _is_fp8(self, tensor_or_dtype: torch.Tensor | torch.dtype | TensorDesc) -> bool:
         """Check if tensor or dtype is an FP8 datatype.
@@ -875,12 +885,24 @@ class APIBase(ABC):
             assumed_align=assumed_align,
         )
 
-    def _make_tensor_desc(self, tensor: Optional[torch.Tensor], name: str = "") -> Optional[TensorDesc]:
+    def _make_tensor_desc(
+        self,
+        tensor: Optional[torch.Tensor],
+        name: str = "",
+        interpret_uint8_as_fp4x2: Optional[bool] = None,
+    ) -> Optional[TensorDesc]:
         """Capture logical tensor metadata that is sufficient for validation/compile."""
         if tensor is None:
             return None
-        tensor_shape = self._tensor_shape(tensor, name=name)
-        tensor_stride = self._tensor_stride(tensor, name=name)
+        if interpret_uint8_as_fp4x2 is None:
+            interpret_uint8_as_fp4x2 = self._interpret_uint8_as_fp4x2
+        prev_interpret = self._interpret_uint8_as_fp4x2
+        self._interpret_uint8_as_fp4x2 = interpret_uint8_as_fp4x2
+        try:
+            tensor_shape = self._tensor_shape(tensor, name=name)
+            tensor_stride = self._tensor_stride(tensor, name=name)
+        finally:
+            self._interpret_uint8_as_fp4x2 = prev_interpret
         tensor_stride_order = tuple(i for i, s in sorted(enumerate(tensor_stride), key=lambda x: (x[1], tensor_shape[x[0]])))
         return TensorDesc(
             dtype=tensor.dtype,
@@ -888,6 +910,7 @@ class APIBase(ABC):
             stride=tensor_stride,
             stride_order=tensor_stride_order,
             device=tensor.device,
+            interpret_uint8_as_fp4x2=interpret_uint8_as_fp4x2,
             name=name,
         )
 
@@ -904,6 +927,7 @@ class APIBase(ABC):
             shape=tensor_desc.shape,
             stride=tensor_desc.stride,
             assumed_align=assumed_align,
+            interpret_uint8_as_fp4x2=tensor_desc.interpret_uint8_as_fp4x2,
         )
 
     def _make_fake_cute_tensor(
@@ -912,6 +936,7 @@ class APIBase(ABC):
         shape: Tuple[int, ...],
         stride: Tuple[int, ...],
         assumed_align: int = 16,
+        interpret_uint8_as_fp4x2: Optional[bool] = None,
     ) -> cute.Pointer:
         """Make a fake tensor.
 
@@ -926,8 +951,10 @@ class APIBase(ABC):
         :return: A fake tensor
         :rtype: cute.Pointer
         """
+        if interpret_uint8_as_fp4x2 is None:
+            interpret_uint8_as_fp4x2 = self._interpret_uint8_as_fp4x2
         return cute.runtime.make_fake_tensor(
-            dtype=_convert_to_cutlass_data_type(dtype, interpret_uint8_as_fp4x2=self._interpret_uint8_as_fp4x2),
+            dtype=_convert_to_cutlass_data_type(dtype, interpret_uint8_as_fp4x2=interpret_uint8_as_fp4x2),
             shape=shape,
             stride=stride,
             assumed_align=assumed_align,
@@ -941,6 +968,7 @@ class APIBase(ABC):
         assumed_align: int = 16,
         dynamic_mode: Optional[int] = None,
         divisibility: int = 16,
+        interpret_uint8_as_fp4x2: Optional[bool] = None,
     ) -> cute.Pointer:
         """Make a fake compact tensor.
         :param dtype: The dtype of the tensor
@@ -958,8 +986,10 @@ class APIBase(ABC):
             dynamic_dim = cute.sym_int(divisibility=divisibility)
             shape = shape[:dynamic_mode] + (dynamic_dim,) + shape[dynamic_mode + 1 :]
 
+        if interpret_uint8_as_fp4x2 is None:
+            interpret_uint8_as_fp4x2 = self._interpret_uint8_as_fp4x2
         return cute.runtime.make_fake_compact_tensor(
-            dtype=_convert_to_cutlass_data_type(dtype, interpret_uint8_as_fp4x2=self._interpret_uint8_as_fp4x2),
+            dtype=_convert_to_cutlass_data_type(dtype, interpret_uint8_as_fp4x2=interpret_uint8_as_fp4x2),
             shape=shape,
             stride_order=stride_order,
             assumed_align=assumed_align,

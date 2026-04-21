@@ -1,8 +1,8 @@
 """
-Utilities and parameterization for Grouped GEMM SwiGLU tests.
+Utilities and parameterization for Grouped GEMM SReLU tests.
 Contains test configuration fixtures, tensor creation, and reference implementations.
 
-Reference: continugous_blockscaled_grouped_gemm_swiglu_quant_fusion.py (lines 3518-4825)
+Reference: continugous_blockscaled_grouped_gemm_srelu_quant_fusion.py (lines 3518-4825)
 """
 
 import torch
@@ -33,25 +33,13 @@ GROUPED_GEMM_SWIGLU_FP8_TYPE_MARKS = [
         "ab_dtype",
         [
             torch.float8_e4m3fn,
-            # torch.float8_e5m2,
         ],
     ),
-    pytest.mark.parametrize(
-        "c_dtype",
-        [
-            # torch.float8_e4m3fn,
-            # torch.float8_e5m2,
-            # torch.float16,
-            torch.bfloat16,
-            # torch.float32,
-        ],
-    ),
+    pytest.mark.parametrize("c_dtype", [torch.bfloat16]),
     pytest.mark.parametrize(
         "d_dtype",
         [
             torch.float8_e4m3fn,
-            # torch.float8_e5m2,
-            # torch.bfloat16,
         ],
     ),
 ]
@@ -60,8 +48,7 @@ GROUPED_GEMM_SWIGLU_FP4_TYPE_MARKS = [
     pytest.mark.parametrize(
         "ab_dtype",
         [
-            torch.float4_e2m1fn_x2,
-            # torch.uint8,
+            torch.uint8,
         ],
     ),
     pytest.mark.parametrize(
@@ -81,15 +68,15 @@ GROUPED_GEMM_SWIGLU_FP4_TYPE_MARKS = [
     ),
 ]
 
-GROUPED_GEMM_SWIGLU_PARAM_MARKS_FP8 = (
-    GROUPED_GEMM_SWIGLU_FP8_TYPE_MARKS
-    + GROUPED_GEMM_SWIGLU_COMMON_MARKS
-    + [
-        pytest.mark.parametrize("mma_tiler_mn", [(256, 256)]),
-        pytest.mark.parametrize("sf_vec_size,sf_dtype", [(32, torch.float8_e8m0fnu)]),
-        pytest.mark.parametrize("discrete_col_sfd", [True, False]),
-    ]
-)
+GROUPED_GEMM_SWIGLU_PARAM_MARKS_FP8 = GROUPED_GEMM_SWIGLU_FP8_TYPE_MARKS + [
+    pytest.mark.parametrize("cd_major", ["n"]),
+    pytest.mark.parametrize("acc_dtype", [torch.float32]),
+    pytest.mark.parametrize("mma_tiler_mn", [(256, 256)]),
+    pytest.mark.parametrize("cluster_shape_mn", [(2, 1)]),
+    pytest.mark.parametrize("vector_f32", [False]),
+    pytest.mark.parametrize("sf_vec_size,sf_dtype", [(32, torch.float8_e8m0fnu)]),
+    pytest.mark.parametrize("discrete_col_sfd", [True]),
+]
 
 GROUPED_GEMM_SWIGLU_PARAM_MARKS_FP4 = (
     GROUPED_GEMM_SWIGLU_FP4_TYPE_MARKS
@@ -109,16 +96,6 @@ GROUPED_GEMM_SWIGLU_PARAM_MARKS_FP4 = (
     ]
 )
 
-GROUPED_GEMM_SWIGLU_PARAM_MARKS_BIAS_FP8 = (
-    GROUPED_GEMM_SWIGLU_FP8_TYPE_MARKS
-    + GROUPED_GEMM_SWIGLU_COMMON_MARKS
-    + [
-        pytest.mark.parametrize("mma_tiler_mn", [(128, 256), (256, 256)]),
-        pytest.mark.parametrize("sf_vec_size,sf_dtype", [(32, torch.float8_e8m0fnu)]),
-        pytest.mark.parametrize("discrete_col_sfd", [True, False]),
-    ]
-)
-
 GROUPED_GEMM_SWIGLU_PARAM_MARKS_BIAS_FP4 = (
     GROUPED_GEMM_SWIGLU_FP4_TYPE_MARKS
     + GROUPED_GEMM_SWIGLU_COMMON_MARKS
@@ -132,35 +109,28 @@ GROUPED_GEMM_SWIGLU_PARAM_MARKS_BIAS_FP4 = (
                 (32, torch.float8_e8m0fnu),
             ],
         ),
-        pytest.mark.parametrize("discrete_col_sfd", [True, False]),
+        pytest.mark.parametrize("discrete_col_sfd", [False]),
     ]
 )
 
 
-def with_grouped_gemm_swiglu_params_fp4(func):
-    """Decorator to apply grouped GEMM SwiGLU FP4 test parameters."""
+def with_grouped_gemm_srelu_params_fp4(func):
+    """Decorator to apply grouped GEMM SReLU FP4 test parameters."""
     for mark in reversed(GROUPED_GEMM_SWIGLU_PARAM_MARKS_FP4):
         func = mark(func)
     return func
 
 
-def with_grouped_gemm_swiglu_params_fp8(func):
-    """Decorator to apply grouped GEMM SwiGLU FP8 test parameters."""
+def with_grouped_gemm_srelu_params_fp8(func):
+    """Decorator to apply grouped GEMM SReLU FP8 test parameters."""
     for mark in reversed(GROUPED_GEMM_SWIGLU_PARAM_MARKS_FP8):
         func = mark(func)
     return func
 
 
-def with_grouped_gemm_swiglu_params_bias_fp4(func):
-    """Decorator to apply grouped GEMM SwiGLU dense bias FP4 test parameters."""
+def with_grouped_gemm_srelu_params_bias_fp4(func):
+    """Decorator to apply grouped GEMM SReLU dense bias FP4 test parameters."""
     for mark in reversed(GROUPED_GEMM_SWIGLU_PARAM_MARKS_BIAS_FP4):
-        func = mark(func)
-    return func
-
-
-def with_grouped_gemm_swiglu_params_bias_fp8(func):
-    """Decorator to apply grouped GEMM SwiGLU dense bias FP8 test parameters."""
-    for mark in reversed(GROUPED_GEMM_SWIGLU_PARAM_MARKS_BIAS_FP8):
         func = mark(func)
     return func
 
@@ -170,7 +140,7 @@ def with_grouped_gemm_swiglu_params_bias_fp8(func):
 # =============================================================================
 
 
-def grouped_gemm_swiglu_init(
+def grouped_gemm_srelu_init(
     request,
     ab_dtype: torch.dtype,
     c_dtype: torch.dtype,
@@ -186,7 +156,7 @@ def grouped_gemm_swiglu_init(
     b_major: str = "k",
     enable_bias: bool = False,
 ) -> Dict[str, Any]:
-    """Initialize configuration for Grouped GEMM SwiGLU tests.
+    """Initialize configuration for Grouped GEMM SReLU tests.
 
     :param request: pytest request object
     :param ab_dtype: Data type for A and B tensors
@@ -332,7 +302,7 @@ def allocate_grouped_gemm_input_tensors(
     enable_bias: bool = False,
     device: str = "cuda",
 ) -> Dict[str, Any]:
-    """Allocate input tensors for grouped GEMM SwiGLU.
+    """Allocate input tensors for grouped GEMM SReLU.
 
     :param permuted_m: Optional padded M dimension for cuda_graph support. If provided,
                      A matrix, D matrix, and scale factor A will be padded to this size.
@@ -371,7 +341,7 @@ def allocate_grouped_gemm_input_tensors(
         a_tensor = a_tensor.view(torch.uint8)
         b_tensor = b_tensor.view(torch.uint8)
     else:
-        # Note: b tensor can be n-major for mxfp8 dSwiglu; otherwise, a and b tensors are always k-major
+        # Note: b tensor can be n-major for mxfp8 dSrelu; otherwise, a and b tensors are always k-major
         a_ref, a_tensor = create_and_permute_tensor(1, tensor_m, k, False, ab_dtype)
         b_ref, b_tensor = create_and_permute_tensor(l, n, k, b_major == "n", ab_dtype)
 
@@ -379,7 +349,7 @@ def allocate_grouped_gemm_input_tensors(
     sfb_ref, sfb_tensor = create_scale_factor_tensor(l, n, k, sf_vec_size, sf_dtype)
 
     alpha_tensor = torch.randint(-2, 2, (l,), dtype=torch.float32, device=device).float()
-    beta_tensor = torch.randint(-2, 2, (l,), dtype=torch.float32, device=device).float()  # dSwiglu only
+    beta_tensor = torch.randint(-2, 2, (l,), dtype=torch.float32, device=device).float()  # dSrelu only
 
     prob_tensor = torch.randint(-2, 2, (tensor_m, 1, 1), dtype=torch.float32, device=device).float()
 
@@ -428,11 +398,11 @@ def allocate_grouped_gemm_output_tensors(
     sf_vec_size: int = 16,
     device: str = "cuda",
 ) -> Dict[str, Any]:
-    """Allocate output tensors for grouped GEMM SwiGLU.
+    """Allocate output tensors for grouped GEMM SReLU.
 
     :return: Dictionary containing all output tensors
     """
-    n_out = n // 2  # After SwiGLU
+    n_out = n  # After SReLU
 
     _, c_tensor = create_and_permute_tensor(1, tensor_m, n, cd_major == "m", c_dtype)
     _, d_tensor = create_and_permute_tensor(1, tensor_m, n_out, cd_major == "m", d_dtype)
@@ -469,7 +439,7 @@ def allocate_grouped_gemm_output_tensors(
 # =============================================================================
 
 
-def run_grouped_gemm_swiglu_ref(
+def run_grouped_gemm_srelu_ref(
     a_ref: torch.Tensor,
     b_ref: torch.Tensor,
     sfa_ref: torch.Tensor,
@@ -487,9 +457,9 @@ def run_grouped_gemm_swiglu_ref(
     sf_vec_size: int = 16,
     sf_dtype: torch.dtype = torch.float8_e8m0fnu,
 ) -> torch.Tensor:
-    """Run reference implementation for grouped GEMM SwiGLU.
+    """Run reference implementation for grouped GEMM SReLU.
 
-    Matches the reference checking in continugous_blockscaled_grouped_gemm_swiglu_quant_fusion.py
+    Matches the reference checking in continugous_blockscaled_grouped_gemm_srelu_quant_fusion.py
     (lines 4113-4179)
 
     :param a_ref: A tensor (tensor_m, k, 1) in float32
@@ -510,7 +480,7 @@ def run_grouped_gemm_swiglu_ref(
     :return: Reference output tensor (valid_m, n_out, 1)
     """
     n, k, l = b_ref.shape
-    n_out = n // 2
+    n_out = n
     ref_tensors = {}
 
     # Step 1: Compute GEMM per group with scale factors
@@ -540,35 +510,17 @@ def run_grouped_gemm_swiglu_ref(
 
     ref_tensors["c_ref"] = ref.clone()
 
-    # Step 3: Apply SwiGLU with interleaved block layout
-    group = 32
-    assert n % group == 0, "N must be divisible by 32 for GLU block grouping"
-    num_blocks = n // group
-    assert num_blocks % 2 == 0, "Number of 32-col blocks must be even (pairs of input/gate)"
-
-    cols = torch.arange(n, device=ref.device, dtype=torch.long)
-    block_cols = cols.view(num_blocks, group)
-    # ref1: blocks 1,3,5,7 (1-based) => indices 0,2,4,6 (0-based)
-    # ref2: blocks 2,4,6,8 (1-based) => indices 1,3,5,7 (0-based)
-    gate_idx = block_cols[0::2].reshape(-1)
-    up_idx = block_cols[1::2].reshape(-1)
-    ref_gate = ref.index_select(1, gate_idx)
-    ref_up = ref.index_select(1, up_idx)
-
-    # SwiGLU: up * (gate * sigmoid(gate))
-    ref_gate = ref_gate * torch.sigmoid(ref_gate)
-    ref_after_swiglu = ref_up * ref_gate
-
-    # Step 4: Apply prob
-    ref_after_swiglu = ref_after_swiglu * prob_tensor.expand(-1, n_out, -1)
-    ref_tensors["d_ref"] = ref_after_swiglu.clone()
+    # Step 3: Apply squared-ReLU and probability gating elementwise
+    ref_after_srelu = torch.relu(ref) ** 2
+    ref_after_srelu = ref_after_srelu * prob_tensor.expand(-1, n_out, -1)
+    ref_tensors["d_ref"] = ref_after_srelu.clone()
 
     if generate_amax:
-        amax_ref = torch.empty((l,), dtype=torch.float32, device=a_ref.device)
+        amax_ref = torch.empty((l, 1), dtype=torch.float32, device=a_ref.device)
         start = 0
         for i, group_m in enumerate(aligned_group_m_list):
             end = start + group_m
-            amax_ref[i] = compute_reference_amax(ref_after_swiglu[start:end, :, 0].clone())
+            amax_ref[i, 0] = compute_reference_amax(ref_after_srelu[start:end, :, 0].clone())
             start = end
         ref_tensors["amax_ref"] = amax_ref
 
@@ -585,20 +537,20 @@ def run_grouped_gemm_swiglu_ref(
         n_out_aligned = ceil_div(n_out, 128) * 128
         if n_out_aligned != n_out:
             zeros = torch.zeros(
-                ref_after_swiglu.shape[0],
+                ref_after_srelu.shape[0],
                 n_out_aligned - n_out,
-                ref_after_swiglu.shape[2],
-                dtype=ref_after_swiglu.dtype,
-                device=ref_after_swiglu.device,
+                ref_after_srelu.shape[2],
+                dtype=ref_after_srelu.dtype,
+                device=ref_after_srelu.device,
             )
-            ref_after_swiglu_sf = torch.cat([ref_after_swiglu, zeros], dim=1)
+            ref_after_srelu_sf = torch.cat([ref_after_srelu, zeros], dim=1)
         else:
-            ref_after_swiglu_sf = ref_after_swiglu
+            ref_after_srelu_sf = ref_after_srelu
 
         # 1. Compute reference SFDRow (m, sfn, l) in fp32
         sfn = ceil_div(n_out_aligned, sf_vec_size)
         # Resahpe ref to (l, m, sfn, sf_vec_size)
-        ref_for_sf = ref_after_swiglu_sf.permute(2, 0, 1).contiguous()  # (l, m, n)
+        ref_for_sf = ref_after_srelu_sf.permute(2, 0, 1).contiguous()  # (l, m, n)
         # l is involved in valid_m
         ref_for_sf = ref_for_sf.view(1, valid_m, sfn, sf_vec_size)
         # Take abs max over sf_vec_size dimension
@@ -609,8 +561,7 @@ def run_grouped_gemm_swiglu_ref(
         ref_sfd_row_f32 = ref_sfd_row_f32.permute(1, 2, 0)
 
         # Convert fp32 -> f8 -> fp32 for ref_sfd_row_f32
-        valid_m_aligned = ceil_div(valid_m, 128) * 128
-        ref_sfd_row_f8_torch = torch.empty(*(1, valid_m_aligned, sfn), dtype=torch.uint8, device="cuda").permute(1, 2, 0)
+        ref_sfd_row_f8_torch = torch.empty(*(1, valid_m, sfn), dtype=torch.uint8, device="cuda").permute(1, 2, 0)
         ref_sfd_row_f8 = from_dlpack(ref_sfd_row_f8_torch, assumed_align=16).mark_layout_dynamic(leading_dim=1)
         ref_sfd_row_f8.element_type = _convert_to_cutlass_data_type(sf_dtype)
         ref_sfd_row_f32_device = ref_sfd_row_f32.cuda()
@@ -620,9 +571,9 @@ def run_grouped_gemm_swiglu_ref(
         ref_sfd_row_f32 = ref_sfd_row_f32_device.cpu()
 
         # 2. Convert ref_sfd_row_f32 to scale factor layout and compare with kernel sfd tensor
-        ref_sfd_row_f32_cute_torch_tensor_cpu, _ = create_sf_layout_tensor(1, valid_m_aligned, n_out, sf_vec_size)
+        ref_sfd_row_f32_cute_torch_tensor_cpu, _ = create_sf_layout_tensor(1, valid_m, n_out, sf_vec_size)
 
-        # convert ref_after_swiglu f32 tensor to cute f32 tensor
+        # convert ref_after_srelu f32 tensor to cute f32 tensor
         cvt_sf_MKL_to_M32x4xrm_K4xrk_L(
             from_dlpack(ref_sfd_row_f32),
             from_dlpack(ref_sfd_row_f32_cute_torch_tensor_cpu),
@@ -642,73 +593,55 @@ def run_grouped_gemm_swiglu_ref(
         ref_sfd_row_rcp_expanded = ref_sfd_row_rcp_expanded[:, :n_out, :]
 
         # Apply scale to reference output: ref = ref * ref_sfd_row_rcp
-        ref_after_row_quant = torch.einsum("mnl,mnl->mnl", ref_after_swiglu, ref_sfd_row_rcp_expanded)
-        ref_tensors["d_ref"] = ref_after_row_quant.clone()
+        ref_after_row_quant = torch.einsum("mnl,mnl->mnl", ref_after_srelu, ref_sfd_row_rcp_expanded)
+        ref_tensors["d_ref"] = ref_after_row_quant.cuda().to(d_dtype).to(torch.float32).clone()
 
-        # Col Quantized SFD tensor
-        # 1. Compute reference SFDCol (m, sfn, l) in fp32
-        ref_after_swiglu = ref_after_swiglu.permute(2, 1, 0).contiguous().permute(1, 2, 0)
-        ref_after_swiglu_sf = ref_after_swiglu_sf.permute(2, 1, 0).contiguous().permute(1, 2, 0)
-        n_after_swiglu = ref_after_swiglu.shape[1]
-        sfn = ceil_div(n_after_swiglu, sf_vec_size)
-        valid_m = ref_after_swiglu.shape[0]
-        valid_m_aligned = ceil_div(valid_m, 128) * 128
-        # Reshape ref to (l, m, sfn, sf_vec_size)
-        ref_for_sf = ref_after_swiglu_sf.permute(2, 0, 1).contiguous()  # (l, m, n)
-        # l is involved in valid_m
-        ref_for_sf = ref_for_sf.view(1, valid_m_aligned, sfn, sf_vec_size)
-        # Take abs max over sf_vec_size dimension
-        ref_for_sf, _ = torch.abs(ref_for_sf).max(dim=3)  # (l, m, sfn)
-        # Multiply by norm_const and rcp_limits
-        ref_sfd_row_f32 = ref_for_sf * norm_const * get_dtype_rcp_limits(d_dtype)
-        # Permute to (m, sfn, l)
-        ref_sfd_row_f32 = ref_sfd_row_f32.permute(1, 2, 0)
+        ref_d_col = ref_after_srelu.permute(2, 1, 0).contiguous().permute(1, 2, 0)
+        ref_col_sf = ref_after_srelu_sf.permute(2, 1, 0).contiguous().permute(1, 2, 0)
+        n_col = ref_d_col.shape[1]
+        sfn_col = ceil_div(n_col, sf_vec_size)
+        valid_m_col = ref_d_col.shape[0]
+        valid_m_col_aligned = ceil_div(valid_m_col, 128) * 128
+        ref_for_sf_col = ref_col_sf.permute(2, 0, 1).contiguous()
+        ref_for_sf_col = ref_for_sf_col.view(1, valid_m_col_aligned, sfn_col, sf_vec_size)
+        ref_for_sf_col, _ = torch.abs(ref_for_sf_col).max(dim=3)
+        ref_sfd_col_f32 = ref_for_sf_col * norm_const * get_dtype_rcp_limits(d_dtype)
+        ref_sfd_col_f32 = ref_sfd_col_f32.permute(1, 2, 0)
 
-        # Convert fp32 -> f8 -> fp32 for ref_sfd_row_f32
-        ref_sfd_row_f8_torch = torch.empty(*(1, valid_m_aligned, sfn), dtype=torch.uint8, device="cuda").permute(1, 2, 0)
-        ref_sfd_row_f8 = from_dlpack(ref_sfd_row_f8_torch, assumed_align=16).mark_layout_dynamic(leading_dim=1)
-        ref_sfd_row_f8.element_type = _convert_to_cutlass_data_type(sf_dtype)
-        ref_sfd_row_f32_device = ref_sfd_row_f32.cuda()
-        ref_sfd_row_f32_tensor = from_dlpack(ref_sfd_row_f32_device, assumed_align=16).mark_layout_dynamic(leading_dim=1)
-        cute.testing.convert(ref_sfd_row_f32_tensor, ref_sfd_row_f8)
-        cute.testing.convert(ref_sfd_row_f8, ref_sfd_row_f32_tensor)
-        ref_sfd_row_f32 = ref_sfd_row_f32_device.cpu()
+        ref_sfd_col_f8_torch = torch.empty(*(1, valid_m_col_aligned, sfn_col), dtype=torch.uint8, device="cuda").permute(1, 2, 0)
+        ref_sfd_col_f8 = from_dlpack(ref_sfd_col_f8_torch, assumed_align=16).mark_layout_dynamic(leading_dim=1)
+        ref_sfd_col_f8.element_type = _convert_to_cutlass_data_type(sf_dtype)
+        ref_sfd_col_f32_device = ref_sfd_col_f32.cuda()
+        ref_sfd_col_f32_tensor = from_dlpack(ref_sfd_col_f32_device, assumed_align=16).mark_layout_dynamic(leading_dim=1)
+        cute.testing.convert(ref_sfd_col_f32_tensor, ref_sfd_col_f8)
+        cute.testing.convert(ref_sfd_col_f8, ref_sfd_col_f32_tensor)
+        ref_sfd_col_f32 = ref_sfd_col_f32_device.cpu()
 
-        # 2. Convert ref_sfd_row_f32 to scale factor layout and compare with kernel sfd tensor
-        ref_sfd_row_f32_cute_torch_tensor_cpu, _ = create_sf_layout_tensor(1, valid_m_aligned, n_after_swiglu, sf_vec_size)
-
-        # convert ref_after_swiglu f32 tensor to cute f32 tensor
+        ref_sfd_col_f32_cute_torch_tensor_cpu, _ = create_sf_layout_tensor(1, valid_m_col_aligned, n_col, sf_vec_size)
         cvt_sf_MKL_to_M32x4xrm_K4xrk_L(
-            from_dlpack(ref_sfd_row_f32),
-            from_dlpack(ref_sfd_row_f32_cute_torch_tensor_cpu),
+            from_dlpack(ref_sfd_col_f32),
+            from_dlpack(ref_sfd_col_f32_cute_torch_tensor_cpu),
         )
-        ref_sfd_row_f32 = ref_sfd_row_f32.cuda()
-        ref_tensors["sfd_col_ref"] = ref_sfd_row_f32_cute_torch_tensor_cpu.clone()
+        ref_sfd_col_f32 = ref_sfd_col_f32.cuda()
+        ref_tensors["sfd_col_ref"] = ref_sfd_col_f32_cute_torch_tensor_cpu.clone()
 
-        # 3. Quantized output with scale factor
-        # Compute reciprocal of ref_sfd_row_f32 and multiply by norm_const
-        ref_sfd_row_rcp = norm_const * ref_sfd_row_f32.reciprocal()
-        ref_sfd_row_rcp = torch.clamp(ref_sfd_row_rcp, max=3.40282346638528859812e38)
-        # Expand the sfn dimension by repeating each value sf_vec_size times
-        # ref_sfd_row_rcp: (m, sfn, l) -> (m, sfn, sf_vec_size, l) -> (m, n, l)
-        ref_sfd_row_rcp_expanded = ref_sfd_row_rcp[:valid_m, :, :].unsqueeze(2).expand(valid_m, sfn, sf_vec_size, 1)
-        ref_sfd_row_rcp_expanded = ref_sfd_row_rcp_expanded.reshape(valid_m, sfn * sf_vec_size, 1)
-        # Trim to exact n dimension if needed
-        ref_sfd_row_rcp_expanded = ref_sfd_row_rcp_expanded[:, :n_after_swiglu, :]
+        ref_sfd_col_rcp = norm_const * ref_sfd_col_f32.reciprocal()
+        ref_sfd_col_rcp = torch.clamp(ref_sfd_col_rcp, max=3.40282346638528859812e38)
+        ref_sfd_col_rcp_expanded = ref_sfd_col_rcp[:valid_m_col, :, :].unsqueeze(2).expand(valid_m_col, sfn_col, sf_vec_size, 1)
+        ref_sfd_col_rcp_expanded = ref_sfd_col_rcp_expanded.reshape(valid_m_col, sfn_col * sf_vec_size, 1)
+        ref_sfd_col_rcp_expanded = ref_sfd_col_rcp_expanded[:, :n_col, :]
 
-        # Apply scale to reference output: ref = ref * ref_sfd_row_rcp
-        ref_after_row_quant = torch.einsum("mnl,mnl->mnl", ref_after_swiglu, ref_sfd_row_rcp_expanded)
+        ref_after_col_quant = torch.einsum("mnl,mnl->mnl", ref_d_col, ref_sfd_col_rcp_expanded)
 
-        # Convert ref_after_row_quant : f32 -> f8 -> f32
-        ref_ = torch.empty(*(1, valid_m, n_after_swiglu), dtype=torch.uint8, device="cuda").permute(1, 2, 0)
-        ref_ = from_dlpack(ref_, assumed_align=16).mark_layout_dynamic(leading_dim=1)
-        ref_.element_type = _convert_to_cutlass_data_type(d_dtype)
-        ref_device = ref_after_row_quant.cuda()
-        ref_tensor = from_dlpack(ref_device, assumed_align=16).mark_layout_dynamic(leading_dim=1)
-        cute.testing.convert(ref_tensor, ref_)
-        cute.testing.convert(ref_, ref_tensor)
+        ref_col_f8_torch = torch.empty(*(1, valid_m_col, n_col), dtype=torch.uint8, device="cuda").permute(1, 2, 0)
+        ref_col_f8 = from_dlpack(ref_col_f8_torch, assumed_align=16).mark_layout_dynamic(leading_dim=1)
+        ref_col_f8.element_type = _convert_to_cutlass_data_type(d_dtype)
+        ref_col_device = ref_after_col_quant.cuda()
+        ref_col_tensor = from_dlpack(ref_col_device, assumed_align=16).mark_layout_dynamic(leading_dim=1)
+        cute.testing.convert(ref_col_tensor, ref_col_f8)
+        cute.testing.convert(ref_col_f8, ref_col_tensor)
 
-        ref_tensors["d_col_ref"] = ref_device.clone().permute(1, 0, 2)
+        ref_tensors["d_col_ref"] = ref_col_device.clone().permute(1, 0, 2)
 
     return ref_tensors
 
@@ -718,7 +651,7 @@ def run_grouped_gemm_swiglu_ref(
 # =============================================================================
 
 
-def check_ref_grouped_gemm_swiglu(
+def check_ref_grouped_gemm_srelu(
     inputs: Dict[str, Any],
     outputs: Dict[str, Any],
     cfg: Dict[str, Any],
@@ -726,32 +659,22 @@ def check_ref_grouped_gemm_swiglu(
     rtol: float = 1e-2,
     skip_ref: bool = False,
 ) -> None:
-    """Check grouped GEMM SwiGLU result against reference.
-
-    :param inputs: Dictionary of input tensors (from allocate_grouped_gemm_input_tensors)
-    :param outputs: Dictionary of output tensors (from allocate_grouped_gemm_output_tensors)
-    :param cfg: Configuration dictionary (from grouped_gemm_swiglu_init)
-    :param atol: Absolute tolerance
-    :param rtol: Relative tolerance
-    :param skip_ref: Skip reference check if True
-    """
     if skip_ref:
-        print("Skipping reference check")
         return
 
-    # Run reference
-    ref_tensors = run_grouped_gemm_swiglu_ref(
-        a_ref=inputs["a_ref"].to(torch.float32),
-        b_ref=inputs["b_ref"].to(torch.float32),
-        sfa_ref=inputs["sfa_ref"].to(torch.float32),
-        sfb_ref=inputs["sfb_ref"].to(torch.float32),
+    torch.cuda.synchronize()
+    ref_tensors = run_grouped_gemm_srelu_ref(
+        a_ref=inputs["a_ref"],
+        b_ref=inputs["b_ref"],
+        sfa_ref=inputs["sfa_ref"],
+        sfb_ref=inputs["sfb_ref"],
         alpha_tensor=inputs["alpha_tensor"],
         prob_tensor=inputs["prob_tensor"],
         aligned_group_m_list=inputs["aligned_group_m_list"],
         valid_m=inputs["valid_m"],
         bias_tensor=inputs.get("bias_tensor"),
-        generate_amax=(outputs.get("amax_tensor") is not None),
-        generate_sfd=(outputs.get("sfd_row_tensor") is not None),
+        generate_amax=outputs.get("amax_tensor") is not None,
+        generate_sfd=outputs.get("sfd_row_tensor") is not None and outputs.get("sfd_col_tensor") is not None,
         norm_const_tensor=inputs.get("norm_const_tensor"),
         c_dtype=cfg["c_dtype"],
         d_dtype=cfg["d_dtype"],
@@ -759,118 +682,56 @@ def check_ref_grouped_gemm_swiglu(
         sf_dtype=cfg["sf_dtype"],
     )
 
-    torch.cuda.synchronize()
+    torch.testing.assert_close(outputs["c_tensor"].float(), ref_tensors["c_ref"].float(), atol=atol, rtol=rtol)
+    torch.testing.assert_close(outputs["d_tensor"].float(), ref_tensors["d_ref"].float(), atol=atol, rtol=rtol)
 
-    c_gpu = outputs["c_tensor"][: inputs["valid_m"]]
-    c_ref = ref_tensors["c_ref"]
-    torch.testing.assert_close(
-        c_gpu.cpu().float(),
-        c_ref.cpu().to(cfg["c_dtype"]).to(torch.float32),
-        atol=atol,
-        rtol=rtol,
-    )
+    if "d_col_ref" in ref_tensors:
+        torch.testing.assert_close(outputs["d_col_tensor"].float(), ref_tensors["d_col_ref"].float(), atol=atol, rtol=rtol)
 
-    if cfg["d_dtype"] in [torch.float32, torch.float16, torch.bfloat16]:
-        if ref_tensors.get("amax_ref") is not None:
-            amax_gpu = outputs["amax_tensor"]
-            amax_ref = ref_tensors["amax_ref"]
-            torch.testing.assert_close(
-                amax_gpu.cpu().squeeze(),
-                amax_ref.cpu(),
-                atol=atol,
-                rtol=rtol,
-            )
+    if outputs.get("amax_tensor") is not None and "amax_ref" in ref_tensors:
+        torch.testing.assert_close(outputs["amax_tensor"].float(), ref_tensors["amax_ref"].float(), atol=atol, rtol=rtol)
 
-        d_gpu = outputs["d_tensor"][: inputs["valid_m"]]
-        d_ref = ref_tensors["d_ref"]
+    if outputs.get("sfd_row_tensor") is not None and "sfd_row_ref" in ref_tensors:
         torch.testing.assert_close(
-            d_gpu.cpu().float(),
-            d_ref.cpu().to(cfg["d_dtype"]).to(torch.float32),
+            outputs["sfd_row_tensor"].float(),
+            ref_tensors["sfd_row_ref"].to(outputs["sfd_row_tensor"].device).float(),
             atol=atol,
             rtol=rtol,
         )
-    elif cfg["d_dtype"] in [torch.float8_e4m3fn, torch.float8_e5m2]:
-        if ref_tensors.get("sfd_row_ref") is not None:  # generate_sfd
-            # sfd_row_ref
-            sfd_row_gpu = outputs["sfd_row_tensor"]
-            sfd_row_ref = ref_tensors["sfd_row_ref"]
-            torch.testing.assert_close(
-                sfd_row_gpu.cpu().float(),
-                sfd_row_ref.cpu().to(torch.float32),
-                atol=atol,
-                rtol=rtol,
-            )
 
-            # d_ref (row)
-            d_gpu = outputs["d_tensor"]
-            d_ref = ref_tensors["d_ref"]
-            torch.testing.assert_close(
-                d_gpu.cpu().float(),
-                d_ref.to(cfg["d_dtype"]).to(torch.float32).cpu(),
-                atol=atol,
-                rtol=rtol,
-            )
+    if outputs.get("sfd_col_tensor") is not None and "sfd_col_ref" in ref_tensors:
+        sfd_col_tensor = outputs["sfd_col_tensor"].float()
+        sfd_col_ref = ref_tensors["sfd_col_ref"].to(outputs["sfd_col_tensor"].device).float()
+        if cfg.get("discrete_col_sfd", False):
+            # Mirror the original standalone discrete-col verification, which
+            # remaps packed tiles rather than comparing the whole buffer directly.
+            group_n_tile_list = [group // 128 for group in inputs["aligned_group_m_list"]]
+            m_tile = sfd_col_ref.shape[2]
+            res_real_idx = 0
+            cumsum_n = 0
+            total_n = sum(group_n_tile_list)
 
-            # sfd_col
-            if cfg["discrete_col_sfd"]:
-                # discrete col sfd
-                group_m_list = inputs["aligned_group_m_list"]
-                group_n_tile_list = [group // 128 for group in group_m_list]
-                m_tile = ref_tensors["sfd_col_ref"].shape[2]
+            for n_tile in group_n_tile_list:
+                for m_idx in range(m_tile):
+                    for n_idx in range(n_tile):
+                        res_real_m_idx = res_real_idx // total_n
+                        res_real_n_idx = res_real_idx % total_n
+                        ref_real_n_idx = n_idx + cumsum_n
 
-                sfd_col_torch_gpu_f8 = outputs["sfd_col_tensor"].cpu().to(torch.float32)
-                sfd_col_ref_f32 = ref_tensors["sfd_col_ref"].cpu().to(torch.float32)
-
-                res_real_idx = 0
-                cumsum_n = 0
-                total_n = sum(group_n_tile_list)
-                for n_tile in group_n_tile_list:
-                    for m_idx in range(m_tile):
-                        for n_idx in range(n_tile):
-                            res_real_m_idx = res_real_idx // total_n
-                            res_real_n_idx = res_real_idx % total_n
-
-                            ref_real_n_idx = n_idx + cumsum_n
-                            ref_slice = sfd_col_ref_f32[:, :, m_idx, :, ref_real_n_idx, :]
-                            res_slice = sfd_col_torch_gpu_f8[:, :, res_real_m_idx, :, res_real_n_idx, :]
-                            torch.testing.assert_close(
-                                ref_slice,
-                                res_slice,
-                                atol=atol,
-                                rtol=rtol,
-                            )
-                            res_real_idx += 1
-                    cumsum_n += n_tile
-            else:
-                # contiguous col sfd
-                sfd_col_gpu = outputs["sfd_col_tensor"]
-                sfd_col_ref = ref_tensors["sfd_col_ref"]
-                torch.testing.assert_close(
-                    sfd_col_gpu.cpu().float(),
-                    sfd_col_ref.cpu().to(torch.float32),
-                    atol=atol,
-                    rtol=rtol,
-                )
-
-            # d_col_ref
-            d_col_gpu = outputs["d_col_tensor"]
-            d_col_ref = ref_tensors["d_col_ref"]
-            torch.testing.assert_close(
-                d_col_gpu.cpu().float(),
-                d_col_ref.to(cfg["d_dtype"]).to(torch.float32).cpu(),
-                atol=atol,
-                rtol=rtol,
-            )
+                        ref_slice = sfd_col_ref[:, :, m_idx, :, ref_real_n_idx, :]
+                        res_slice = sfd_col_tensor[:, :, res_real_m_idx, :, res_real_n_idx, :]
+                        torch.testing.assert_close(
+                            res_slice,
+                            ref_slice,
+                            atol=atol,
+                            rtol=rtol,
+                        )
+                        res_real_idx += 1
+                cumsum_n += n_tile
         else:
-            # Note: This is outside support surface
-            d_gpu = outputs["d_tensor"][: inputs["valid_m"]]
-            d_ref = ref_tensors["d_ref"][: inputs["valid_m"]]
             torch.testing.assert_close(
-                d_gpu.cpu().float(),
-                d_ref.cpu().to(cfg["d_dtype"]).to(torch.float32),
+                sfd_col_tensor,
+                sfd_col_ref,
                 atol=atol,
                 rtol=rtol,
             )
-
-    else:
-        raise NotImplementedError(f"Unsupported dtype: {cfg['d_dtype']}")
