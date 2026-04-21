@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 from collections import namedtuple
 import inspect
 from functools import lru_cache
+import math
 import random
 import string
 from tensor_ir_utils import CompilerWithKernelCacheSingleton
@@ -1774,19 +1775,50 @@ class test_tensor_ir:
 
         # For scaled matmul, we need to rewrite the tensor descriptor stride for the scaling factors to represent the
         # 128x4 interleave layout that meets the tensor-core instruction requirement.
+        # Temporary limitation: this rewrite path only supports FP8 tensors with block_size == 32.
+        # TODO: https://jirasw.nvidia.com/browse/CL-20137
+        # Support the fp4 cases for pycudnnTest.py
         if op_name == "scaled_matmul":
             sfA_node, sfB_node = node.producer_nodes[1], node.producer_nodes[3]
+            A_node = node.producer_nodes[0]
+            B_node = node.producer_nodes[2]
 
             sfA_shape, sfA_stride = sfA_node.output[0].dim, sfA_node.output[0].stride
             sfB_shape, sfB_stride = sfB_node.output[0].dim, sfB_node.output[0].stride
+            A_shape = A_node.output[0].dim
+            B_shape = B_node.output[0].dim
+
+            fp8_types = (DataType.FP8_E4M3, DataType.FP8_E5M2, DataType.FP8_E8M0)
+            A_dtype = A_node.output[0].data_type
+            B_dtype = B_node.output[0].data_type
+            sfA_dtype = sfA_node.output[0].data_type
+            sfB_dtype = sfB_node.output[0].data_type
+
+            # Guard unsupported dtype combinations until non-FP8 lowering is added.
+            if A_dtype not in fp8_types or B_dtype not in fp8_types or sfA_dtype not in fp8_types or sfB_dtype not in fp8_types:
+                raise ValueError("scaled_matmul SF stride rewrite currently supports FP8-only tensors.")
+
+            # Validate logical K-to-scale_K mapping from both A and B paths.
+            if A_shape[2] % sfA_shape[2] != 0 or B_shape[1] % sfB_shape[1] != 0:
+                raise ValueError("scaled_matmul requires K dimensions to be divisible by scale_K.")
+
+            block_size = A_shape[2] // sfA_shape[2]
+            block_size_b = B_shape[1] // sfB_shape[1]
+            if block_size != block_size_b:
+                raise ValueError(f"scaled_matmul expects consistent block_size from A/B, got {block_size} and {block_size_b}.")
+            if block_size != 32:
+                raise ValueError(f"scaled_matmul SF stride rewrite currently supports block_size == 32, got {block_size}.")
 
             # Rewrite the M/N stride of SF tensor descriptors to:
-            #   (elements per 128x4_interleave_block) * (number of 128x4_interleave_blocks)
-            #   i.e.,                       (128 * 4) * (shape_K / tile_size_K)
+            #   (elements per 128x4 interleave block) * (number of K-blocks)
+            # where:
+            #   shape_K = scale_dim * block_size (each scale value covers block_size elements in K)
+            #   number of K-blocks = ceil(shape_K / 128)
+            # This stride depends on SF logical shape, not tile_size_K.
             self.node_overwrite_stride_func_map[sfA_node] = (
-                lambda tile_size: sfA_stride[:1] + [128 * 4 * ((sfA_shape[2] * 32) // tile_size[2])] + sfA_stride[2:]
+                lambda _tile_size: sfA_stride[:1] + [128 * 4 * math.ceil((sfA_shape[2] * block_size) / 128)] + sfA_stride[2:]
             )
-            self.node_overwrite_stride_func_map[sfB_node] = lambda tile_size: sfB_stride[:2] + [128 * 4 * ((sfB_shape[1] * 32) // tile_size[2])]
+            self.node_overwrite_stride_func_map[sfB_node] = lambda _tile_size: sfB_stride[:2] + [128 * 4 * math.ceil((sfB_shape[1] * block_size) / 128)]
 
         # Create and run the node
         ir_node = node_class(node, node_map, ip, self)
