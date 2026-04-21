@@ -420,8 +420,8 @@ TEST_CASE("Blackwell Block Scale Matmul Quantize", "[matmul][graph][FP4]") {
     }
 
     auto test_params = GENERATE(TestParams(1,
-                                           256,
-                                           256,
+                                           137,
+                                           272,
                                            256,
                                            16,
                                            cudnn_frontend::DataType_t::FP4_E2M1,
@@ -523,6 +523,8 @@ TEST_CASE("Blackwell Block Scale Matmul Quantize", "[matmul][graph][FP4]") {
 
     tensor_d->set_output(true).set_data_type(datatype_d);
     block_scale->set_output(true)
+        .set_dim({b, block_scale_dim_out_m, block_scale_dim_out_n})
+        .set_stride({block_scale_dim_out_m * block_scale_dim_out_n, block_scale_dim_out_n, 1})
         .set_data_type(datatype_block_scale)
         .set_reordering_type(cudnn_frontend::TensorReordering_t::F8_128x4);
 
