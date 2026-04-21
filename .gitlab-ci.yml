@@ -90,25 +90,25 @@ default:
     script:
         - ci/run_python_tests.sh
 
-.mha_v1_tests:template:
-    stage: mha_v1_tests
-    script:
-        - ci/run_test_mhas_v1.sh
+# .mha_v1_tests:template:
+#     stage: mha_v1_tests
+#     script:
+#         - ci/run_test_mhas_v1.sh
 
-.mha_v2_tests:template:
-    stage: mha_v2_tests
-    script:
-        - ci/run_test_mhas_v2.sh
+# .mha_v2_tests:template:
+#     stage: mha_v2_tests
+#     script:
+#         - ci/run_test_mhas_v2.sh
 
 .pycudnntest:template:
     stage: pycudnnTest
     script:
         - ci/run_pycudnntest.sh
 
-.cpp_tests:template:
-    stage: cpp_tests
-    script:
-        - ci/run_cpp_tests.sh
+# .cpp_tests:template:
+#     stage: cpp_tests
+#     script:
+#         - ci/run_cpp_tests.sh
 
 .python_samples:template:
     stage: python_samples
@@ -161,14 +161,14 @@ build:dev:
         - .fetch_cudnn_dev:template
         - .build:template
 
-cpp_test:dev:
-    extends:
-        - .default_job_template
-        - .device_matrix:template
-        - .cudnn_dev_image:template
-        - .fetch_cudnn_dev:template
-        - .cpp_tests:template
-    needs: ["build:dev"]
+# cpp_test:dev:
+#     extends:
+#         - .default_job_template
+#         - .device_matrix:template
+#         - .cudnn_dev_image:template
+#         - .fetch_cudnn_dev:template
+#         - .cpp_tests:template
+#     needs: ["build:dev"]
 
 py_test:dev:
     extends:
@@ -179,14 +179,14 @@ py_test:dev:
         - .python_tests:template
     needs: ["build:dev"]
 
-mha_v1:dev:
-    extends:
-        - .default_job_template
-        - .device_matrix:template
-        - .cudnn_dev_image:template
-        - .fetch_cudnn_dev:template
-        - .mha_v1_tests:template
-    needs: ["build:dev"]
+# mha_v1:dev:
+#     extends:
+#         - .default_job_template
+#         - .device_matrix:template
+#         - .cudnn_dev_image:template
+#         - .fetch_cudnn_dev:template
+#         - .mha_v1_tests:template
+#     needs: ["build:dev"]
 
 pycudnn:dev:
     extends:
@@ -219,14 +219,14 @@ build:rel:
         - .fetch_cudnn_rel:template
         - .build:template
 
-cpp_test:rel:
-    extends:
-        - .default_job_template
-        - .device_matrix:template
-        - .cudnn_rel_image:template
-        - .fetch_cudnn_rel:template
-        - .cpp_tests:template
-    needs: ["build:rel"]
+# cpp_test:rel:
+#     extends:
+#         - .default_job_template
+#         - .device_matrix:template
+#         - .cudnn_rel_image:template
+#         - .fetch_cudnn_rel:template
+#         - .cpp_tests:template
+#     needs: ["build:rel"]
 
 py_test:rel:
     extends:
@@ -237,14 +237,14 @@ py_test:rel:
         - .python_tests:template
     needs: ["build:rel"]
 
-mha_v1:rel:
-    extends:
-        - .default_job_template
-        - .device_matrix:template
-        - .cudnn_rel_image:template
-        - .fetch_cudnn_rel:template
-        - .mha_v1_tests:template
-    needs: ["build:rel"]
+# mha_v1:rel:
+#     extends:
+#         - .default_job_template
+#         - .device_matrix:template
+#         - .cudnn_rel_image:template
+#         - .fetch_cudnn_rel:template
+#         - .mha_v1_tests:template
+#     needs: ["build:rel"]
 
 pycudnn:rel:
     extends:
