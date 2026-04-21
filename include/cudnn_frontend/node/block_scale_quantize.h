@@ -86,20 +86,12 @@ class BlockScaleQuantizeNode : public NodeCRTP<BlockScaleQuantizeNode> {
 
         // Only infer dims and strides if user did not set them
         if (scale->get_dim().empty()) {
-            auto scale_dim   = X->get_dim();
-            int64_t axis_idx = attributes.axis ? attributes.axis.value() : static_cast<int64_t>(scale_dim.size() - 1);
-            scale_dim[axis_idx] /= attributes.block_size.value();
-
-            static constexpr int64_t f8_128x4_block_mn = 128;
-            static constexpr int64_t f8_128x4_block_k  = 4;
-            for (size_t i = 1; i < scale_dim.size(); ++i) {
-                if (static_cast<int64_t>(i) == axis_idx) {
-                    scale_dim[i] = (scale_dim[i] + f8_128x4_block_k - 1) / f8_128x4_block_k * f8_128x4_block_k;
-                } else {
-                    scale_dim[i] = (scale_dim[i] + f8_128x4_block_mn - 1) / f8_128x4_block_mn * f8_128x4_block_mn;
-                }
+            auto scale_dim = X->get_dim();
+            if (attributes.axis) {
+                scale_dim[attributes.axis.value()] /= attributes.block_size.value();
+            } else {
+                scale_dim.back() /= attributes.block_size.value();
             }
-
             scale->set_dim(scale_dim);
         }
         if (scale->get_stride().empty()) {
