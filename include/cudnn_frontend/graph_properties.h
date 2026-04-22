@@ -1709,7 +1709,7 @@ class RoPE_attributes : public Attributes<RoPE_attributes> {
     friend class Graph;
 
    public:
-    enum class input_names { INPUT, COS, SIN };
+    enum class input_names { INPUT, FREQS };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
     enum class output_names { OUTPUT };
     std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;

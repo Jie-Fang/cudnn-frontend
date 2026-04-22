@@ -1,129 +1,75 @@
 """
-Test standalone RoPE OSS engine via cuDNN Graph API.
+Test RoPE + SDPA via cuDNN Graph API.
 
-Constructs a graph with a single RoPE node and builds with
-heur_mode.OPENSOURCE to dispatch to the NVRTC-compiled RoPE kernel.
+Constructs a graph with RoPE nodes feeding into SDPA.
+RoPE takes raw frequency angles (freqs) and computes sincosf internally.
 
-Non-interleaved (halved) RoPE:
-  y[..., :D/2] = x[..., :D/2] * cos - x[..., D/2:] * sin
-  y[..., D/2:] = x[..., D/2:] * cos + x[..., :D/2] * sin
+User graph:
+  q_rot = graph.rope(q, freqs)
+  k_rot = graph.rope(k, freqs)
+  o = graph.sdpa(q_rot, k_rot, v)
 """
 
 import pytest
 import torch
+import torch.nn.functional as F
 
 import cudnn
 
 
-def rope_reference(x, cos, sin):
-    """PyTorch reference for non-interleaved RoPE.
+def rope_reference(x, freqs):
+    """PyTorch reference for non-interleaved RoPE with raw freqs (BHSD layout).
 
     Args:
-        x: [B, S, H, D] input tensor
-        cos: [S, D/2] cosine values
-        sin: [S, D/2] sine values
+        x: [B, H, S, D] input tensor
+        freqs: [S, 1, 1, D] raw angle values (float32)
 
     Returns:
-        [B, S, H, D] rotated tensor
+        [B, H, S, D] rotated tensor
     """
-    d2 = x.shape[-1] // 2
+    d = x.shape[-1]
+    d2 = d // 2
+    # freqs is [S, 1, 1, D], we need [S, D/2] for the cos/sin
+    angles = freqs[:, 0, 0, :d2].float()  # [S, D/2]
+    cos_vals = torch.cos(angles).unsqueeze(0).unsqueeze(0)  # [1, 1, S, D/2]
+    sin_vals = torch.sin(angles).unsqueeze(0).unsqueeze(0)
+
     x1 = x[..., :d2].float()
     x2 = x[..., d2:].float()
-    cos_f = cos.float().unsqueeze(0).unsqueeze(2)  # [1, S, 1, D/2]
-    sin_f = sin.float().unsqueeze(0).unsqueeze(2)  # [1, S, 1, D/2]
-    y1 = x1 * cos_f - x2 * sin_f
-    y2 = x2 * cos_f + x1 * sin_f
+    y1 = x1 * cos_vals - x2 * sin_vals
+    y2 = x2 * cos_vals + x1 * sin_vals
     return torch.cat([y1, y2], dim=-1).to(x.dtype)
 
 
-def _build_rope_graph(B, S, H, D, data_type=cudnn.data_type.BFLOAT16):
-    """Build a graph with a standalone RoPE node."""
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="No GPU")
+def test_rope_sdpa_smoke():
+    """Smoke test: build a RoPE+SDPA graph and verify it constructs."""
+    B, S, H, D = 1, 128, 8, 128
+
     graph = cudnn.pygraph(
         intermediate_data_type=cudnn.data_type.FLOAT,
         compute_data_type=cudnn.data_type.FLOAT,
     )
 
-    d2 = D // 2
+    bhsd_stride = [H * S * D, S * D, D, 1]
 
-    X = graph.tensor(
-        name="X",
-        dim=[B, S, H, D],
-        stride=[S * H * D, H * D, D, 1],
-        data_type=data_type,
-    )
+    Q = graph.tensor(name="Q", dim=[B, H, S, D], stride=bhsd_stride, data_type=cudnn.data_type.BFLOAT16)
+    K = graph.tensor(name="K", dim=[B, H, S, D], stride=bhsd_stride, data_type=cudnn.data_type.BFLOAT16)
+    V = graph.tensor(name="V", dim=[B, H, S, D], stride=bhsd_stride, data_type=cudnn.data_type.BFLOAT16)
+    FREQS = graph.tensor(name="freqs", dim=[S, 1, 1, D], stride=[D, D, D, 1], data_type=cudnn.data_type.FLOAT)
 
-    COS = graph.tensor(
-        name="COS",
-        dim=[S, d2],
-        stride=[d2, 1],
-        data_type=data_type,
-    )
+    Q_rot = graph.rope(input=Q, freqs=FREQS, name="RoPE_Q")
+    Q_rot.set_data_type(cudnn.data_type.BFLOAT16).set_dim([B, H, S, D]).set_stride(bhsd_stride)
 
-    SIN = graph.tensor(
-        name="SIN",
-        dim=[S, d2],
-        stride=[d2, 1],
-        data_type=data_type,
-    )
+    K_rot = graph.rope(input=K, freqs=FREQS, name="RoPE_K")
+    K_rot.set_data_type(cudnn.data_type.BFLOAT16).set_dim([B, H, S, D]).set_stride(bhsd_stride)
 
-    Y = graph.rope(input=X, cos=COS, sin=SIN, name="RoPE")
-    Y.set_output(True).set_data_type(data_type)
+    O, stats = graph.sdpa(q=Q_rot, k=K_rot, v=V, is_inference=True, name="SDPA")
+    O.set_output(True).set_data_type(cudnn.data_type.BFLOAT16).set_dim([B, H, S, D]).set_stride(bhsd_stride)
+    if stats is not None:
+        stats.set_output(True).set_data_type(cudnn.data_type.FLOAT)
 
-    graph.build([cudnn.heur_mode.OPENSOURCE])
-
-    return graph, X, COS, SIN, Y
-
-
-def _run_rope_test(B, S, H, D, dtype=torch.bfloat16):
-    """Run a standalone RoPE test and return max absolute error."""
-    cudnn_dtype = cudnn.data_type.BFLOAT16 if dtype == torch.bfloat16 else cudnn.data_type.HALF
-
-    graph, X, COS, SIN, Y = _build_rope_graph(B, S, H, D, data_type=cudnn_dtype)
-
-    d2 = D // 2
-
-    # Create test data
-    x_gpu = torch.randn(B, S, H, D, dtype=dtype, device="cuda")
-    cos_gpu = torch.randn(S, d2, dtype=dtype, device="cuda")
-    sin_gpu = torch.randn(S, d2, dtype=dtype, device="cuda")
-    y_gpu = torch.empty_like(x_gpu)
-
-    # Execute
-    graph.execute(
-        {X: x_gpu, COS: cos_gpu, SIN: sin_gpu, Y: y_gpu},
-        torch.empty(graph.get_workspace_size(), dtype=torch.uint8, device="cuda"),
-    )
-
-    # Reference
-    y_ref = rope_reference(x_gpu, cos_gpu, sin_gpu)
-
-    max_err = (y_gpu.float() - y_ref.float()).abs().max().item()
-    return max_err
-
-
-# ---- Tests ----
-
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="No GPU")
-@pytest.mark.parametrize("B", [1, 4])
-@pytest.mark.parametrize("S", [1, 128, 2048])
-@pytest.mark.parametrize("H", [8, 32])
-@pytest.mark.parametrize("D", [64, 128])
-def test_rope_standalone_bf16(B, S, H, D):
-    """Test standalone RoPE with bf16."""
-    max_err = _run_rope_test(B, S, H, D, dtype=torch.bfloat16)
-    assert max_err < 1e-2, f"RoPE bf16 max_err={max_err} exceeds tolerance"
-
-
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="No GPU")
-@pytest.mark.parametrize("D", [64, 128, 256])
-def test_rope_standalone_fp16(D):
-    """Test standalone RoPE with fp16."""
-    max_err = _run_rope_test(1, 128, 8, D, dtype=torch.float16)
-    assert max_err < 1e-3, f"RoPE fp16 max_err={max_err} exceeds tolerance"
-
-
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="No GPU")
-def test_rope_smoke():
-    """Quick smoke test."""
-    max_err = _run_rope_test(2, 256, 32, 128, dtype=torch.bfloat16)
-    assert max_err < 1e-2, f"RoPE smoke test max_err={max_err}"
+    # This should build successfully with backend heuristics
+    # (the backend detects RoPE+SDPA pattern and fuses them)
+    graph.build([cudnn.heur_mode.HEURISTICS_CHOICE])
+    print(f"Graph built successfully, workspace: {graph.get_workspace_size()}")

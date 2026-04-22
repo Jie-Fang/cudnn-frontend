@@ -322,8 +322,7 @@ init_pygraph_norm_submodule(py::class_<PyGraph>& m) {
         .def("rope",
              &PyGraph::rope,
              py::arg("input"),
-             py::arg("cos"),
-             py::arg("sin"),
+             py::arg("freqs"),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("name", ""));
 }
@@ -331,13 +330,12 @@ init_pygraph_norm_submodule(py::class_<PyGraph>& m) {
 // RoPE implementation
 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
 PyGraph::rope(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input,
-              std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& cos,
-              std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& sin,
+              std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& freqs,
               cudnn_frontend::DataType_t const& compute_data_type,
               std::string const& name) {
     auto attributes = cudnn_frontend::graph::RoPE_attributes().set_compute_data_type(compute_data_type).set_name(name);
 
-    return graph->rope(input, cos, sin, attributes);
+    return graph->rope(input, freqs, attributes);
 }
 
 }  // namespace python_bindings

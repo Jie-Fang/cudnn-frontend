@@ -257,54 +257,5 @@ compile_and_load_kernel(const KernelSpec* spec,
     return {error_code_t::OK, ""};
 }
 
-// ============================================================
-// RoPE (Rotary Position Embedding) engine interface
-// ============================================================
-
-struct RoPEShape_t {
-    int batch     = 0;  // B
-    int seq_len   = 0;  // S
-    int num_heads = 0;  // H
-    int head_dim  = 0;  // D (must be even)
-    bool is_bf16  = true;  // true = bf16, false = fp16
-};
-
-class IOssRoPEEngine {
-   public:
-    virtual ~IOssRoPEEngine() = default;
-
-    // Phase 1: Validate that (shape, sm_version) is supported.
-    virtual error_t
-    check_support(RoPEShape_t shape, int sm_version) = 0;
-
-    // Phase 2: NVRTC compile the kernel.
-    virtual error_t
-    build() = 0;
-
-    // Phase 3: Launch the kernel.
-    //   input     — [B, S, H, D] input tensor (bf16 or fp16)
-    //   cos       — [S, D/2] cosine values (same dtype as input)
-    //   sin       — [S, D/2] sine values (same dtype as input)
-    //   output    — [B, S, H, D] output tensor (same dtype as input, may alias input for in-place)
-    //   in_strides  — [stride_b, stride_s, stride_h] for input (stride_d assumed 1)
-    //   out_strides — [stride_b, stride_s, stride_h] for output (stride_d assumed 1)
-    virtual error_t
-    execute(void* input,
-            void* cos,
-            void* sin,
-            void* output,
-            int batch,
-            int seq_len,
-            int num_heads,
-            int head_dim,
-            std::vector<int64_t> const& in_strides,
-            std::vector<int64_t> const& out_strides,
-            int device,
-            cudaStream_t stream) = 0;
-
-    virtual int64_t
-    get_workspace_size() const = 0;
-};
-
 }  // namespace experimental
 }  // namespace cudnn_frontend
