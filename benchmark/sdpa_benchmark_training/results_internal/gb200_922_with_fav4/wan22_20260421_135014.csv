@@ -1,0 +1,11 @@
+config_name,model_name,backend,data_type,attn_mask,batch_size,q_seqlen,kv_seqlen,num_q_heads,num_kv_heads,head_dim_qk,head_dim_vo,profile_pass,deterministic_bwd,fwd_time_ms,bwd_time_ms,fwd_tflops,bwd_tflops,max_diff,num_iterations,sliding_window_size,success,error_message,gpu_name,cudnn_version,cudnn_backend_version
+wan22,wan22_a14b,cudnn,bfloat16,no_mask,1,7800,7800,40,40,128,128,both,False,0.796,2.333,1565.000,1335.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92200
+wan22,wan22_a14b,flash_attention_4,bfloat16,no_mask,1,7800,7800,40,40,128,128,both,False,0.847,2.263,1470.000,1377.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92200
+wan22,wan22_a14b,cudnn,bfloat16,no_mask,1,17160,17160,40,40,128,128,both,False,3.687,10.900,1636.000,1383.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92200
+wan22,wan22_a14b,flash_attention_4,bfloat16,no_mask,1,17160,17160,40,40,128,128,both,False,3.604,9.953,1673.000,1515.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92200
+wan22,wan22_a14b,cudnn,bfloat16,no_mask,1,32760,32760,40,40,128,128,both,False,14.515,41.028,1514.000,1339.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92200
+wan22,wan22_a14b,flash_attention_4,bfloat16,no_mask,1,32760,32760,40,40,128,128,both,False,14.897,38.732,1475.000,1419.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92200
+wan22,wan22_a14b,cudnn,bfloat16,no_mask,1,48360,48360,40,40,128,128,both,False,32.944,97.764,1454.000,1225.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92200
+wan22,wan22_a14b,flash_attention_4,bfloat16,no_mask,1,48360,48360,40,40,128,128,both,False,33.612,88.955,1425.000,1346.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92200
+wan22,wan22_a14b,cudnn,bfloat16,no_mask,1,75600,75600,40,40,128,128,both,False,78.195,243.033,1497.000,1204.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92200
+wan22,wan22_a14b,flash_attention_4,bfloat16,no_mask,1,75600,75600,40,40,128,128,both,False,80.403,219.410,1456.000,1334.000,0.000,10,,True,,NVIDIA GB200,1.21.1,92200

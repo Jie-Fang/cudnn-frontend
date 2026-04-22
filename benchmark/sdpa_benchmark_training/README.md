@@ -11,6 +11,8 @@ This directory contains benchmarking tools for Scaled Dot Product Attention (SDP
 - `configs/` - Benchmark configuration files
   - `llama.py` - Llama 3.1 GQA benchmarks (causal + non-causal)
   - `dsv3.py` - DeepSeek V3 MHA benchmarks (causal only)
+  - `wan22.py` - Wan 2.2 A14B video DiT self-attention benchmarks (bidirectional, no mask)
+  - `qwen35.py` - Qwen 3.5 GQA benchmarks (head_dim=256, causal, bf16 fwd-only — Blackwell bwd/fp8/fa4 limits)
 - `runner.py` - Configuration-based benchmark runner
 - `config_types.py` - Data types for benchmark configuration
 - `charts.py` - Chart generation utilities
@@ -37,6 +39,12 @@ python -m benchmark.sdpa_benchmark_training.runner --config dsv3
 
 # Run GPT-OSS benchmark suite
 python -m benchmark.sdpa_benchmark_training.runner --config gpt_oss
+
+# Run Wan 2.2 A14B benchmark suite
+python -m benchmark.sdpa_benchmark_training.runner --config wan22
+
+# Run Qwen 3.5 benchmark suite (cuDNN bf16 fwd only at head_dim=256)
+python -m benchmark.sdpa_benchmark_training.runner --config qwen35
 
 # Dry run (show what would be executed)
 python -m benchmark.sdpa_benchmark_training.runner --config llama --dry-run
