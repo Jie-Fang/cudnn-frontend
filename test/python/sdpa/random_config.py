@@ -87,6 +87,7 @@ class ExecConfig:
     with_score_sum_exp: bool = False
     with_sink_token: bool = False
     with_unfuse_fma: bool = False
+    with_rope: bool = False
     rescale_threshold: float = None
 
     diag_align: cudnn.diagonal_alignment = None

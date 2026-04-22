@@ -54,6 +54,9 @@ class TensorUid(IntEnum):
     score_sum_exp = 28
     sink_token = 29
     dSink_token = 30
+    rope_freqs = 31
+    q_rot = 32
+    k_rot = 33
 
 def validate_config(cfg):
     if not all((x > 0 and type(x) == int) for x in (cfg.batches, cfg.d_qk, cfg.d_v, cfg.s_q, cfg.s_kv, cfg.h_q, cfg.h_k, cfg.h_v)):
@@ -180,6 +183,19 @@ def allocate_tensors(cfg, rng_data_gen, perf=False):
         allocs[TensorUid.page_table_k] = (page_table_k, None, None)
         allocs[TensorUid.page_table_v] = (page_table_v, None, None)
 
+    # RoPE: allocate frequency angles and intermediate buffers
+    if getattr(cfg, 'with_rope', False) and not cfg.is_ragged:
+        d2 = cfg.d_qk // 2
+        theta = 10000.0
+        dim_idx = torch.arange(d2, device="cuda").float()
+        freqs_1d = 1.0 / (theta ** (dim_idx / d2))
+        max_s = max(cfg.s_q, cfg.s_kv)
+        pos = torch.arange(max_s, device="cuda").float()
+        angles = torch.outer(pos, freqs_1d)  # [max_s, d2]
+        freqs_gpu = torch.zeros(max_s, 1, 1, cfg.d_qk, device="cuda")
+        freqs_gpu[:, 0, 0, :d2] = angles
+        allocs[TensorUid.rope_freqs] = (freqs_gpu, None, None)
+
     tensors = {uid: alloc[0] for uid, alloc in allocs.items()}
     return allocs, tensors, max_t_q, max_t_kv
 
@@ -251,9 +267,21 @@ def create_forward_graph(cfg, tensors, cudnn_handle):
 
     attn_scale = 0.125
 
+    # RoPE pre-processing: apply RoPE to Q and K if enabled
+    sdpa_q, sdpa_k = q, k
+    if getattr(cfg, 'with_rope', False) and not cfg.is_ragged:
+        max_s = max(cfg.s_q, cfg.s_kv)
+        freqs = graph.tensor(uid=int(TensorUid.rope_freqs), dim=[max_s, 1, 1, cfg.d_qk],
+                             stride=[cfg.d_qk, cfg.d_qk, cfg.d_qk, 1], data_type=cudnn.data_type.FLOAT)
+        q_rot = graph.rope(input=q, freqs=freqs, name="RoPE_Q")
+        q_rot.set_data_type(cudnn_dtype).set_dim(cfg.shape_q).set_stride(cfg.stride_q)
+        k_rot = graph.rope(input=k, freqs=freqs, name="RoPE_K")
+        k_rot.set_data_type(cudnn_dtype).set_dim(cfg.shape_k).set_stride(cfg.stride_k)
+        sdpa_q, sdpa_k = q_rot, k_rot
+
     o, stats = graph.sdpa(
         name="sdpa_forward",
-        q=q, k=k, v=v,
+        q=sdpa_q, k=sdpa_k, v=v,
         generate_stats=cfg.is_train,
         attn_scale=attn_scale,
         bias=bias,
@@ -327,6 +355,8 @@ def create_forward_graph(cfg, tensors, cudnn_handle):
         int(TensorUid.seed): tensors.get(TensorUid.seed),
         int(TensorUid.offset): tensors.get(TensorUid.offset),
         int(TensorUid.rng_dump): tensors.get(TensorUid.rng_dump),
+        # RoPE freqs tensor (Q_rot/K_rot are virtual — managed via workspace)
+        int(TensorUid.rope_freqs): tensors.get(TensorUid.rope_freqs),
     }
     variant_pack = {k: v for k, v in variant_pack.items() if v is not None}
 
@@ -540,6 +570,25 @@ def compute_and_compare_reference(cfg, allocs, tensors, diffs):
     q_ref = q_gpu.detach().float()
     k_ref = k_gpu.detach().float()
     v_ref = v_gpu.detach().float()
+
+    # Apply RoPE to reference Q and K if enabled
+    if getattr(cfg, 'with_rope', False) and not cfg.is_ragged:
+        freqs_gpu = tensors.get(TensorUid.rope_freqs)
+        d2 = cfg.d_qk // 2
+        # freqs: [max_s, 1, 1, D], angles are in [:, 0, 0, :d2]
+        # Q is BHSD: [B, H, S_q, D]
+        angles_q = freqs_gpu[:cfg.s_q, 0, 0, :d2].float()  # [S_q, d2]
+        cos_q = torch.cos(angles_q).unsqueeze(0).unsqueeze(0)  # [1, 1, S_q, d2]
+        sin_q = torch.sin(angles_q).unsqueeze(0).unsqueeze(0)
+        q1, q2 = q_ref[..., :d2], q_ref[..., d2:]
+        q_ref = torch.cat([q1 * cos_q - q2 * sin_q, q2 * cos_q + q1 * sin_q], dim=-1)
+
+        angles_k = freqs_gpu[:cfg.s_kv, 0, 0, :d2].float()  # [S_kv, d2]
+        cos_k = torch.cos(angles_k).unsqueeze(0).unsqueeze(0)
+        sin_k = torch.sin(angles_k).unsqueeze(0).unsqueeze(0)
+        k1, k2 = k_ref[..., :d2], k_ref[..., d2:]
+        k_ref = torch.cat([k1 * cos_k - k2 * sin_k, k2 * cos_k + k1 * sin_k], dim=-1)
+
     dO_ref = dO_gpu.detach().float() if dO_gpu is not None else None
     seq_len_q_ref = seq_len_q_gpu.flatten().detach() if seq_len_q_gpu is not None else None
     seq_len_kv_ref = seq_len_kv_gpu.flatten().detach() if seq_len_kv_gpu is not None else None

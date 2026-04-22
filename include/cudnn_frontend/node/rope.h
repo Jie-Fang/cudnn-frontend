@@ -98,7 +98,11 @@ class RoPENode : public NodeCRTP<RoPENode> {
 
         uids_involved_in_operations.insert(X->get_uid());
         uids_involved_in_operations.insert(FREQS->get_uid());
-        uids_involved_in_operations.insert(Y->get_uid());
+        // Y (output) is virtual — managed via workspace by the SDPA engine.
+        // Only add it if the user explicitly set it as non-virtual output.
+        if (!Y->get_is_virtual()) {
+            uids_involved_in_operations.insert(Y->get_uid());
+        }
 
         raw_operations.push_back(rope_operation);
 

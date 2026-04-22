@@ -151,6 +151,7 @@ def test_sdpa_random_fwd_unified_L0(env_info, test_no, request, cudnn_handle):
         is_alibi=RandomChoice({True : 1, False : 3}),
         is_ragged_or_padded_or_full=RandomChoice({"ragged" : 0, "padded" : 1, "full" : 1}),
         with_unfuse_fma=RandomChoice({True : 1, False : 1}),  # Randomly enable unfuse_fma for SM100
+        with_rope=RandomChoice({True : 3, False : 1}),  # Randomly enable RoPE pre-processing (75%)
         with_score_max=RandomChoice({True : 1, False : 3}),
         with_score_sum_exp=RandomChoice({True : 1, False : 3}),
         with_sink_token=RandomChoice({True : 1, False : 3}),
@@ -159,6 +160,11 @@ def test_sdpa_random_fwd_unified_L0(env_info, test_no, request, cudnn_handle):
         test.cfg = randomization_ctx(rng, data_seed, geom_seed)
 
     test.cfg.dropout_prob = 0.1 if test.cfg.is_dropout else 0.0
+    # RoPE: backend validates d_qk in {64,128,256} and both Q/K must have RoPE
+    # Incompatible with ragged/paged/padded. Dropout reference not yet verified.
+    if test.cfg.with_rope:
+        if test.cfg.is_ragged or test.cfg.is_paged or test.cfg.is_padding or test.cfg.is_dropout:
+            test.cfg.with_rope = False
     test.cfg.implementation = getattr(cudnn.attention_implementation, request.config.getoption("--implementation") or "", cudnn.attention_implementation.UNIFIED)
     test.showConfig(test_no, request)
 
