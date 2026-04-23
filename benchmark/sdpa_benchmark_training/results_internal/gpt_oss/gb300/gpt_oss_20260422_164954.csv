@@ -1,0 +1,271 @@
+config_name,model_name,backend,data_type,attn_mask,batch_size,q_seqlen,kv_seqlen,num_q_heads,num_kv_heads,head_dim_qk,head_dim_vo,profile_pass,deterministic_bwd,time_ms,tflops,max_diff,num_iterations,sliding_window_size,success,error_message,gpu_name,cudnn_version,cudnn_backend_version
+gpt_oss,gpt_oss,cudnn,bfloat16,top_left,2,32768,32768,128,128,64,64,fwd,False,2.530,108.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,cudnn,bfloat16,top_left,2,32768,32768,128,128,64,64,bwd,True,4.368,157.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,cudnn,fp8,top_left,2,32768,32768,128,128,64,64,fwd,False,1.294,212.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,cudnn,fp8,top_left,2,32768,32768,128,128,64,64,bwd,True,74.715,9.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,cudnn,mxfp8,top_left,2,32768,32768,128,128,64,64,fwd,False,1.345,204.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,cudnn,mxfp8,top_left,2,32768,32768,128,128,64,64,bwd,True,96.964,7.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,flash_attention_4,bfloat16,top_left,2,32768,32768,128,128,64,64,fwd,False,1.616,170.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,flash_attention_4,bfloat16,top_left,2,32768,32768,128,128,64,64,bwd,True,4.340,158.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,flash_attention_4,fp8,top_left,2,32768,32768,128,128,64,64,fwd,False,inf,0.000,0.000,10,128,False,"Benchmark failed with return code 1.
+stderr: /usr/local/lib/python3.12/dist-packages/torch/profiler/profiler.py:217: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/workspace/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1475, in <module>
+    output = sdpa_function(query, key, value)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/workspace/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1094, in flash_attention_4_sdpa
+    output, _ = flash_attn_interface.flash_attn_func(query, key, value, causal=args.attn_mask != ""no_mask"", window_size=window_size)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1982, in flash_attn_func
+    return FlashAttnFunc.apply(
+           ^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/function.py"", line 596, in apply
+    return super().apply(*args, **kwargs)  # type: ignore[misc]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1808, in forward
+    out, lse = _flash_attn_fwd(
+               ^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 430, in _flash_attn_fwd
+    raise NotImplementedError(""FA4 CuTe FP8 backward is not supported yet (forward-only)."")
+NotImplementedError: FA4 CuTe FP8 backward is not supported yet (forward-only).
+
+stdout: ",,,
+gpt_oss,gpt_oss,flash_attention_4,fp8,top_left,2,32768,32768,128,128,64,64,bwd,True,inf,0.000,0.000,10,128,False,"Benchmark failed with return code 1.
+stderr: Traceback (most recent call last):
+  File ""/workspace/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1499, in <module>
+    output = sdpa_function(query, key, value)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/workspace/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1094, in flash_attention_4_sdpa
+    output, _ = flash_attn_interface.flash_attn_func(query, key, value, causal=args.attn_mask != ""no_mask"", window_size=window_size)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1982, in flash_attn_func
+    return FlashAttnFunc.apply(
+           ^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/function.py"", line 596, in apply
+    return super().apply(*args, **kwargs)  # type: ignore[misc]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1808, in forward
+    out, lse = _flash_attn_fwd(
+               ^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 430, in _flash_attn_fwd
+    raise NotImplementedError(""FA4 CuTe FP8 backward is not supported yet (forward-only)."")
+NotImplementedError: FA4 CuTe FP8 backward is not supported yet (forward-only).
+
+stdout: ",,,
+gpt_oss,gpt_oss,cudnn,bfloat16,top_left,2,16384,16384,128,128,64,64,fwd,False,0.790,173.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,cudnn,bfloat16,top_left,2,16384,16384,128,128,64,64,bwd,True,2.193,156.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,cudnn,fp8,top_left,2,16384,16384,128,128,64,64,fwd,False,0.650,211.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,cudnn,fp8,top_left,2,16384,16384,128,128,64,64,bwd,True,19.338,18.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,cudnn,mxfp8,top_left,2,16384,16384,128,128,64,64,fwd,False,0.676,203.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,cudnn,mxfp8,top_left,2,16384,16384,128,128,64,64,bwd,True,25.000,14.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,flash_attention_4,bfloat16,top_left,2,16384,16384,128,128,64,64,fwd,False,0.813,168.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,flash_attention_4,bfloat16,top_left,2,16384,16384,128,128,64,64,bwd,True,2.172,158.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,flash_attention_4,fp8,top_left,2,16384,16384,128,128,64,64,fwd,False,inf,0.000,0.000,10,128,False,"Benchmark failed with return code 1.
+stderr: /usr/local/lib/python3.12/dist-packages/torch/profiler/profiler.py:217: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/workspace/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1475, in <module>
+    output = sdpa_function(query, key, value)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/workspace/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1094, in flash_attention_4_sdpa
+    output, _ = flash_attn_interface.flash_attn_func(query, key, value, causal=args.attn_mask != ""no_mask"", window_size=window_size)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1982, in flash_attn_func
+    return FlashAttnFunc.apply(
+           ^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/function.py"", line 596, in apply
+    return super().apply(*args, **kwargs)  # type: ignore[misc]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1808, in forward
+    out, lse = _flash_attn_fwd(
+               ^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 430, in _flash_attn_fwd
+    raise NotImplementedError(""FA4 CuTe FP8 backward is not supported yet (forward-only)."")
+NotImplementedError: FA4 CuTe FP8 backward is not supported yet (forward-only).
+
+stdout: ",,,
+gpt_oss,gpt_oss,flash_attention_4,fp8,top_left,2,16384,16384,128,128,64,64,bwd,True,inf,0.000,0.000,10,128,False,"Benchmark failed with return code 1.
+stderr: Traceback (most recent call last):
+  File ""/workspace/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1499, in <module>
+    output = sdpa_function(query, key, value)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/workspace/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1094, in flash_attention_4_sdpa
+    output, _ = flash_attn_interface.flash_attn_func(query, key, value, causal=args.attn_mask != ""no_mask"", window_size=window_size)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1982, in flash_attn_func
+    return FlashAttnFunc.apply(
+           ^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/function.py"", line 596, in apply
+    return super().apply(*args, **kwargs)  # type: ignore[misc]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1808, in forward
+    out, lse = _flash_attn_fwd(
+               ^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 430, in _flash_attn_fwd
+    raise NotImplementedError(""FA4 CuTe FP8 backward is not supported yet (forward-only)."")
+NotImplementedError: FA4 CuTe FP8 backward is not supported yet (forward-only).
+
+stdout: ",,,
+gpt_oss,gpt_oss,cudnn,bfloat16,top_left,2,8192,8192,128,128,64,64,fwd,False,0.397,172.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,cudnn,bfloat16,top_left,2,8192,8192,128,128,64,64,bwd,True,1.105,154.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,cudnn,fp8,top_left,2,8192,8192,128,128,64,64,fwd,False,0.327,208.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,cudnn,fp8,top_left,2,8192,8192,128,128,64,64,bwd,True,5.183,33.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,cudnn,mxfp8,top_left,2,8192,8192,128,128,64,64,fwd,False,0.342,199.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,cudnn,mxfp8,top_left,2,8192,8192,128,128,64,64,bwd,True,6.641,26.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,flash_attention_4,bfloat16,top_left,2,8192,8192,128,128,64,64,fwd,False,0.407,167.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,flash_attention_4,bfloat16,top_left,2,8192,8192,128,128,64,64,bwd,True,1.083,157.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,flash_attention_4,fp8,top_left,2,8192,8192,128,128,64,64,fwd,False,inf,0.000,0.000,10,128,False,"Benchmark failed with return code 1.
+stderr: /usr/local/lib/python3.12/dist-packages/torch/profiler/profiler.py:217: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/workspace/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1475, in <module>
+    output = sdpa_function(query, key, value)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/workspace/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1094, in flash_attention_4_sdpa
+    output, _ = flash_attn_interface.flash_attn_func(query, key, value, causal=args.attn_mask != ""no_mask"", window_size=window_size)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1982, in flash_attn_func
+    return FlashAttnFunc.apply(
+           ^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/function.py"", line 596, in apply
+    return super().apply(*args, **kwargs)  # type: ignore[misc]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1808, in forward
+    out, lse = _flash_attn_fwd(
+               ^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 430, in _flash_attn_fwd
+    raise NotImplementedError(""FA4 CuTe FP8 backward is not supported yet (forward-only)."")
+NotImplementedError: FA4 CuTe FP8 backward is not supported yet (forward-only).
+
+stdout: ",,,
+gpt_oss,gpt_oss,flash_attention_4,fp8,top_left,2,8192,8192,128,128,64,64,bwd,True,inf,0.000,0.000,10,128,False,"Benchmark failed with return code 1.
+stderr: Traceback (most recent call last):
+  File ""/workspace/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1499, in <module>
+    output = sdpa_function(query, key, value)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/workspace/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1094, in flash_attention_4_sdpa
+    output, _ = flash_attn_interface.flash_attn_func(query, key, value, causal=args.attn_mask != ""no_mask"", window_size=window_size)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1982, in flash_attn_func
+    return FlashAttnFunc.apply(
+           ^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/function.py"", line 596, in apply
+    return super().apply(*args, **kwargs)  # type: ignore[misc]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1808, in forward
+    out, lse = _flash_attn_fwd(
+               ^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 430, in _flash_attn_fwd
+    raise NotImplementedError(""FA4 CuTe FP8 backward is not supported yet (forward-only)."")
+NotImplementedError: FA4 CuTe FP8 backward is not supported yet (forward-only).
+
+stdout: ",,,
+gpt_oss,gpt_oss,cudnn,bfloat16,top_left,2,4096,4096,128,128,64,64,fwd,False,0.202,168.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,cudnn,bfloat16,top_left,2,4096,4096,128,128,64,64,bwd,True,0.565,150.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,cudnn,fp8,top_left,2,4096,4096,128,128,64,64,fwd,False,0.167,203.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,cudnn,fp8,top_left,2,4096,4096,128,128,64,64,bwd,True,1.479,57.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,cudnn,mxfp8,top_left,2,4096,4096,128,128,64,64,fwd,False,0.175,194.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,cudnn,mxfp8,top_left,2,4096,4096,128,128,64,64,bwd,True,1.871,45.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,flash_attention_4,bfloat16,top_left,2,4096,4096,128,128,64,64,fwd,False,0.207,164.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,flash_attention_4,bfloat16,top_left,2,4096,4096,128,128,64,64,bwd,True,0.545,155.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,flash_attention_4,fp8,top_left,2,4096,4096,128,128,64,64,fwd,False,inf,0.000,0.000,10,128,False,"Benchmark failed with return code 1.
+stderr: /usr/local/lib/python3.12/dist-packages/torch/profiler/profiler.py:217: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/workspace/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1475, in <module>
+    output = sdpa_function(query, key, value)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/workspace/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1094, in flash_attention_4_sdpa
+    output, _ = flash_attn_interface.flash_attn_func(query, key, value, causal=args.attn_mask != ""no_mask"", window_size=window_size)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1982, in flash_attn_func
+    return FlashAttnFunc.apply(
+           ^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/function.py"", line 596, in apply
+    return super().apply(*args, **kwargs)  # type: ignore[misc]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1808, in forward
+    out, lse = _flash_attn_fwd(
+               ^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 430, in _flash_attn_fwd
+    raise NotImplementedError(""FA4 CuTe FP8 backward is not supported yet (forward-only)."")
+NotImplementedError: FA4 CuTe FP8 backward is not supported yet (forward-only).
+
+stdout: ",,,
+gpt_oss,gpt_oss,flash_attention_4,fp8,top_left,2,4096,4096,128,128,64,64,bwd,True,inf,0.000,0.000,10,128,False,"Benchmark failed with return code 1.
+stderr: Traceback (most recent call last):
+  File ""/workspace/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1499, in <module>
+    output = sdpa_function(query, key, value)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/workspace/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1094, in flash_attention_4_sdpa
+    output, _ = flash_attn_interface.flash_attn_func(query, key, value, causal=args.attn_mask != ""no_mask"", window_size=window_size)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1982, in flash_attn_func
+    return FlashAttnFunc.apply(
+           ^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/function.py"", line 596, in apply
+    return super().apply(*args, **kwargs)  # type: ignore[misc]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1808, in forward
+    out, lse = _flash_attn_fwd(
+               ^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 430, in _flash_attn_fwd
+    raise NotImplementedError(""FA4 CuTe FP8 backward is not supported yet (forward-only)."")
+NotImplementedError: FA4 CuTe FP8 backward is not supported yet (forward-only).
+
+stdout: ",,,
+gpt_oss,gpt_oss,cudnn,bfloat16,top_left,2,2048,2048,128,128,64,64,fwd,False,0.104,160.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,cudnn,bfloat16,top_left,2,2048,2048,128,128,64,64,bwd,True,0.292,143.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,cudnn,fp8,top_left,2,2048,2048,128,128,64,64,fwd,False,0.086,193.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,cudnn,fp8,top_left,2,2048,2048,128,128,64,64,bwd,True,0.467,89.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,cudnn,mxfp8,top_left,2,2048,2048,128,128,64,64,fwd,False,0.092,181.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,cudnn,mxfp8,top_left,2,2048,2048,128,128,64,64,bwd,True,0.580,72.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,flash_attention_4,bfloat16,top_left,2,2048,2048,128,128,64,64,fwd,False,0.107,155.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,flash_attention_4,bfloat16,top_left,2,2048,2048,128,128,64,64,bwd,True,0.276,151.000,0.000,10,128,True,,NVIDIA GB300,1.21.1,92200.000
+gpt_oss,gpt_oss,flash_attention_4,fp8,top_left,2,2048,2048,128,128,64,64,fwd,False,inf,0.000,0.000,10,128,False,"Benchmark failed with return code 1.
+stderr: /usr/local/lib/python3.12/dist-packages/torch/profiler/profiler.py:217: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/workspace/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1475, in <module>
+    output = sdpa_function(query, key, value)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/workspace/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1094, in flash_attention_4_sdpa
+    output, _ = flash_attn_interface.flash_attn_func(query, key, value, causal=args.attn_mask != ""no_mask"", window_size=window_size)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1982, in flash_attn_func
+    return FlashAttnFunc.apply(
+           ^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/function.py"", line 596, in apply
+    return super().apply(*args, **kwargs)  # type: ignore[misc]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1808, in forward
+    out, lse = _flash_attn_fwd(
+               ^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 430, in _flash_attn_fwd
+    raise NotImplementedError(""FA4 CuTe FP8 backward is not supported yet (forward-only)."")
+NotImplementedError: FA4 CuTe FP8 backward is not supported yet (forward-only).
+
+stdout: ",,,
+gpt_oss,gpt_oss,flash_attention_4,fp8,top_left,2,2048,2048,128,128,64,64,bwd,True,inf,0.000,0.000,10,128,False,"Benchmark failed with return code 1.
+stderr: Traceback (most recent call last):
+  File ""/workspace/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1499, in <module>
+    output = sdpa_function(query, key, value)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/workspace/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1094, in flash_attention_4_sdpa
+    output, _ = flash_attn_interface.flash_attn_func(query, key, value, causal=args.attn_mask != ""no_mask"", window_size=window_size)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1982, in flash_attn_func
+    return FlashAttnFunc.apply(
+           ^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/function.py"", line 596, in apply
+    return super().apply(*args, **kwargs)  # type: ignore[misc]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1808, in forward
+    out, lse = _flash_attn_fwd(
+               ^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 430, in _flash_attn_fwd
+    raise NotImplementedError(""FA4 CuTe FP8 backward is not supported yet (forward-only)."")
+NotImplementedError: FA4 CuTe FP8 backward is not supported yet (forward-only).
+
+stdout: ",,,

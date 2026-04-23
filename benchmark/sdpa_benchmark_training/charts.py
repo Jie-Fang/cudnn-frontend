@@ -136,8 +136,12 @@ def generate_charts_by_mask(
         mask_df["backend_order"] = mask_df["backend"].map(lambda b: BACKEND_CONFIG.get(b, {}).get("order", 99))
         mask_df.sort_values(["q_seqlen", "backend_order"], inplace=True)
 
-        has_fwd = (mask_df["fwd_tflops"] > 0).any()
-        has_bwd = (mask_df["bwd_tflops"] > 0).any()
+        # Split rows by pass. Under the new schema each row has a single
+        # time_ms/tflops tagged by profile_pass.
+        fwd_df = mask_df[(mask_df["profile_pass"] == "fwd") & (mask_df["tflops"] > 0)]
+        bwd_df = mask_df[(mask_df["profile_pass"] == "bwd") & (mask_df["tflops"] > 0)]
+        has_fwd = not fwd_df.empty
+        has_bwd = not bwd_df.empty
 
         if has_fwd and has_bwd:
             fig, (ax_fwd, ax_bwd) = plt.subplots(1, 2, figsize=(14, 6), dpi=150)
@@ -150,49 +154,45 @@ def generate_charts_by_mask(
 
         mask_title = "Causal" if mask == "top_left" else "Non-Causal" if mask == "no_mask" else mask
 
-        if ax_fwd is not None:
-            fwd_df = mask_df[mask_df["fwd_tflops"] > 0]
-            if not fwd_df.empty:
-                sns.barplot(
-                    data=fwd_df,
-                    x="seqlen_label",
-                    y="fwd_tflops",
-                    hue="backend_display",
-                    ax=ax_fwd,
-                    palette=palette,
-                    edgecolor="black",
-                    linewidth=0.5,
-                )
-                ax_fwd.set_xlabel("Sequence Length", fontsize=LABEL_FONT_SIZE)
-                ax_fwd.set_ylabel("TFLOPS", fontsize=LABEL_FONT_SIZE)
-                model_info = _get_model_info(config)
-                ax_fwd.set_title(f"{config.name} Forward ({mask_title}, batch={config.batch_size}{model_info})", fontsize=TITLE_FONT_SIZE)
-                ax_fwd.legend(title="Backend", fontsize=LEGEND_FONT_SIZE)
-                ax_fwd.tick_params(axis="x", rotation=45)
-                for container in ax_fwd.containers:
-                    ax_fwd.bar_label(container, fmt="%.0f", fontsize=BAR_LABEL_FONT_SIZE)
+        if ax_fwd is not None and has_fwd:
+            sns.barplot(
+                data=fwd_df,
+                x="seqlen_label",
+                y="tflops",
+                hue="backend_display",
+                ax=ax_fwd,
+                palette=palette,
+                edgecolor="black",
+                linewidth=0.5,
+            )
+            ax_fwd.set_xlabel("Sequence Length", fontsize=LABEL_FONT_SIZE)
+            ax_fwd.set_ylabel("TFLOPS", fontsize=LABEL_FONT_SIZE)
+            model_info = _get_model_info(config)
+            ax_fwd.set_title(f"{config.name} Forward ({mask_title}, batch={config.batch_size}{model_info})", fontsize=TITLE_FONT_SIZE)
+            ax_fwd.legend(title="Backend", fontsize=LEGEND_FONT_SIZE)
+            ax_fwd.tick_params(axis="x", rotation=45)
+            for container in ax_fwd.containers:
+                ax_fwd.bar_label(container, fmt="%.0f", fontsize=BAR_LABEL_FONT_SIZE)
 
-        if ax_bwd is not None:
-            bwd_df = mask_df[mask_df["bwd_tflops"] > 0]
-            if not bwd_df.empty:
-                sns.barplot(
-                    data=bwd_df,
-                    x="seqlen_label",
-                    y="bwd_tflops",
-                    hue="backend_display",
-                    ax=ax_bwd,
-                    palette=palette,
-                    edgecolor="black",
-                    linewidth=0.5,
-                )
-                ax_bwd.set_xlabel("Sequence Length", fontsize=LABEL_FONT_SIZE)
-                ax_bwd.set_ylabel("TFLOPS", fontsize=LABEL_FONT_SIZE)
-                model_info = _get_model_info(config)
-                ax_bwd.set_title(f"{config.name} Backward ({mask_title}, batch={config.batch_size}{model_info})", fontsize=TITLE_FONT_SIZE)
-                ax_bwd.legend(title="Backend", fontsize=LEGEND_FONT_SIZE)
-                ax_bwd.tick_params(axis="x", rotation=45)
-                for container in ax_bwd.containers:
-                    ax_bwd.bar_label(container, fmt="%.0f", fontsize=BAR_LABEL_FONT_SIZE)
+        if ax_bwd is not None and has_bwd:
+            sns.barplot(
+                data=bwd_df,
+                x="seqlen_label",
+                y="tflops",
+                hue="backend_display",
+                ax=ax_bwd,
+                palette=palette,
+                edgecolor="black",
+                linewidth=0.5,
+            )
+            ax_bwd.set_xlabel("Sequence Length", fontsize=LABEL_FONT_SIZE)
+            ax_bwd.set_ylabel("TFLOPS", fontsize=LABEL_FONT_SIZE)
+            model_info = _get_model_info(config)
+            ax_bwd.set_title(f"{config.name} Backward ({mask_title}, batch={config.batch_size}{model_info})", fontsize=TITLE_FONT_SIZE)
+            ax_bwd.legend(title="Backend", fontsize=LEGEND_FONT_SIZE)
+            ax_bwd.tick_params(axis="x", rotation=45)
+            for container in ax_bwd.containers:
+                ax_bwd.bar_label(container, fmt="%.0f", fontsize=BAR_LABEL_FONT_SIZE)
 
         plt.tight_layout()
         output_path = output_dir / f"{config.name}_{mask}.png"

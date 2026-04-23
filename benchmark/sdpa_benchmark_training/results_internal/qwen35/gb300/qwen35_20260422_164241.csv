@@ -1,0 +1,141 @@
+config_name,model_name,backend,data_type,attn_mask,batch_size,q_seqlen,kv_seqlen,num_q_heads,num_kv_heads,head_dim_qk,head_dim_vo,profile_pass,deterministic_bwd,time_ms,tflops,max_diff,num_iterations,sliding_window_size,success,error_message,gpu_name,cudnn_version,cudnn_backend_version
+qwen35,qwen35,cudnn,bfloat16,top_left,1,32768,32768,32,2,256,256,fwd,False,8.729,2015.000,0.000,10,,True,,NVIDIA GB300,1.21.1,92200.000
+qwen35,qwen35,flash_attention_4,bfloat16,top_left,1,32768,32768,32,2,256,256,fwd,False,inf,0.000,0.000,10,,False,"Benchmark failed with return code 1.
+stderr: /usr/local/lib/python3.12/dist-packages/torch/profiler/profiler.py:217: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/workspace/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1475, in <module>
+    output = sdpa_function(query, key, value)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/workspace/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1094, in flash_attention_4_sdpa
+    output, _ = flash_attn_interface.flash_attn_func(query, key, value, causal=args.attn_mask != ""no_mask"", window_size=window_size)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1982, in flash_attn_func
+    return FlashAttnFunc.apply(
+           ^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/function.py"", line 596, in apply
+    return super().apply(*args, **kwargs)  # type: ignore[misc]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1808, in forward
+    out, lse = _flash_attn_fwd(
+               ^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 419, in _flash_attn_fwd
+    _validate_head_dims(head_dim, head_dim_v, arch // 10, alignment)
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 98, in _validate_head_dims
+    assert (is_standard_range or is_deepseek_shape or is_deepseek_mla_absorbed_shape) and head_dim % alignment == 0 and head_dim_v % alignment == 0, (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: (head_dim, head_dim_v)=(256, 256) is not supported on SM100/SM110. head_dim and head_dim_v must be between 8 and 128 and divisible by 8, or (192, 128) for DeepSeek.
+
+stdout: ",,,
+qwen35,qwen35,cudnn,bfloat16,top_left,1,16384,16384,32,2,256,256,fwd,False,2.113,2081.000,0.000,10,,True,,NVIDIA GB300,1.21.1,92200.000
+qwen35,qwen35,flash_attention_4,bfloat16,top_left,1,16384,16384,32,2,256,256,fwd,False,inf,0.000,0.000,10,,False,"Benchmark failed with return code 1.
+stderr: /usr/local/lib/python3.12/dist-packages/torch/profiler/profiler.py:217: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/workspace/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1475, in <module>
+    output = sdpa_function(query, key, value)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/workspace/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1094, in flash_attention_4_sdpa
+    output, _ = flash_attn_interface.flash_attn_func(query, key, value, causal=args.attn_mask != ""no_mask"", window_size=window_size)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1982, in flash_attn_func
+    return FlashAttnFunc.apply(
+           ^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/function.py"", line 596, in apply
+    return super().apply(*args, **kwargs)  # type: ignore[misc]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1808, in forward
+    out, lse = _flash_attn_fwd(
+               ^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 419, in _flash_attn_fwd
+    _validate_head_dims(head_dim, head_dim_v, arch // 10, alignment)
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 98, in _validate_head_dims
+    assert (is_standard_range or is_deepseek_shape or is_deepseek_mla_absorbed_shape) and head_dim % alignment == 0 and head_dim_v % alignment == 0, (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: (head_dim, head_dim_v)=(256, 256) is not supported on SM100/SM110. head_dim and head_dim_v must be between 8 and 128 and divisible by 8, or (192, 128) for DeepSeek.
+
+stdout: ",,,
+qwen35,qwen35,cudnn,bfloat16,top_left,1,8192,8192,32,2,256,256,fwd,False,0.553,1990.000,0.000,10,,True,,NVIDIA GB300,1.21.1,92200.000
+qwen35,qwen35,flash_attention_4,bfloat16,top_left,1,8192,8192,32,2,256,256,fwd,False,inf,0.000,0.000,10,,False,"Benchmark failed with return code 1.
+stderr: /usr/local/lib/python3.12/dist-packages/torch/profiler/profiler.py:217: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/workspace/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1475, in <module>
+    output = sdpa_function(query, key, value)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/workspace/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1094, in flash_attention_4_sdpa
+    output, _ = flash_attn_interface.flash_attn_func(query, key, value, causal=args.attn_mask != ""no_mask"", window_size=window_size)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1982, in flash_attn_func
+    return FlashAttnFunc.apply(
+           ^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/function.py"", line 596, in apply
+    return super().apply(*args, **kwargs)  # type: ignore[misc]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1808, in forward
+    out, lse = _flash_attn_fwd(
+               ^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 419, in _flash_attn_fwd
+    _validate_head_dims(head_dim, head_dim_v, arch // 10, alignment)
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 98, in _validate_head_dims
+    assert (is_standard_range or is_deepseek_shape or is_deepseek_mla_absorbed_shape) and head_dim % alignment == 0 and head_dim_v % alignment == 0, (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: (head_dim, head_dim_v)=(256, 256) is not supported on SM100/SM110. head_dim and head_dim_v must be between 8 and 128 and divisible by 8, or (192, 128) for DeepSeek.
+
+stdout: ",,,
+qwen35,qwen35,cudnn,bfloat16,top_left,1,4096,4096,32,2,256,256,fwd,False,0.158,1739.000,0.000,10,,True,,NVIDIA GB300,1.21.1,92200.000
+qwen35,qwen35,flash_attention_4,bfloat16,top_left,1,4096,4096,32,2,256,256,fwd,False,inf,0.000,0.000,10,,False,"Benchmark failed with return code 1.
+stderr: /usr/local/lib/python3.12/dist-packages/torch/profiler/profiler.py:217: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/workspace/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1475, in <module>
+    output = sdpa_function(query, key, value)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/workspace/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1094, in flash_attention_4_sdpa
+    output, _ = flash_attn_interface.flash_attn_func(query, key, value, causal=args.attn_mask != ""no_mask"", window_size=window_size)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1982, in flash_attn_func
+    return FlashAttnFunc.apply(
+           ^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/function.py"", line 596, in apply
+    return super().apply(*args, **kwargs)  # type: ignore[misc]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1808, in forward
+    out, lse = _flash_attn_fwd(
+               ^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 419, in _flash_attn_fwd
+    _validate_head_dims(head_dim, head_dim_v, arch // 10, alignment)
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 98, in _validate_head_dims
+    assert (is_standard_range or is_deepseek_shape or is_deepseek_mla_absorbed_shape) and head_dim % alignment == 0 and head_dim_v % alignment == 0, (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: (head_dim, head_dim_v)=(256, 256) is not supported on SM100/SM110. head_dim and head_dim_v must be between 8 and 128 and divisible by 8, or (192, 128) for DeepSeek.
+
+stdout: ",,,
+qwen35,qwen35,cudnn,bfloat16,top_left,1,2048,2048,32,2,256,256,fwd,False,0.053,1299.000,0.000,10,,True,,NVIDIA GB300,1.21.1,92200.000
+qwen35,qwen35,flash_attention_4,bfloat16,top_left,1,2048,2048,32,2,256,256,fwd,False,inf,0.000,0.000,10,,False,"Benchmark failed with return code 1.
+stderr: /usr/local/lib/python3.12/dist-packages/torch/profiler/profiler.py:217: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+Traceback (most recent call last):
+  File ""/workspace/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1475, in <module>
+    output = sdpa_function(query, key, value)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/workspace/cudnn_frontend/benchmark/sdpa_benchmark_training/benchmark_single_sdpa.py"", line 1094, in flash_attention_4_sdpa
+    output, _ = flash_attn_interface.flash_attn_func(query, key, value, causal=args.attn_mask != ""no_mask"", window_size=window_size)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1982, in flash_attn_func
+    return FlashAttnFunc.apply(
+           ^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/torch/autograd/function.py"", line 596, in apply
+    return super().apply(*args, **kwargs)  # type: ignore[misc]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 1808, in forward
+    out, lse = _flash_attn_fwd(
+               ^^^^^^^^^^^^^^^^
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 419, in _flash_attn_fwd
+    _validate_head_dims(head_dim, head_dim_v, arch // 10, alignment)
+  File ""/usr/local/lib/python3.12/dist-packages/flash_attn/cute/interface.py"", line 98, in _validate_head_dims
+    assert (is_standard_range or is_deepseek_shape or is_deepseek_mla_absorbed_shape) and head_dim % alignment == 0 and head_dim_v % alignment == 0, (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: (head_dim, head_dim_v)=(256, 256) is not supported on SM100/SM110. head_dim and head_dim_v must be between 8 and 128 and divisible by 8, or (192, 128) for DeepSeek.
+
+stdout: ",,,
