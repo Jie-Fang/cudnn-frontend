@@ -38,6 +38,7 @@ To add a new frontend-only API, follow these steps:
 
 **Currently implemented frontend-only APIs**:
 - `GEMM + Amax`
+- `RMSNorm + RHT + Amax`
 - `GEMM + SwiGLU`
 - `GEMM + sReLU`
 - `GEMM + dsReLU`

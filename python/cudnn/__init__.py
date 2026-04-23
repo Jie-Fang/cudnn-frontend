@@ -246,6 +246,8 @@ _LAZY_OPTIONAL_IMPORTS = {
     "gemm_dsrelu_wrapper_sm100": (".gemm_dsrelu", "gemm_dsrelu_wrapper_sm100"),
     "GemmAmaxSm100": (".gemm_amax", "GemmAmaxSm100"),
     "gemm_amax_wrapper_sm100": (".gemm_amax", "gemm_amax_wrapper_sm100"),
+    "RmsNormRhtAmaxSm100": (".rmsnorm_rht_amax", "RmsNormRhtAmaxSm100"),
+    "rmsnorm_rht_amax_wrapper_sm100": (".rmsnorm_rht_amax", "rmsnorm_rht_amax_wrapper_sm100"),
     "grouped_gemm": (".grouped_gemm", None),
     "GroupedGemmSwigluSm100": (".grouped_gemm", "GroupedGemmSwigluSm100"),
     "grouped_gemm_swiglu_wrapper_sm100": (".grouped_gemm", "grouped_gemm_swiglu_wrapper_sm100"),
