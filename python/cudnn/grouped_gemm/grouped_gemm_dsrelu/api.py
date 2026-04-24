@@ -820,6 +820,24 @@ def grouped_gemm_dsrelu_wrapper_sm100(
     def stride_order(tensor: torch.Tensor) -> Tuple[int, ...]:
         return tuple(i for i, s in sorted(enumerate(tensor.stride()), key=lambda x: x[1]))
 
+    def tensor_signature(tensor: Optional[torch.Tensor]) -> Tuple[Optional[Tuple[int, ...]], Optional[Tuple[int, ...]], Optional[torch.dtype]]:
+        if tensor is None:
+            return None, None, None
+        return tuple(tensor.shape), tuple(tensor.stride()), tensor.dtype
+
+    def dynamic_tensor_signature(tensor: Optional[torch.Tensor]) -> Tuple[Optional[Tuple[int, ...]], Optional[Tuple[int, ...]], Optional[torch.dtype]]:
+        if tensor is None:
+            return None, None, None
+        return None, stride_order(tensor), tensor.dtype
+
+    def dynamic_m_tensor_signature(
+        tensor: Optional[torch.Tensor], static_shape_suffix: Optional[Tuple[int, ...]], dynamic_stride_dims: Tuple[int, ...] = ()
+    ) -> Tuple[Optional[Tuple[int, ...]], Optional[Tuple[int, ...]], Optional[torch.dtype]]:
+        if tensor is None:
+            return None, None, None
+        stride_signature = tuple(None if i in dynamic_stride_dims else s for i, s in enumerate(tensor.stride()))
+        return static_shape_suffix, stride_signature, tensor.dtype
+
     cache_key = (
         use_full_dynamic,
         a_tensor.shape[1:] if not use_full_dynamic else None,
@@ -828,14 +846,19 @@ def grouped_gemm_dsrelu_wrapper_sm100(
         a_tensor.dtype,
         b_tensor.dtype,
         c_tensor.dtype,
-        sfa_tensor.dtype,
-        sfb_tensor.dtype,
         stride_order(a_tensor),
         stride_order(b_tensor),
         stride_order(c_tensor),
-        norm_const_tensor.shape if norm_const_tensor is not None else None,
-        norm_const_tensor.stride() if norm_const_tensor is not None else None,
-        norm_const_tensor.dtype if norm_const_tensor is not None else None,
+        *(
+            dynamic_tensor_signature(sfa_tensor)
+            if use_full_dynamic
+            else dynamic_m_tensor_signature(sfa_tensor, (sfa_tensor.shape[4], 1) if sfa_tensor is not None else None, dynamic_stride_dims=(5,))
+        ),
+        *(dynamic_tensor_signature(sfb_tensor) if use_full_dynamic else tensor_signature(sfb_tensor)),
+        *tensor_signature(alpha_tensor),
+        *(dynamic_tensor_signature(prob_tensor) if use_full_dynamic else dynamic_m_tensor_signature(prob_tensor, (1, 1))),
+        *(dynamic_tensor_signature(dprob_tensor) if use_full_dynamic else dynamic_m_tensor_signature(dprob_tensor, (1, 1))),
+        *tensor_signature(norm_const_tensor),
         padded_offsets.shape if not use_full_dynamic else None,
         padded_offsets.stride() if not use_full_dynamic else None,
         padded_offsets.dtype,
