@@ -298,6 +298,13 @@ NLOHMANN_JSON_SERIALIZE_ENUM(Reshape_attributes::input_names,
 
 NLOHMANN_JSON_SERIALIZE_ENUM(Reshape_attributes::output_names, {{Reshape_attributes::output_names::Y, "Y"}})
 
+NLOHMANN_JSON_SERIALIZE_ENUM(Transpose_attributes::input_names,
+                             {
+                                 {Transpose_attributes::input_names::X, "X"},
+                             })
+
+NLOHMANN_JSON_SERIALIZE_ENUM(Transpose_attributes::output_names, {{Transpose_attributes::output_names::Y, "Y"}})
+
 NLOHMANN_JSON_SERIALIZE_ENUM(Rmsnorm_attributes::input_names,
                              {
                                  {Rmsnorm_attributes::input_names::X, "X"},
