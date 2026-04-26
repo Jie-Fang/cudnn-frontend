@@ -1305,11 +1305,6 @@ class CompositeSDPABackwardNode : public NodeCRTP<CompositeSDPABackwardNode> {
                                        "For cuDNN version below 9.6.0, group-query attention with raggged offset is not supported");
 
         // TODO add version check once fixed
-        RETURN_CUDNN_FRONTEND_ERROR_IF(prop_major == 10 && is_rng,
-                                       error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "Dropout RNG dump is not supported for SM Major version 10");
-
-        // TODO add version check once fixed
         RETURN_CUDNN_FRONTEND_ERROR_IF(prop_major == 10 && is_ragged && is_dbias,
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "dbias with ragged is not supported for SM Major version 10");
