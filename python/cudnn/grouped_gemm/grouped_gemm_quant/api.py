@@ -213,7 +213,7 @@ class GroupedGemmQuantSm100(APIBase):
         self.num_cluster_overlap_margin = int(os.getenv("CUDNNFE_CLUSTER_OVERLAP_MARGIN", "0"))
         print(f"setting num_cluster_overlap_margin: {self.num_cluster_overlap_margin}")
         self._workspace = None
-        self._use_full_dynamic_mnkl = os.environ.get("CUDNN_FE_GROUPED_GEMM_DYNAMIC_MNKL") is not None
+        self._use_full_dynamic_mnkl = os.environ.get("CUDNN_FE_GROUPED_GEMM_DYNAMIC_MNKL", "1") != "0"
         self._logger.debug("__init__ completed")
 
     def check_support(self) -> bool:
@@ -537,7 +537,7 @@ class GroupedGemmQuantSm100(APIBase):
             self._logger.debug("sample valid_m is zero, skipping kernel compilation")
             return
 
-        self._use_full_dynamic_mnkl = os.environ.get("CUDNN_FE_GROUPED_GEMM_DYNAMIC_MNKL") is not None
+        self._use_full_dynamic_mnkl = os.environ.get("CUDNN_FE_GROUPED_GEMM_DYNAMIC_MNKL", "1") != "0"
 
         gemm_quant = self._kernel(
             sf_vec_size=self.sf_vec_size,
@@ -1315,7 +1315,7 @@ def grouped_gemm_quant_wrapper_sm100(
         stride_signature = tuple(None if i in dynamic_stride_dims else s for i, s in enumerate(tensor.stride()))
         return static_shape_suffix, stride_signature, tensor.dtype
 
-    use_full_dynamic = is_dense and os.environ.get("CUDNN_FE_GROUPED_GEMM_DYNAMIC_MNKL") is not None
+    use_full_dynamic = is_dense and os.environ.get("CUDNN_FE_GROUPED_GEMM_DYNAMIC_MNKL", "1") != "0"
 
     if is_dense:
         cache_key = (

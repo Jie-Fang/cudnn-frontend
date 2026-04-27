@@ -395,7 +395,7 @@ class GroupedGemmDswigluSm100(APIBase):
         fake_stream = make_fake_stream(use_tvm_ffi_env_stream=False)
 
         self._logger.debug("Compiling grouped_gemm_dswiglu kernel")
-        use_full_dynamic = os.environ.get("CUDNN_FE_GROUPED_GEMM_DYNAMIC_MNKL") is not None
+        use_full_dynamic = os.environ.get("CUDNN_FE_GROUPED_GEMM_DYNAMIC_MNKL", "1") != "0"
         if not use_full_dynamic:
             valid_m = cute.sym_int(divisibility=256)
 
@@ -763,7 +763,7 @@ def grouped_gemm_dswiglu_wrapper_sm100(
     if cd_major != "n":
         raise ValueError(f"cd_major must be 'n', got {cd_major}")
 
-    use_full_dynamic = os.environ.get("CUDNN_FE_GROUPED_GEMM_DYNAMIC_MNKL") is not None
+    use_full_dynamic = os.environ.get("CUDNN_FE_GROUPED_GEMM_DYNAMIC_MNKL", "1") != "0"
 
     def stride_order(tensor: torch.Tensor) -> Tuple[int, ...]:
         return tuple(i for i, s in sorted(enumerate(tensor.stride()), key=lambda x: x[1]))

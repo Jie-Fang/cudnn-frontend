@@ -648,7 +648,7 @@ class GroupedGemmGluSm100(APIBase):
 
     def _compile_dense(self, gemm_glu, max_active_clusters, fake_stream) -> None:
         """Compile for dense (contiguous) weight mode."""
-        use_full_dynamic = os.environ.get("CUDNN_FE_GROUPED_GEMM_DYNAMIC_MNKL") is not None
+        use_full_dynamic = os.environ.get("CUDNN_FE_GROUPED_GEMM_DYNAMIC_MNKL", "1") != "0"
 
         fake_workspace_ptr = cute.runtime.nullptr(
             dtype=cutlass.Uint8,
@@ -1385,7 +1385,7 @@ def grouped_gemm_glu_wrapper_sm100(
         stride_signature = tuple(None if i in dynamic_stride_dims else s for i, s in enumerate(tensor.stride()))
         return static_shape_suffix, stride_signature, tensor.dtype
 
-    use_full_dynamic = is_dense and os.environ.get("CUDNN_FE_GROUPED_GEMM_DYNAMIC_MNKL") is not None
+    use_full_dynamic = is_dense and os.environ.get("CUDNN_FE_GROUPED_GEMM_DYNAMIC_MNKL", "1") != "0"
 
     if is_dense:
         cache_key = (
