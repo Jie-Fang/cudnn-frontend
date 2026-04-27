@@ -646,7 +646,8 @@ class GroupedGemmQuantSm100(APIBase):
             bias_cute_fake = self._make_fake_cute_tensor_from_desc(self.bias_desc, assumed_align=16)
         else:
             valid_m = cute.sym_int(divisibility=256)
-            n_sym = cute.sym_int()
+            n_sym_divisibility = 128 // _convert_to_cutlass_data_type(self.bias_desc.dtype).width if self.bias_desc is not None else 1
+            n_sym = cute.sym_int(divisibility=n_sym_divisibility)
             k_sym = cute.sym_int()
             l_sym = cute.sym_int()
 
