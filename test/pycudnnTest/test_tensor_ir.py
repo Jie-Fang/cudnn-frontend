@@ -543,6 +543,7 @@ def calculate_stride_div_from_alignment(
     stride_dynamic,
     stride,
     dtype_width,
+    shape=None,
 ):
     """Calculate stride divisibility from stride layout.
 
@@ -550,6 +551,10 @@ def calculate_stride_div_from_alignment(
         stride_dynamic: List of stride placeholders (0 for broadcast, 1 for leading, etc.)
         stride: List of actual stride values
         dtype_width: Data type width in bits
+        shape: Optional list of shape values; dims with shape==1 are treated as
+            broadcast-like (same effect as stride==0), so the TMA alignment div
+            still lands on the leading dim under the new
+            shape=1+dyn-stride convention.
 
     Returns:
         List of stride divisibility values
@@ -570,15 +575,16 @@ def calculate_stride_div_from_alignment(
     stride_div = []
     tma_requirement_in_bits = 128
     stride_div_flag = True
-    has_stride_zero = False
+    has_broadcast_dim = False
 
     for idx, s in enumerate(stride_dynamic):
-        if s == 0:
+        is_broadcast_dim = (s == 0) or (shape is not None and shape[idx] == 1)
+        if is_broadcast_dim:
             stride_div.append(1)
-            has_stride_zero = True
+            has_broadcast_dim = True
         else:
             if s != 1:
-                if stride_div_flag and has_stride_zero:
+                if stride_div_flag and has_broadcast_dim:
                     actual_stride_div = calculate_actual_divisibility(stride[idx])
                     final_stride_div = gcd(actual_stride_div * dtype_width, tma_requirement_in_bits) // dtype_width
                     stride_div.append(final_stride_div)
@@ -588,7 +594,7 @@ def calculate_stride_div_from_alignment(
             else:
                 stride_div.append(1)
 
-    if has_stride_zero:
+    if has_broadcast_dim:
         stride_div[0] = gcd(stride[0] * dtype_width, tma_requirement_in_bits) // dtype_width
 
     return stride_div
@@ -1178,11 +1184,10 @@ class test_tensor_ir:
                 shape = [1] * len(ori_shape)
                 stride = [1] * len(ori_stride)
             else:
-                # Collective backend: use stride=0 and dynamic shape (no explicit BroadcastOp).
-                # stride=0 encodes broadcast natively in collective IR.
-                scalar_dim = 1 if self.static_shapes_only else -1
-                shape = [scalar_dim] * len(ori_shape)
-                stride = [0] * len(ori_stride)
+                # Collective backend (new convention): static shape=1 + dynamic stride.
+                # Unifies with CudaTile; stride=? lets backend pick broadcast from shape=1.
+                shape = [1] * len(ori_shape)
+                stride = [1 if self.static_shapes_only else -1] * len(ori_stride)
             stride_div = [1] * len(ori_stride)
             return TensorInfo(
                 tensor_type=nv_tensor_ir.TensorType.get(shape=shape, datatype=dtype),
@@ -1202,9 +1207,9 @@ class test_tensor_ir:
                     shape.append(1)
                     stride.append(1)
                 else:
-                    # Collective backend: stride=0 + dynamic shape encodes broadcast natively.
-                    shape.append(d if self.static_shapes_only else -1)
-                    stride.append(0)
+                    # Collective backend (new convention): static shape=1 + dynamic stride.
+                    shape.append(1)
+                    stride.append(1 if self.static_shapes_only else -1)
             else:
                 if s != 1:
                     stride.append(s if self.static_shapes_only else -1)
@@ -1229,6 +1234,7 @@ class test_tensor_ir:
             stride,
             ori_stride,
             dtype_width,
+            shape=shape,
         )
 
         reorder_mode = self.get_reorder_mode(node)
