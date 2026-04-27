@@ -4,7 +4,7 @@
 
 ## Overview
 
-**Grouped GEMM + dsReLU backward fusion**: A contiguous grouped block-scaled GEMM fused with a probability-gradient backward epilogue on NVIDIA Blackwell GPUs (SM100+), designed for MoE-style workloads. Groups are contiguous in the `M` dimension and described by `padded_offsets`.
+**Grouped GEMM + dsReLU backward fusion**: A grouped block-scaled GEMM fused with a probability-gradient backward epilogue on NVIDIA Blackwell GPUs (SM100+), designed for MoE-style workloads. The API supports dense contiguous weights and discrete per-expert weight allocations. Groups are contiguous in the `M` dimension and described by `padded_offsets`.
 
 This kernel performs:
 1. **Block-scaled grouped GEMM** over contiguous expert ranges
@@ -15,10 +15,10 @@ This kernel performs:
 
 - **Inputs**
   - `A`: contiguous activation tensor across all groups, shape `(valid_m, K, 1)`
-  - `B`: weight tensor across all groups, shape `(N, K, L)`
+  - `B`: dense weight tensor across all groups, shape `(N, K, L)`, or discrete per-expert tensors addressed by `b_ptrs`
   - `C`: forward/intermediate tensor, shape `(valid_m, N, 1)`
   - `SFA`: shape `(32, 4, ceil_div(valid_m, 128), 4, ceil_div(ceil_div(K, sf_vec_size), 4), 1)`
-  - `SFB`: shape `(32, 4, ceil_div(N, 128), 4, ceil_div(ceil_div(K, sf_vec_size), 4), L)`
+  - `SFB`: dense scale-factor tensor, shape `(32, 4, ceil_div(N, 128), 4, ceil_div(ceil_div(K, sf_vec_size), 4), L)`, or discrete per-expert tensors addressed by `sfb_ptrs`
   - `padded_offsets`: cumulative padded group ends, shape `(L,)`
   - `alpha`: per-group scaling factors, shape `(L,)`
   - `prob`: per-row gating probabilities, shape `(valid_m, 1, 1)`
@@ -108,7 +108,26 @@ result = grouped_gemm_dsrelu_wrapper_sm100(
     current_stream=None,
 )
 
-d_row, d_col, dprob, amax, sfd_row, sfd_col = result
+d_row, d_col, dprob, dbias, amax, sfd_row, sfd_col = result
+```
+
+### Discrete-weight wrapper
+
+```python
+result = grouped_gemm_dsrelu_wrapper_sm100(
+    a_tensor=a,
+    c_tensor=c,
+    sfa_tensor=sfa,
+    padded_offsets=padded_offsets,
+    alpha_tensor=alpha,
+    prob_tensor=prob,
+    b_ptrs=b_ptrs,          # int64 device tensor of per-expert B pointers
+    sfb_ptrs=sfb_ptrs,      # int64 device tensor of per-expert SFB pointers
+    n=N,
+    b_dtype=torch.float4_e2m1fn_x2,
+    b_major="k",
+    d_dtype=torch.bfloat16,
+)
 ```
 
 ### Class API
@@ -177,6 +196,10 @@ op.execute(
   - Shape: `(N, K, L)`
   - Layout: must be `k`-major
   - Dtype: must match `A`
+- Discrete input **B pointers**: `b_ptrs` (wrapper) or `num_experts` / `b_shape` / `b_dtype` (class)
+  - `b_ptrs`: 1-D `int64` CUDA tensor containing one data pointer per expert
+  - `n` and `b_dtype` are required in wrapper discrete mode
+  - `b_major` may be `"k"` or `"n"` for supported FP8 cases; FP4 uses `"k"`
 - Input tensor **C**: `c_tensor` (wrapper) or `sample_c` / `c_tensor` (class)
   - Shape: `(valid_m, N, 1)`
   - Layout: must be `n`-major
@@ -187,6 +210,8 @@ op.execute(
 - Input tensor **SFB**: `sfb_tensor` (wrapper) or `sample_sfb` / `sfb_tensor` (class)
   - Shape: `(32, 4, ceil_div(N, 128), 4, ceil_div(ceil_div(K, sf_vec_size), 4), L)`
   - Dtype: must match `SFA`
+- Discrete input **SFB pointers**: `sfb_ptrs`
+  - 1-D `int64` CUDA tensor containing one scale-factor pointer per expert
 - Input tensor **padded_offsets**
   - Shape: `(L,)`
   - Dtype: `int32`
@@ -250,11 +275,12 @@ Returns a `TupleDict` with keys:
 - `d_row_tensor`
 - `d_col_tensor`
 - `dprob_tensor`
+- `dbias_tensor`
 - `amax_tensor`
 - `sfd_row_tensor`
 - `sfd_col_tensor`
 
-Tuple unpacking order is: `(d_row_tensor, d_col_tensor, dprob_tensor, amax_tensor, sfd_row_tensor, sfd_col_tensor)`.
+Tuple unpacking order is: `(d_row_tensor, d_col_tensor, dprob_tensor, dbias_tensor, amax_tensor, sfd_row_tensor, sfd_col_tensor)`.
 
 ---
 
@@ -264,6 +290,7 @@ Tuple unpacking order is: `(d_row_tensor, d_col_tensor, dprob_tensor, amax_tenso
 
 - `A` must be `k`-major
 - `B` must be `k`-major
+- Discrete `B` supports `b_major="k"` and supported FP8 `b_major="n"` configurations
 - `C`, `D_row`, and `D_col` must be `n`-major
 - The wrapper only supports `cd_major="n"`
 

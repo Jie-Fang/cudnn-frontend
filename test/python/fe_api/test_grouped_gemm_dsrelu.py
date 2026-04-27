@@ -16,8 +16,31 @@ from fe_api.test_grouped_gemm_dsrelu_utils import (
     check_ref_grouped_gemm_dsrelu,
     grouped_gemm_dsrelu_init,
 )
+from fe_api.test_discrete_grouped_gemm_swiglu_utils import (
+    allocate_discrete_input_tensors,
+    discrete_grouped_gemm_init,
+)
 
 GROUPED_GEMM_DSRELU_DYNAMIC_SHAPES_M_VALUES = [64, 320, 576, 832, 1088, 1344, 1600, 1856, 2112, 2368]
+
+DISCRETE_GROUPED_GEMM_DSRELU_SUPPORTED_CONFIGS = [
+    pytest.param(torch.float4_e2m1fn_x2, torch.bfloat16, torch.bfloat16, "k", id="fp4-k-major"),
+    pytest.param(torch.float8_e4m3fn, torch.bfloat16, torch.float8_e4m3fn, "k", id="fp8-k-major"),
+    pytest.param(torch.float8_e4m3fn, torch.bfloat16, torch.float8_e4m3fn, "n", id="fp8-n-major"),
+]
+
+
+def _dense_ref_inputs_from_discrete(inputs):
+    ref_inputs = dict(inputs)
+    ref_inputs["b_ref"] = torch.cat(inputs["b_ref_list"], dim=2)
+    ref_inputs["sfb_ref"] = torch.cat(inputs["sfb_ref_list"], dim=2)
+    return ref_inputs
+
+
+def _prepare_discrete_dsrelu_inputs(inputs):
+    inputs["alpha_tensor"] = torch.ones_like(inputs["alpha_tensor"])
+    inputs["prob_tensor"] = torch.ones_like(inputs["prob_tensor"])
+    return inputs
 
 
 @pytest.mark.L0
@@ -360,6 +383,214 @@ def test_grouped_gemm_dsrelu_wrapper_uint8_raw_fp4_smoke(request):
     assert torch.isfinite(outputs["d_row_tensor"].float()).all()
     assert torch.isfinite(outputs["dprob_tensor"].float()).all()
     assert torch.count_nonzero(outputs["d_row_tensor"]).item() > 0
+
+
+@pytest.mark.L0
+@torch_fork_set_rng(seed=13)
+@pytest.mark.parametrize("ab_dtype,c_dtype,d_dtype,b_major", DISCRETE_GROUPED_GEMM_DSRELU_SUPPORTED_CONFIGS)
+def test_grouped_gemm_dsrelu_discrete_compile_execute(request, ab_dtype, c_dtype, d_dtype, b_major):
+    try:
+        from cudnn import GroupedGemmDsreluSm100
+        from cuda.bindings import driver as cuda
+    except ImportError:
+        pytest.skip("Environment not supported: cudnn optional dependencies not installed")
+
+    cfg = discrete_grouped_gemm_init(
+        request=request,
+        ab_dtype=ab_dtype,
+        c_dtype=c_dtype,
+        d_dtype=d_dtype,
+        cd_major="n",
+        acc_dtype=torch.float32,
+        mma_tiler_mn=(256, 256),
+        cluster_shape_mn=(2, 1),
+        sf_vec_size=32,
+        sf_dtype=torch.float8_e8m0fnu,
+        vector_f32=False,
+        discrete_col_sfd=False,
+        b_major=b_major,
+    )
+
+    inputs = _prepare_discrete_dsrelu_inputs(
+        allocate_discrete_input_tensors(
+            n=cfg["n"],
+            k=cfg["k"],
+            num_experts=cfg["l"],
+            group_m_list=cfg["group_m_list"],
+            ab_dtype=cfg["ab_dtype"],
+            sf_dtype=cfg["sf_dtype"],
+            sf_vec_size=cfg["sf_vec_size"],
+            m_aligned=cfg["m_aligned"],
+            b_major=cfg["b_major"],
+        )
+    )
+    inputs, outputs = allocate_grouped_gemm_dsrelu_tensors(
+        tensor_m=inputs["tensor_m"],
+        n=cfg["n"],
+        l=cfg["l"],
+        ab_dtype=cfg["ab_dtype"],
+        c_dtype=cfg["c_dtype"],
+        d_dtype=cfg["d_dtype"],
+        cd_major=cfg["cd_major"],
+        sf_dtype=cfg["sf_dtype"],
+        sf_vec_size=cfg["sf_vec_size"],
+        input_tensors=inputs,
+    )
+
+    api = GroupedGemmDsreluSm100(
+        sample_a=inputs["a_tensor"],
+        sample_c=inputs["c_tensor"],
+        sample_d_row=outputs["d_row_tensor"],
+        sample_d_col=outputs["d_col_tensor"],
+        sample_sfa=inputs["sfa_tensor"],
+        sample_padded_offsets=inputs["padded_offsets_tensor"],
+        sample_alpha=inputs["alpha_tensor"],
+        sample_prob=inputs["prob_tensor"],
+        sample_dprob=outputs["dprob_tensor"],
+        num_experts=cfg["l"],
+        b_shape=(cfg["n"], cfg["k"]),
+        b_dtype=inputs["b_list"][0].dtype,
+        sample_amax=outputs.get("amax_tensor"),
+        sample_sfd_row=outputs.get("sfd_row_tensor"),
+        sample_sfd_col=outputs.get("sfd_col_tensor"),
+        sample_norm_const=inputs.get("norm_const_tensor"),
+        acc_dtype=cfg["acc_dtype"],
+        mma_tiler_mn=cfg["mma_tiler_mn"],
+        cluster_shape_mn=cfg["cluster_shape_mn"],
+        sf_vec_size=cfg["sf_vec_size"],
+        vector_f32=cfg["vector_f32"],
+        m_aligned=cfg["m_aligned"],
+        discrete_col_sfd=cfg["discrete_col_sfd"],
+        b_major=cfg["b_major"],
+    )
+
+    try:
+        assert api.check_support(), "Unsupported testcase"
+    except (ValueError, NotImplementedError) as e:
+        pytest.skip(f"Unsupported testcase: {e}")
+
+    api.compile()
+    api.execute(
+        a_tensor=inputs["a_tensor"],
+        b_ptrs=inputs["b_ptrs_tensor"],
+        sfb_ptrs=inputs["sfb_ptrs_tensor"],
+        c_tensor=inputs["c_tensor"],
+        d_row_tensor=outputs["d_row_tensor"],
+        d_col_tensor=outputs["d_col_tensor"],
+        sfa_tensor=inputs["sfa_tensor"],
+        padded_offsets=inputs["padded_offsets_tensor"],
+        alpha_tensor=inputs["alpha_tensor"],
+        prob_tensor=inputs["prob_tensor"],
+        dprob_tensor=outputs["dprob_tensor"],
+        sfd_row_tensor=outputs.get("sfd_row_tensor"),
+        sfd_col_tensor=outputs.get("sfd_col_tensor"),
+        norm_const_tensor=inputs.get("norm_const_tensor"),
+        amax_tensor=outputs.get("amax_tensor"),
+        current_stream=cuda.CUstream(torch.cuda.current_stream().cuda_stream),
+    )
+
+    torch.cuda.synchronize()
+    check_ref_grouped_gemm_dsrelu(
+        _dense_ref_inputs_from_discrete(inputs),
+        outputs,
+        cfg,
+        skip_ref=cfg["skip_ref"],
+    )
+
+
+@pytest.mark.L0
+@torch_fork_set_rng(seed=13)
+@pytest.mark.parametrize("ab_dtype,c_dtype,d_dtype,b_major", DISCRETE_GROUPED_GEMM_DSRELU_SUPPORTED_CONFIGS)
+def test_grouped_gemm_dsrelu_discrete_wrapper(request, ab_dtype, c_dtype, d_dtype, b_major):
+    try:
+        from cudnn import grouped_gemm_dsrelu_wrapper_sm100
+        from cuda.bindings import driver as cuda
+    except ImportError:
+        pytest.skip("Environment not supported: cudnn optional dependencies not installed")
+
+    cfg = discrete_grouped_gemm_init(
+        request=request,
+        ab_dtype=ab_dtype,
+        c_dtype=c_dtype,
+        d_dtype=d_dtype,
+        cd_major="n",
+        acc_dtype=torch.float32,
+        mma_tiler_mn=(256, 256),
+        cluster_shape_mn=(2, 1),
+        sf_vec_size=32,
+        sf_dtype=torch.float8_e8m0fnu,
+        vector_f32=False,
+        discrete_col_sfd=False,
+        b_major=b_major,
+    )
+
+    inputs = _prepare_discrete_dsrelu_inputs(
+        allocate_discrete_input_tensors(
+            n=cfg["n"],
+            k=cfg["k"],
+            num_experts=cfg["l"],
+            group_m_list=cfg["group_m_list"],
+            ab_dtype=cfg["ab_dtype"],
+            sf_dtype=cfg["sf_dtype"],
+            sf_vec_size=cfg["sf_vec_size"],
+            m_aligned=cfg["m_aligned"],
+            b_major=cfg["b_major"],
+        )
+    )
+    inputs, _ = allocate_grouped_gemm_dsrelu_tensors(
+        tensor_m=inputs["tensor_m"],
+        n=cfg["n"],
+        l=cfg["l"],
+        ab_dtype=cfg["ab_dtype"],
+        c_dtype=cfg["c_dtype"],
+        d_dtype=cfg["d_dtype"],
+        cd_major=cfg["cd_major"],
+        sf_dtype=cfg["sf_dtype"],
+        sf_vec_size=cfg["sf_vec_size"],
+        input_tensors=inputs,
+    )
+
+    outputs = grouped_gemm_dsrelu_wrapper_sm100(
+        a_tensor=inputs["a_tensor"],
+        c_tensor=inputs["c_tensor"],
+        sfa_tensor=inputs["sfa_tensor"],
+        padded_offsets=inputs["padded_offsets_tensor"],
+        alpha_tensor=inputs["alpha_tensor"],
+        prob_tensor=inputs["prob_tensor"],
+        b_ptrs=inputs["b_ptrs_tensor"],
+        sfb_ptrs=inputs["sfb_ptrs_tensor"],
+        n=cfg["n"],
+        b_dtype=inputs["b_list"][0].dtype,
+        b_major=cfg["b_major"],
+        norm_const_tensor=inputs.get("norm_const_tensor"),
+        acc_dtype=cfg["acc_dtype"],
+        d_dtype=cfg["d_dtype"],
+        cd_major=cfg["cd_major"],
+        mma_tiler_mn=cfg["mma_tiler_mn"],
+        cluster_shape_mn=cfg["cluster_shape_mn"],
+        sf_vec_size=cfg["sf_vec_size"],
+        vector_f32=cfg["vector_f32"],
+        m_aligned=cfg["m_aligned"],
+        discrete_col_sfd=cfg["discrete_col_sfd"],
+        current_stream=cuda.CUstream(torch.cuda.current_stream().cuda_stream),
+    )
+
+    torch.cuda.synchronize()
+    wrapper_outputs = {
+        "d_row_tensor": outputs["d_row_tensor"],
+        "d_col_tensor": outputs["d_col_tensor"],
+        "dprob_tensor": outputs["dprob_tensor"],
+        "dbias_tensor": outputs["dbias_tensor"],
+        "amax_tensor": outputs["amax_tensor"],
+        "sfd_row_tensor": outputs["sfd_row_tensor"],
+        "sfd_col_tensor": outputs["sfd_col_tensor"],
+    }
+    check_ref_grouped_gemm_dsrelu(
+        _dense_ref_inputs_from_discrete(inputs),
+        wrapper_outputs,
+        cfg,
+        skip_ref=cfg["skip_ref"],
+    )
 
 
 """
