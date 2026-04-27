@@ -1177,17 +1177,11 @@ class test_tensor_ir:
                 return 32  # bytes
 
         if isScalarTensor:
-            if self.compiler_backend == "CudaTile":
-                # CudaTile backend: use static shape [1,...,1] with stride [1,...,1].
-                # build_tensor_ir_recursive sees a different type from the output (?,?,?) and
-                # inserts a nv_tensor_ir.broadcast op; BroadcastOpConversion clamps static-1 dims.
-                shape = [1] * len(ori_shape)
-                stride = [1] * len(ori_stride)
-            else:
-                # Collective backend (new convention): static shape=1 + dynamic stride.
-                # Unifies with CudaTile; stride=? lets backend pick broadcast from shape=1.
-                shape = [1] * len(ori_shape)
-                stride = [1 if self.static_shapes_only else -1] * len(ori_stride)
+            # Unified broadcast encoding for both CudaTile and Collective backends:
+            # static shape=1 + dynamic stride. The frontend emits an explicit
+            # nv_tensor_ir.broadcast op when the consumer expects a wider shape.
+            shape = [1] * len(ori_shape)
+            stride = [1 if self.static_shapes_only else -1] * len(ori_stride)
             stride_div = [1] * len(ori_stride)
             return TensorInfo(
                 tensor_type=nv_tensor_ir.TensorType.get(shape=shape, datatype=dtype),
@@ -1202,14 +1196,11 @@ class test_tensor_ir:
 
         for s, d in zip(ori_stride, ori_shape):
             if d == 1:
-                if self.compiler_backend == "CudaTile":
-                    # CudaTile backend: static shape=1 + stride=1 triggers explicit BroadcastOp.
-                    shape.append(1)
-                    stride.append(1)
-                else:
-                    # Collective backend (new convention): static shape=1 + dynamic stride.
-                    shape.append(1)
-                    stride.append(1 if self.static_shapes_only else -1)
+                # Unified broadcast encoding for both backends: static shape=1
+                # + dynamic stride. Triggers an explicit nv_tensor_ir.broadcast
+                # op in the graph when the consumer expects a wider shape.
+                shape.append(1)
+                stride.append(1 if self.static_shapes_only else -1)
             else:
                 if s != 1:
                     stride.append(s if self.static_shapes_only else -1)
