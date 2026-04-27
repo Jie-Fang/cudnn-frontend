@@ -4,6 +4,7 @@ import re
 import os
 import subprocess
 from pathlib import Path
+from urllib.parse import urlparse
 # should be in pytorch container
 import requests
 
@@ -13,14 +14,18 @@ PATTERN = re.compile(
 )
 
 
-def _auth():
-    u, t = os.getenv("URM_USER"), os.getenv("URM_TOKEN")
-    return (u, t) if u and t else None
+def request_kwargs(url):
+    token = os.getenv("ARTIFACTORY_TOKEN")
+    user = os.getenv("ARTIFACTORY_USER")
+    if not token:
+        raise RuntimeError("ARTIFACTORY_TOKEN is required for Artifactory downloads")
+    if user:
+        return {"auth": (user, token)}
+    return {"headers": {"Authorization": f"Bearer {token}"}}
 
 
 def _parse_artifactory_base_url(base_url):
     """Parse base_url (e.g. https://host/artifactory/repo_key/path) into api_base, repo_key, path_in_repo."""
-    from urllib.parse import urlparse
     parsed = urlparse(base_url)
     api_base = f"{parsed.scheme}://{parsed.netloc}/artifactory"
     path_after = parsed.path.split("/artifactory/", 1)[-1].strip("/") if "/artifactory/" in parsed.path else parsed.path.strip("/")
@@ -45,7 +50,7 @@ def get_artifact_properties(base_url, version, cuda_version, property_keys):
     artifact_path = f"{path_in_repo}/{rel}" if path_in_repo else rel
     url = f"{api_base}/api/storage/{repo_key}/{artifact_path}?properties={','.join(property_keys)}"
     try:
-        r = requests.get(url, auth=_auth(), timeout=30)
+        r = requests.get(url, **request_kwargs(url), timeout=30)
         r.raise_for_status()
         return r.json().get("properties")
     except (requests.RequestException, json.JSONDecodeError, KeyError):
@@ -76,7 +81,7 @@ def download_url(url, path):
     """Download url to path via a .tmp file (no partial file left on failure)."""
     tmp = Path(f"{path}.tmp")
     try:
-        with requests.get(url, auth=_auth(), stream=True) as r:
+        with requests.get(url, **request_kwargs(url), stream=True, timeout=300) as r:
             r.raise_for_status()
             with tmp.open("wb") as f:
                 for chunk in r.iter_content(chunk_size=8192):
@@ -88,7 +93,9 @@ def download_url(url, path):
 
 
 def fetch_cudnn(base_url, cuda_version, download_dir, unzip_dir, output_dir, cudnn_version=None, artifact_property_dict=None):
-    response = requests.get(base_url).text
+    response = requests.get(base_url, **request_kwargs(base_url), timeout=30)
+    response.raise_for_status()
+    response = response.text
     matches = PATTERN.findall(response)
     matches = [{"version": a, "version_num": a.split("-")[0], "last_modified": b} for a, b in matches]
 
@@ -155,8 +162,8 @@ def create_prop_dict(props):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Fetch cuDNN debug tarball from URM/JFrog, extract to /debug_cudnn, clean old cache.")
-    parser.add_argument("--base-url", dest="base_url", required=True, help="Base URL, e.g. https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.21")
+    parser = argparse.ArgumentParser(description="Fetch cuDNN debug tarball from Artifactory, extract to /debug_cudnn, clean old cache.")
+    parser.add_argument("--base-url", dest="base_url", required=True, help="Base URL, e.g. https://artifactory.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.21")
     parser.add_argument("--cuda-version", dest="cuda_version", required=True, help="CUDA version subdir, e.g. 13.2")
     parser.add_argument("--download-dir", dest="download_dir", default="downloads", help="Directory where downloaded tarballs are cached.")
     parser.add_argument("--unzip-dir", dest="unzip_dir", default="/", help="Directory where the tarball is extracted before moving cudnn/ into place.")
