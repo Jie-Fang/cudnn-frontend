@@ -70,6 +70,7 @@ add_executable(
     membound/slice.cpp
     membound/concat.cpp
     membound/membound_fusion.cpp
+    membound/boolean_fusion.cpp
 
     causal_conv1d/causal_conv1d.cpp
 )
