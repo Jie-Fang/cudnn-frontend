@@ -123,7 +123,7 @@ class GroupedGemmSwigluSm100(APIBase):
         """
         super().__init__()
 
-        self._logger.warning("GroupedGemmSwigluSm100 is an experimental API")
+        self._warn_experimental_api()
         self._logger.debug("Entering __init__")
 
         # Store sample tensor descriptors
@@ -168,7 +168,7 @@ class GroupedGemmSwigluSm100(APIBase):
         self._kernel = BlockScaledContiguousGroupedGemmKernel
 
         self.num_cluster_overlap_margin = int(os.getenv("CUDNNFE_CLUSTER_OVERLAP_MARGIN", "0"))
-        print(f"setting num_cluster_overlap_margin: {self.num_cluster_overlap_margin}")
+        self._logger.debug(f"setting num_cluster_overlap_margin: {self.num_cluster_overlap_margin}")
         self._logger.debug(f"__init__ completed")
 
     def check_support(self) -> bool:

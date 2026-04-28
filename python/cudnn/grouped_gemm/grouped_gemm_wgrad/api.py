@@ -50,7 +50,7 @@ class GroupedGemmWgradSm100(APIBase):
         accumulate_on_output: bool = False,
     ):
         super().__init__()
-        self._logger.warning("GroupedGemmWgradSm100 is an experimental API")
+        self._warn_experimental_api()
 
         if sample_wgrad is not None and num_experts is None:
             self.weight_mode = MoEWeightMode.DENSE

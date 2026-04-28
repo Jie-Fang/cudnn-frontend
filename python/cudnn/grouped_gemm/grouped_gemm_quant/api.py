@@ -133,7 +133,7 @@ class GroupedGemmQuantSm100(APIBase):
         """
         super().__init__()
 
-        self._logger.warning("GroupedGemmQuantSm100 is an experimental API")
+        self._warn_experimental_api()
         self._logger.debug("Entering __init__")
 
         # ---- Weight mode auto-detection ----
@@ -211,7 +211,7 @@ class GroupedGemmQuantSm100(APIBase):
         self._kernel = BlockScaledMoEGroupedGemmQuantKernel
 
         self.num_cluster_overlap_margin = int(os.getenv("CUDNNFE_CLUSTER_OVERLAP_MARGIN", "0"))
-        print(f"setting num_cluster_overlap_margin: {self.num_cluster_overlap_margin}")
+        self._logger.debug(f"setting num_cluster_overlap_margin: {self.num_cluster_overlap_margin}")
         self._workspace = None
         self._use_full_dynamic_mnkl = os.environ.get("CUDNN_FE_GROUPED_GEMM_DYNAMIC_MNKL", "1") != "0"
         self._logger.debug("__init__ completed")

@@ -52,7 +52,7 @@ class GemmDsreluSm100(APIBase):
     ):
         super().__init__()
 
-        self._logger.warning("GemmDsreluSm100 is an experimental API")
+        self._warn_experimental_api()
 
         self.a_desc = self._make_tensor_desc(sample_a, name="sample_a")
         self.b_desc = self._make_tensor_desc(sample_b, name="sample_b")

@@ -58,7 +58,7 @@ class GroupedGemmGluHadamardSm100(APIBase):
     ):
         super().__init__()
 
-        self._logger.warning("GroupedGemmGluHadamardSm100 is an experimental API")
+        self._warn_experimental_api()
         self._interpret_uint8_as_fp4x2 = True
         self._sample_a_tensor = sample_a
         self._sample_b_tensor = sample_b

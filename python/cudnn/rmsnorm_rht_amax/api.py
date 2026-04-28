@@ -64,7 +64,7 @@ class RmsNormRhtAmaxSm100(APIBase):
     ):
         super().__init__()
 
-        self._logger.warning("RmsNormRhtAmaxSm100 is an experimental API")
+        self._warn_experimental_api()
 
         self.x_desc = self._unpad_tensor_to_ndim(self._make_tensor_desc(sample_x, name="sample_x"), 2, "sample_x")
         self.w_desc = self._unpad_tensor_to_ndim(self._make_tensor_desc(sample_w, name="sample_w"), 1, "sample_w")
