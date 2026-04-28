@@ -37,7 +37,7 @@ CONFIG = BenchmarkConfig(
     data_types=["bfloat16"],
     attn_masks=["top_left"],  # Causal only
     profile_pass="fwd",  # Forward-only (bwd blocked at head_dim=256)
-    deterministic_bwd=[False],
+    deterministic_bwd=[False, True],
     batch_size=1,
     num_iterations=10,
     output_dir="results",

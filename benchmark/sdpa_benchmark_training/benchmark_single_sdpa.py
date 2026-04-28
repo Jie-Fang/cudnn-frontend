@@ -132,7 +132,7 @@ def parse_args():
     parser.add_argument(
         "--deterministic_bwd",
         action="store_true",
-        help="Use deterministic algorithm for backward pass where supported (cudnn FP16/BF16/FP8)",
+        help="Use deterministic algorithm for backward pass where supported (cudnn FP16/BF16/FP8, flash_attention, flash_attention_3, flash_attention_4)",
     )
     parser.add_argument(
         "--attn_mask",
@@ -1076,14 +1076,28 @@ else:
         # Flash Attention Native
         def flash_attention_sdpa(query, key, value):
             window_size = (args.sliding_window_size, 0) if args.sliding_window_size else (None, None)
-            return flash_attn_func(query, key, value, causal=args.attn_mask != "no_mask", window_size=window_size)
+            return flash_attn_func(
+                query,
+                key,
+                value,
+                causal=args.attn_mask != "no_mask",
+                window_size=window_size,
+                deterministic=args.deterministic_bwd,
+            )
 
     if args.sdpa_backend == "flash_attention_3":
         import flash_attn_interface
 
         def flash_attention_3_sdpa(query, key, value):
             window_size = (args.sliding_window_size, 0) if args.sliding_window_size else (None, None)
-            output, _ = flash_attn_interface.flash_attn_func(query, key, value, causal=args.attn_mask != "no_mask", window_size=window_size)
+            output, _ = flash_attn_interface.flash_attn_func(
+                query,
+                key,
+                value,
+                causal=args.attn_mask != "no_mask",
+                window_size=window_size,
+                deterministic=args.deterministic_bwd,
+            )
             return output
 
     if args.sdpa_backend == "flash_attention_4" or (not args.skip_ref):
@@ -1091,7 +1105,14 @@ else:
 
         def flash_attention_4_sdpa(query, key, value):
             window_size = (args.sliding_window_size, 0) if args.sliding_window_size else (None, None)
-            output, _ = flash_attn_interface.flash_attn_func(query, key, value, causal=args.attn_mask != "no_mask", window_size=window_size)
+            output, _ = flash_attn_interface.flash_attn_func(
+                query,
+                key,
+                value,
+                causal=args.attn_mask != "no_mask",
+                window_size=window_size,
+                deterministic=args.deterministic_bwd,
+            )
             return output
 
     def get_sdpa_function(backend):
