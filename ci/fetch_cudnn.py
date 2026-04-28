@@ -163,7 +163,7 @@ def create_prop_dict(props):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Fetch cuDNN debug tarball from Artifactory, extract to /debug_cudnn, clean old cache.")
-    parser.add_argument("--base-url", dest="base_url", required=True, help="Base URL, e.g. https://artifactory.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.21")
+    parser.add_argument("--base-url", dest="base_url", required=True, help="Base URL, e.g. https://artifactory.nvidia.com/artifactory/hw-cudnn-generic-local/CUDNN/v9.21")
     parser.add_argument("--cuda-version", dest="cuda_version", required=True, help="CUDA version subdir, e.g. 13.2")
     parser.add_argument("--download-dir", dest="download_dir", default="downloads", help="Directory where downloaded tarballs are cached.")
     parser.add_argument("--unzip-dir", dest="unzip_dir", default="/", help="Directory where the tarball is extracted before moving cudnn/ into place.")
