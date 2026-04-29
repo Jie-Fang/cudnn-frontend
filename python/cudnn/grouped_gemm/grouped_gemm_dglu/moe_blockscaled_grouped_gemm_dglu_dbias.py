@@ -1875,6 +1875,7 @@ class BlockScaledMoEGroupedGemmDgluDbiasKernel:
         x1_vec_load: cute.Tensor,
         x2_vec_load: cute.Tensor,
         mProb: cute.Tensor,
+        square_alpha: Float32,
         linear_offset: Float32,
         dprob_swiglu: Optional[cute.Tensor] = None,
     ):
@@ -1895,6 +1896,7 @@ class BlockScaledMoEGroupedGemmDgluDbiasKernel:
             dx2_vec = cute.make_rmem_tensor(acc_vec.shape, cutlass.Float32)
             for i in cutlass.range(0, cute.size(acc_vec), 2, unroll_full=True):
                 acc = (acc_vec[i], acc_vec[i + 1])
+                acc = fmul2(acc, (square_alpha, square_alpha))
                 x1_0 = x1_vec_load[i]
                 x1_1 = x1_vec_load[i + 1]
                 x2_0 = x2_vec_load[i]
@@ -1989,7 +1991,7 @@ class BlockScaledMoEGroupedGemmDgluDbiasKernel:
 
             # y1 = clamp(x1, max=7.0); y2 = clamp(x2, min=-7.0, max=7.0)
             for i in cutlass.range_constexpr(element_count):
-                fc2_dgrad = acc_vec[i]
+                fc2_dgrad = acc_vec[i] * square_alpha
                 g = fc2_dgrad * mProb
                 y1 = min(x1_vec_load[i], 7.0)
                 y2 = min(x2_vec_load[i], 7.0)
@@ -2995,7 +2997,7 @@ class BlockScaledMoEGroupedGemmDgluDbiasKernel:
                     if cutlass.const_expr(self.act_func == "dswiglu"):
                         d1_vec, d2_vec, dprob_swiglu = self.dswiglu(acc_vec, ab1_vec_load, ab2_vec_load, mProb, beta_val, square_alpha, dprob_swiglu)
                     elif cutlass.const_expr(self.act_func == "dgeglu"):
-                        d1_vec, d2_vec, dprob_swiglu = self.dgeglu(acc_vec, ab1_vec_load, ab2_vec_load, mProb, linear_offset, dprob_swiglu)
+                        d1_vec, d2_vec, dprob_swiglu = self.dgeglu(acc_vec, ab1_vec_load, ab2_vec_load, mProb, square_alpha, linear_offset, dprob_swiglu)
 
                     if cutlass.const_expr(self.generate_dprob):
                         # dprob sum reduction
