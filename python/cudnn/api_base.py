@@ -14,12 +14,12 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, List, Tuple, Optional
 import logging
-import threading
 import cuda.bindings.driver as cuda
 import cutlass
 import torch
 
 import cutlass.cute as cute
+from cudnn._experimental_warnings import warn_experimental_api_once
 from cudnn.datatypes import _convert_to_cutlass_data_type
 
 
@@ -30,26 +30,6 @@ def ceil_div(a: int, b: int) -> int:
 def is_power_of_2(n: int) -> bool:
     """Check if n is a power of 2."""
     return n > 0 and (n & (n - 1)) == 0
-
-
-_experimental_api_warnings_emitted = set()
-_experimental_api_warnings_lock = threading.Lock()
-
-
-def warn_experimental_api_once(logger: logging.Logger, api_name: str) -> None:
-    """Emit the experimental API warning once per API class per process."""
-    with _experimental_api_warnings_lock:
-        if api_name in _experimental_api_warnings_emitted:
-            return
-        _experimental_api_warnings_emitted.add(api_name)
-
-    logger.warning("%s is an experimental API", api_name)
-
-
-def _reset_experimental_api_warning_registry() -> None:
-    """Reset experimental API warning state for tests."""
-    with _experimental_api_warnings_lock:
-        _experimental_api_warnings_emitted.clear()
 
 
 @dataclass(frozen=True)
