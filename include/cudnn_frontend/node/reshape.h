@@ -38,8 +38,12 @@ class ReshapeNode : public NodeCRTP<ReshapeNode> {
                 y_tensor->set_stride(attributes.get_stride());
             } else {
                 auto const& y_dim = y_tensor->get_dim();
-                // Default to NHWC
-                auto const& stride_order = detail::generate_NHWC_stride_order(y_dim.size());
+                // Default to NHWC for multi-axis tensors. generate_NHWC_stride_order
+                // indexes stride_order[1] and assumes num_dims >= 2; use row-major
+                // for scalars (0-D) and vectors (1-D).
+                const int64_t rank = static_cast<int64_t>(y_dim.size());
+                std::vector<int64_t> const stride_order =
+                    rank < 2 ? detail::generate_row_major_stride_order(rank) : detail::generate_NHWC_stride_order(rank);
                 y_tensor->set_stride(detail::generate_stride(y_dim, stride_order));
             }
         }
