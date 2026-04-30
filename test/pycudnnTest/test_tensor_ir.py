@@ -1416,7 +1416,7 @@ class test_tensor_ir:
                             mma_shape,
                             cluster_shape,
                             cta_count,
-                            (nv_tensor_ir.TileSchedulerType.kStreamK if stream_k else nv_tensor_ir.TileSchedulerType.kDefault),
+                            (nv_tensor_ir.TileSchedulerType.StreamK if stream_k else nv_tensor_ir.TileSchedulerType.Default),
                             cubin_chip,
                         ),
                         nv_tensor_ir.DebugOptions(dump_ir_path, load_ir_path, mlir_timing),
