@@ -87,9 +87,9 @@ class SliceNode : public NodeCRTP<SliceNode> {
         auto const output = attributes.outputs.at(Slice_attributes::output_names::Y);
 
 #if (CUDNN_VERSION >= 92200)
-        // For cuDNN >= 9.22.0: Use native slice operation, create both input and output tensors
+        // For cuDNN >= 9.22.0: Use native slice operation, create both input and output tensors.
+        // Preserve output is_virtual from the graph / JSON; create_cudnn_tensor forwards it to the backend.
         CHECK_CUDNN_FRONTEND_ERROR(detail::create_cudnn_tensor(input, tensors, potential_uid, used_uids));
-        output->set_is_virtual(false);
         CHECK_CUDNN_FRONTEND_ERROR(detail::create_cudnn_tensor(output, tensors, potential_uid, used_uids));
 #else
         // For cuDNN < 9.22.0: Fallback to pointer arithmetic approach
@@ -98,7 +98,7 @@ class SliceNode : public NodeCRTP<SliceNode> {
             detail::assign_uid(input.get(), potential_uid, used_uids);
         }
 
-        // Create output tensor
+        // Pointer-arithmetic fallback requires a materialized slice output tensor.
         output->set_is_virtual(false);
         CHECK_CUDNN_FRONTEND_ERROR(detail::create_cudnn_tensor(output, tensors, potential_uid, used_uids));
 #endif
