@@ -37,6 +37,8 @@
 TEST_CASE("Causal conv1d forward", "[causal_conv1d][forward]") {
 #if !HAS_SUBQUADRATIC_OPS
     SKIP("cudnn_subquadratic_ops.h not available");
+#elif defined(_MSC_VER)
+    SKIP("Causal conv1d kernels are not supported on Windows (MSVC)");
 #else
     if (is_arch_supported_by_cudnn() == false) {
         SKIP("Architecture is not supported by current cudnn version");
@@ -73,6 +75,8 @@ TEST_CASE("Causal conv1d forward", "[causal_conv1d][forward]") {
 TEST_CASE("Causal conv1d backward", "[causal_conv1d][backward]") {
 #if !HAS_SUBQUADRATIC_OPS
     SKIP("cudnn_subquadratic_ops.h not available");
+#elif defined(_MSC_VER)
+    SKIP("Causal conv1d kernels are not supported on Windows (MSVC)");
 #else
     if (is_arch_supported_by_cudnn() == false) {
         SKIP("Architecture is not supported by current cudnn version");
