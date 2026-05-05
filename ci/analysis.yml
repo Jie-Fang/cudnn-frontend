@@ -8,7 +8,7 @@
         - .default_job_template
         - .cudnn_ga_image:template
     tags:
-        - Blackwell
+        - Blackwell, wheel_builder
 
 analysis:cudnn_clang_disable_exception:
     extends:
