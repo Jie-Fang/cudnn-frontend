@@ -589,6 +589,10 @@ def compute_and_compare_reference(cfg, allocs, tensors, diffs):
         k1, k2 = k_ref[..., :d2], k_ref[..., d2:]
         k_ref = torch.cat([k1 * cos_k - k2 * sin_k, k2 * cos_k + k1 * sin_k], dim=-1)
 
+        # Round-trip through input dtype to match GPU path (RoPE kernel writes f16/bf16 workspace)
+        q_ref = q_ref.to(cfg.data_type).float()
+        k_ref = k_ref.to(cfg.data_type).float()
+
     dO_ref = dO_gpu.detach().float() if dO_gpu is not None else None
     seq_len_q_ref = seq_len_q_gpu.flatten().detach() if seq_len_q_gpu is not None else None
     seq_len_kv_ref = seq_len_kv_gpu.flatten().detach() if seq_len_kv_gpu is not None else None
