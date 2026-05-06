@@ -4,7 +4,7 @@ import torch
 from enum import IntEnum
 from looseversion import LooseVersion
 
-from .fp16_ref import compute_ref
+from .fp16_ref import compute_ref, compute_ref_backward
 from .helpers import (
     convert_to_cudnn_type,
     exact_equal,
@@ -601,15 +601,6 @@ def compute_and_compare_reference(cfg, allocs, tensors, diffs):
     rng_dump_ref = rng_dump_gpu.detach().float() if rng_dump_gpu is not None else None
     sink_token_ref = sink_token_gpu.detach().float() if sink_token_gpu is not None else None
 
-    if cfg.is_train:
-        q_ref.requires_grad_()
-        k_ref.requires_grad_()
-        v_ref.requires_grad_()
-    if cfg.is_train and cfg.with_sink_token:
-        sink_token_ref.requires_grad_()
-    if cfg.is_train and cfg.is_bias:
-        bias_ref.requires_grad_()
-
     if cfg.is_ragged:
         q_ref = convert_packed_to_uniform(q_ref, seq_len_q_ref, cfg.s_q)
         k_ref = convert_packed_to_uniform(k_ref, seq_len_kv_ref, cfg.s_kv)
@@ -635,6 +626,7 @@ def compute_and_compare_reference(cfg, allocs, tensors, diffs):
         dropout_prob=cfg.dropout_prob,
         dropout_mask=rng_dump_ref,
         sink_token=sink_token_ref,
+        torch_type=cfg.data_type,
     )
 
     o_ref, stats_ref, score_max_ref, score_sum_exp_ref = ret
@@ -661,22 +653,21 @@ def compute_and_compare_reference(cfg, allocs, tensors, diffs):
                 score_sum_exp_gpu[i, :, m:, :] = 0
 
     if cfg.is_train:
-        inputs_ref = [q_ref, k_ref, v_ref]
-        if cfg.is_bias:
-            inputs_ref.append(bias_ref)
-        if cfg.with_sink_token:
-            inputs_ref.append(sink_token_ref)
-        grads = torch.autograd.grad(outputs=o_ref, inputs=inputs_ref, grad_outputs=dO_ref)
-        dQ_ref = grads[0]
-        dK_ref = grads[1]
-        dV_ref = grads[2]
-        idx = 3
-        if cfg.is_bias:
-            dBias_ref = grads[idx]
-            idx += 1
-        if cfg.with_sink_token:
-            dSink_token_ref = grads[idx]
-            idx += 1
+        bwd_ret = compute_ref_backward(
+            q_ref, k_ref, v_ref, o_ref, dO_ref,
+            attn_scale=attn_scale,
+            bias=bias_ref,
+            is_alibi=cfg.is_alibi,
+            padding=(seq_len_q_ref, seq_len_kv_ref) if cfg.is_padding else None,
+            left_bound=cfg.left_bound,
+            right_bound=cfg.right_bound,
+            diag_align=cfg.diag_align,
+            dropout_prob=cfg.dropout_prob,
+            dropout_mask=rng_dump_ref,
+            sink_token=sink_token_ref,
+            torch_type=cfg.data_type,
+        )
+        dQ_ref, dK_ref, dV_ref, dBias_ref, dSink_token_ref = bwd_ret
 
     if cfg.is_train and cfg.is_padding:
         for i, (m, n) in enumerate(zip(seq_len_q_ref, seq_len_kv_ref)):
@@ -719,6 +710,10 @@ def compute_and_compare_reference(cfg, allocs, tensors, diffs):
     err_count = 0
     err_count += approx_equal(allocs[TensorUid.o], o_ref, atol=2e-2, rtol=2e-2, tag="o", disp_elems=diffs)
     if cfg.with_score_max:
+        all_masked = torch.isinf(score_max_ref) & (score_max_ref < 0)
+        if all_masked.any():
+            score_max_ref[all_masked] = 0
+            allocs[TensorUid.score_max][0][all_masked] = 0
         err_count += approx_equal(allocs[TensorUid.score_max], score_max_ref, atol=2e-2, rtol=2e-2, tag="score_max", disp_elems=diffs)
     if cfg.with_score_sum_exp:
         err_count += approx_equal(allocs[TensorUid.score_sum_exp], score_sum_exp_ref, atol=2e-2, rtol=2e-2, tag="score_sum_exp", disp_elems=diffs)
