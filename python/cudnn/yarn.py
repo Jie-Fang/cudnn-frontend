@@ -49,9 +49,7 @@ def _yarn_find_correction_dim(num_rotations: float, dim: int, base: float, max_p
     return (dim * math.log(max_position / (num_rotations * 2.0 * math.pi))) / (2.0 * math.log(base))
 
 
-def _yarn_find_correction_range(
-    beta_fast: float, beta_slow: float, dim: int, base: float, max_position: int
-) -> Tuple[int, int]:
+def _yarn_find_correction_range(beta_fast: float, beta_slow: float, dim: int, base: float, max_position: int) -> Tuple[int, int]:
     """Compute [low, high] dim indices over which to ramp from interpolation -> extrapolation.
 
     beta_fast (alpha in paper, default 32) -> high end of ramp (above which dims extrapolate)

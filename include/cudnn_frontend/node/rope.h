@@ -65,9 +65,10 @@ class RoPENode : public NodeCRTP<RoPENode> {
 
 #if (CUDNN_VERSION >= 92400)
         // Compile- and run-time checks: RoPE op was added in cuDNN 9.24.
-        RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 92400,
-                                       error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "CUDNN_BACKEND_OPERATION_ROPE_FWD_DESCRIPTOR is only available starting cuDNN 9.24.");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            detail::get_backend_version() < 92400,
+            error_code_t::GRAPH_NOT_SUPPORTED,
+            "CUDNN_BACKEND_OPERATION_ROPE_FWD_DESCRIPTOR is only available starting cuDNN 9.24.");
 
         auto rope_operation =
             make_shared_backend_pointer((cudnnBackendDescriptorType_t)CUDNN_BACKEND_OPERATION_ROPE_FWD_DESCRIPTOR);
@@ -139,7 +140,7 @@ class RoPENode : public NodeCRTP<RoPENode> {
 #ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
     virtual void
     serialize(json& j) const override final {
-        j = {{"tag", "ROPE"}, {"name", attributes.name}};
+        j = {{"tag", "ROPE"}, { "name", attributes.name }};
     }
 #endif
 };

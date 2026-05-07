@@ -98,14 +98,11 @@ def _run_rope_sdpa(B, H_q, H_k, S_q, S_kv, D, output_scale_q, output_scale_k, at
     freqs[:, 0, 0, :d2] = angles
 
     cudnn_dtype = cudnn.data_type.BFLOAT16 if dtype == torch.bfloat16 else cudnn.data_type.HALF
-    graph = cudnn.pygraph(
-        intermediate_data_type=cudnn.data_type.FLOAT, compute_data_type=cudnn.data_type.FLOAT
-    )
+    graph = cudnn.pygraph(intermediate_data_type=cudnn.data_type.FLOAT, compute_data_type=cudnn.data_type.FLOAT)
     Q = graph.tensor(name="Q", dim=list(q.shape), stride=list(q.stride()), data_type=cudnn_dtype)
     K = graph.tensor(name="K", dim=list(k.shape), stride=list(k.stride()), data_type=cudnn_dtype)
     V = graph.tensor(name="V", dim=list(v.shape), stride=list(v.stride()), data_type=cudnn_dtype)
-    FREQS = graph.tensor(name="freqs", dim=list(freqs.shape), stride=list(freqs.stride()),
-                         data_type=cudnn.data_type.FLOAT)
+    FREQS = graph.tensor(name="freqs", dim=list(freqs.shape), stride=list(freqs.stride()), data_type=cudnn.data_type.FLOAT)
 
     Q_rot = graph.rope(input=Q, freqs=FREQS, output_scale=output_scale_q, name="RoPE_Q")
     Q_rot.set_data_type(cudnn_dtype).set_dim(list(q.shape)).set_stride(list(q.stride()))
@@ -120,9 +117,11 @@ def _run_rope_sdpa(B, H_q, H_k, S_q, S_kv, D, output_scale_q, output_scale_k, at
     o_gpu = torch.empty(B, H_q, S_q, D, device="cuda", dtype=dtype)
     ws_size = max(int(graph.get_workspace_size()), 1)
     ws_buf = torch.empty(ws_size, device="cuda", dtype=torch.uint8)
-    graph.execute({Q.get_uid(): q.data_ptr(), K.get_uid(): k.data_ptr(),
-                   V.get_uid(): v.data_ptr(), FREQS.get_uid(): freqs.data_ptr(),
-                   O.get_uid(): o_gpu.data_ptr()}, ws_buf.data_ptr(), handle)
+    graph.execute(
+        {Q.get_uid(): q.data_ptr(), K.get_uid(): k.data_ptr(), V.get_uid(): v.data_ptr(), FREQS.get_uid(): freqs.data_ptr(), O.get_uid(): o_gpu.data_ptr()},
+        ws_buf.data_ptr(),
+        handle,
+    )
     return o_gpu, q, k, v, freqs
 
 
@@ -136,7 +135,7 @@ def test_rope_output_scale_equivalence():
     Outputs must match (up to fp arith).
     """
     B, H_q, H_k, S_q, S_kv, D = 1, 4, 4, 128, 128, 64
-    base = 1.0 / (D ** 0.5)
+    base = 1.0 / (D**0.5)
     alpha = 1.7
 
     o_a, *_ = _run_rope_sdpa(B, H_q, H_k, S_q, S_kv, D, 1.0, 1.0, alpha * base)
@@ -155,7 +154,7 @@ def test_rope_output_scale_mscale_style():
     Run B: scales=(1, 1), attn_scale=base * m**2
     """
     B, H_q, H_k, S_q, S_kv, D = 1, 4, 4, 128, 128, 64
-    base = 1.0 / (D ** 0.5)
+    base = 1.0 / (D**0.5)
     m = 1.369  # YARN-like mscale for factor=40: 0.1*log(40)+1
 
     o_a, *_ = _run_rope_sdpa(B, H_q, H_k, S_q, S_kv, D, m, m, base)

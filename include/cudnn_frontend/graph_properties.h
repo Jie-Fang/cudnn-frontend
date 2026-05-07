@@ -1737,13 +1737,15 @@ class RoPE_attributes : public Attributes<RoPE_attributes> {
     }
 
 #ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
-    friend void to_json(nlohmann::json& j, const RoPE_attributes& a) {
+    friend void
+    to_json(nlohmann::json& j, const RoPE_attributes& a) {
         j["name"]              = a.name;
         j["compute_data_type"] = a.compute_data_type;
         j["output_scale"]      = a.output_scale;
         j["rope_dim"]          = a.rope_dim;
     }
-    friend void from_json(const nlohmann::json& j, RoPE_attributes& a) {
+    friend void
+    from_json(const nlohmann::json& j, RoPE_attributes& a) {
         j.at("name").get_to(a.name);
         j.at("compute_data_type").get_to(a.compute_data_type);
         if (j.contains("output_scale")) {

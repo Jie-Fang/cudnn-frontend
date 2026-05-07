@@ -42,15 +42,20 @@ def test_yarn_inv_freq_matches_mcore_reference():
     """compute_yarn_inv_freq must match the Megatron-Core formulation bit-for-bit."""
     cases = [
         # (head_dim, factor, orig, beta_fast, beta_slow)
-        (64, 40.0, 4096, 32, 1),     # DSv3
-        (128, 4.0, 32768, 32, 1),    # Qwen2.5
-        (128, 1.0, 4096, 32, 1),     # YARN inactive (factor=1)
-        (192, 8.0, 8192, 32, 1),     # Hypothetical large
+        (64, 40.0, 4096, 32, 1),  # DSv3
+        (128, 4.0, 32768, 32, 1),  # Qwen2.5
+        (128, 1.0, 4096, 32, 1),  # YARN inactive (factor=1)
+        (192, 8.0, 8192, 32, 1),  # Hypothetical large
     ]
     for d, s, L, bf, bs in cases:
         ours = compute_yarn_inv_freq(
-            d, base=10000.0, scaling_factor=s, original_max_position=L,
-            beta_fast=bf, beta_slow=bs, device="cuda",
+            d,
+            base=10000.0,
+            scaling_factor=s,
+            original_max_position=L,
+            beta_fast=bf,
+            beta_slow=bs,
+            device="cuda",
         )
         ref = _mcore_yarn_inv_freq(d, 10000.0, s, L, bf, bs, "cuda")
         torch.testing.assert_close(ours, ref, rtol=0, atol=0)
@@ -75,7 +80,10 @@ def test_yarn_freqs_factor1_matches_standard_rope():
     head_dim = 128
     max_s = 256
     freqs_yarn, mscale = compute_yarn_freqs(
-        max_s, head_dim, scaling_factor=1.0, original_max_position=4096,
+        max_s,
+        head_dim,
+        scaling_factor=1.0,
+        original_max_position=4096,
     )
     # Standard RoPE: angle[s, i] = s * (1 / 10000^(2i/d))
     inv_std = 1.0 / (10000.0 ** (torch.arange(0, head_dim, 2, device="cuda", dtype=torch.float32) / head_dim))
@@ -105,7 +113,11 @@ def test_yarn_freqs_low_freq_dims_scaled_high_freq_passthrough():
     head_dim = 64
     factor = 40.0
     inv_freq = compute_yarn_inv_freq(
-        head_dim, scaling_factor=factor, original_max_position=4096, beta_fast=32, beta_slow=1,
+        head_dim,
+        scaling_factor=factor,
+        original_max_position=4096,
+        beta_fast=32,
+        beta_slow=1,
     )
     inv_extra = 1.0 / (10000.0 ** (torch.arange(0, head_dim, 2, device="cuda", dtype=torch.float32) / head_dim))
     # Dim 0: high-freq -> extrapolation (unchanged)
@@ -129,8 +141,7 @@ def _build_and_run(b, h_q, h_k, s_q, s_kv, d, freqs, output_scale, attn_scale, d
     Q = g.tensor(name="Q", dim=list(q.shape), stride=list(q.stride()), data_type=cdt)
     K = g.tensor(name="K", dim=list(k.shape), stride=list(k.stride()), data_type=cdt)
     V = g.tensor(name="V", dim=list(v.shape), stride=list(v.stride()), data_type=cdt)
-    F = g.tensor(name="freqs", dim=list(freqs.shape), stride=list(freqs.stride()),
-                 data_type=cudnn.data_type.FLOAT)
+    F = g.tensor(name="freqs", dim=list(freqs.shape), stride=list(freqs.stride()), data_type=cudnn.data_type.FLOAT)
 
     Qr = g.rope(input=Q, freqs=F, output_scale=output_scale, name="RoPE_Q")
     Qr.set_data_type(cdt).set_dim(list(q.shape)).set_stride(list(q.stride()))
@@ -144,8 +155,11 @@ def _build_and_run(b, h_q, h_k, s_q, s_kv, d, freqs, output_scale, attn_scale, d
     handle = cudnn.create_handle()
     o = torch.empty(b, h_q, s_q, d, device="cuda", dtype=dtype)
     ws = torch.empty(max(int(g.get_workspace_size()), 1), device="cuda", dtype=torch.uint8)
-    g.execute({Q.get_uid(): q.data_ptr(), K.get_uid(): k.data_ptr(), V.get_uid(): v.data_ptr(),
-               F.get_uid(): freqs.data_ptr(), O.get_uid(): o.data_ptr()}, ws.data_ptr(), handle)
+    g.execute(
+        {Q.get_uid(): q.data_ptr(), K.get_uid(): k.data_ptr(), V.get_uid(): v.data_ptr(), F.get_uid(): freqs.data_ptr(), O.get_uid(): o.data_ptr()},
+        ws.data_ptr(),
+        handle,
+    )
     return o, q, k, v
 
 
@@ -159,8 +173,7 @@ def _reference_sdpa_with_yarn(q, k, v, freqs, mscale, attn_scale):
     cos_q = (torch.cos(angles_q) * mscale).unsqueeze(0).unsqueeze(0)
     sin_q = (torch.sin(angles_q) * mscale).unsqueeze(0).unsqueeze(0)
     qf = q.float()
-    q_rot = torch.cat([qf[..., :half] * cos_q - qf[..., half:] * sin_q,
-                       qf[..., half:] * cos_q + qf[..., :half] * sin_q], dim=-1)
+    q_rot = torch.cat([qf[..., :half] * cos_q - qf[..., half:] * sin_q, qf[..., half:] * cos_q + qf[..., :half] * sin_q], dim=-1)
     # Quantize back to input dtype to match GPU path (RoPE writes bf16/f16 workspace)
     q_rot = q_rot.to(q.dtype).float()
 
@@ -168,8 +181,7 @@ def _reference_sdpa_with_yarn(q, k, v, freqs, mscale, attn_scale):
     cos_k = (torch.cos(angles_k) * mscale).unsqueeze(0).unsqueeze(0)
     sin_k = (torch.sin(angles_k) * mscale).unsqueeze(0).unsqueeze(0)
     kf = k.float()
-    k_rot = torch.cat([kf[..., :half] * cos_k - kf[..., half:] * sin_k,
-                       kf[..., half:] * cos_k + kf[..., :half] * sin_k], dim=-1)
+    k_rot = torch.cat([kf[..., :half] * cos_k - kf[..., half:] * sin_k, kf[..., half:] * cos_k + kf[..., :half] * sin_k], dim=-1)
     k_rot = k_rot.to(k.dtype).float()
 
     scores = torch.matmul(q_rot, k_rot.transpose(-2, -1)) * attn_scale
@@ -186,13 +198,17 @@ def test_yarn_e2e_dsv3_config():
     base_attn = 1.0 / math.sqrt(d)
 
     freqs, mscale = compute_yarn_freqs(
-        s, d, scaling_factor=factor, original_max_position=4096,
-        beta_fast=32, beta_slow=1, mscale_factor=1.0,
+        s,
+        d,
+        scaling_factor=factor,
+        original_max_position=4096,
+        beta_fast=32,
+        beta_slow=1,
+        mscale_factor=1.0,
     )
     assert mscale > 1.0  # YARN active
 
-    o_gpu, q, k, v = _build_and_run(b, h, h, s, s, d, freqs,
-                                    output_scale=mscale, attn_scale=base_attn)
+    o_gpu, q, k, v = _build_and_run(b, h, h, s, s, d, freqs, output_scale=mscale, attn_scale=base_attn)
     o_ref = _reference_sdpa_with_yarn(q, k, v, freqs, mscale, base_attn)
 
     diff = (o_gpu.float() - o_ref).abs()
@@ -211,8 +227,7 @@ def test_yarn_e2e_factor1_no_op():
     assert mscale == 1.0
 
     # Reference: plain RoPE
-    o_gpu, q, k, v = _build_and_run(b, h, h, s, s, d, freqs,
-                                    output_scale=mscale, attn_scale=base_attn)
+    o_gpu, q, k, v = _build_and_run(b, h, h, s, s, d, freqs, output_scale=mscale, attn_scale=base_attn)
     o_ref = _reference_sdpa_with_yarn(q, k, v, freqs, mscale, base_attn)
 
     diff = (o_gpu.float() - o_ref).abs()
@@ -222,8 +237,7 @@ def test_yarn_e2e_factor1_no_op():
 # ---------- Partial-dim RoPE (DSv3 MLA-style: rotate last K of head_dim) ----------
 
 
-def _build_and_run_partial(b, h_q, h_k, s_q, s_kv, head_dim, rope_dim, freqs, output_scale,
-                           attn_scale, dtype=torch.bfloat16):
+def _build_and_run_partial(b, h_q, h_k, s_q, s_kv, head_dim, rope_dim, freqs, output_scale, attn_scale, dtype=torch.bfloat16):
     """Run RoPE+SDPA where head_dim > rope_dim. Last rope_dim of head_dim gets rotated;
     first (head_dim - rope_dim) is scaled-pass-through."""
     torch.manual_seed(0)
@@ -236,8 +250,7 @@ def _build_and_run_partial(b, h_q, h_k, s_q, s_kv, head_dim, rope_dim, freqs, ou
     Q = g.tensor(name="Q", dim=list(q.shape), stride=list(q.stride()), data_type=cdt)
     K = g.tensor(name="K", dim=list(k.shape), stride=list(k.stride()), data_type=cdt)
     V = g.tensor(name="V", dim=list(v.shape), stride=list(v.stride()), data_type=cdt)
-    F = g.tensor(name="freqs", dim=list(freqs.shape), stride=list(freqs.stride()),
-                 data_type=cudnn.data_type.FLOAT)
+    F = g.tensor(name="freqs", dim=list(freqs.shape), stride=list(freqs.stride()), data_type=cudnn.data_type.FLOAT)
 
     Qr = g.rope(input=Q, freqs=F, output_scale=output_scale, rope_dim=rope_dim, name="RoPE_Q")
     Qr.set_data_type(cdt).set_dim(list(q.shape)).set_stride(list(q.stride()))
@@ -251,8 +264,11 @@ def _build_and_run_partial(b, h_q, h_k, s_q, s_kv, head_dim, rope_dim, freqs, ou
     handle = cudnn.create_handle()
     o = torch.empty(b, h_q, s_q, head_dim, device="cuda", dtype=dtype)
     ws = torch.empty(max(int(g.get_workspace_size()), 1), device="cuda", dtype=torch.uint8)
-    g.execute({Q.get_uid(): q.data_ptr(), K.get_uid(): k.data_ptr(), V.get_uid(): v.data_ptr(),
-               F.get_uid(): freqs.data_ptr(), O.get_uid(): o.data_ptr()}, ws.data_ptr(), handle)
+    g.execute(
+        {Q.get_uid(): q.data_ptr(), K.get_uid(): k.data_ptr(), V.get_uid(): v.data_ptr(), F.get_uid(): freqs.data_ptr(), O.get_uid(): o.data_ptr()},
+        ws.data_ptr(),
+        handle,
+    )
     return o, q, k, v
 
 
@@ -261,7 +277,7 @@ def _ref_partial_rope_sdpa(q, k, v, freqs, mscale, attn_scale, rope_dim):
     then standard SDPA. Matches the GPU kernel's "scaled passthrough + scaled rotation"."""
     head_dim = q.shape[-1]
     nope_dim = head_dim - rope_dim
-    half     = rope_dim // 2
+    half = rope_dim // 2
     s_q, s_kv = q.shape[2], k.shape[2]
 
     qf = q.float()
@@ -269,10 +285,9 @@ def _ref_partial_rope_sdpa(q, k, v, freqs, mscale, attn_scale, rope_dim):
     cos_q = (torch.cos(angles_q) * mscale).unsqueeze(0).unsqueeze(0)
     sin_q = (torch.sin(angles_q) * mscale).unsqueeze(0).unsqueeze(0)
     q_nope = qf[..., :nope_dim] * mscale
-    q_rope_lo = qf[..., nope_dim:nope_dim + half]
-    q_rope_hi = qf[..., nope_dim + half:]
-    q_rope = torch.cat([q_rope_lo * cos_q - q_rope_hi * sin_q,
-                        q_rope_hi * cos_q + q_rope_lo * sin_q], dim=-1)
+    q_rope_lo = qf[..., nope_dim : nope_dim + half]
+    q_rope_hi = qf[..., nope_dim + half :]
+    q_rope = torch.cat([q_rope_lo * cos_q - q_rope_hi * sin_q, q_rope_hi * cos_q + q_rope_lo * sin_q], dim=-1)
     q_full = torch.cat([q_nope, q_rope], dim=-1).to(q.dtype).float()
 
     kf = k.float()
@@ -280,10 +295,9 @@ def _ref_partial_rope_sdpa(q, k, v, freqs, mscale, attn_scale, rope_dim):
     cos_k = (torch.cos(angles_k) * mscale).unsqueeze(0).unsqueeze(0)
     sin_k = (torch.sin(angles_k) * mscale).unsqueeze(0).unsqueeze(0)
     k_nope = kf[..., :nope_dim] * mscale
-    k_rope_lo = kf[..., nope_dim:nope_dim + half]
-    k_rope_hi = kf[..., nope_dim + half:]
-    k_rope = torch.cat([k_rope_lo * cos_k - k_rope_hi * sin_k,
-                        k_rope_hi * cos_k + k_rope_lo * sin_k], dim=-1)
+    k_rope_lo = kf[..., nope_dim : nope_dim + half]
+    k_rope_hi = kf[..., nope_dim + half :]
+    k_rope = torch.cat([k_rope_lo * cos_k - k_rope_hi * sin_k, k_rope_hi * cos_k + k_rope_lo * sin_k], dim=-1)
     k_full = torch.cat([k_nope, k_rope], dim=-1).to(k.dtype).float()
 
     scores = torch.matmul(q_full, k_full.transpose(-2, -1)) * attn_scale
@@ -302,13 +316,17 @@ def test_partial_rope_dsv3_layout():
 
     # YARN freqs sized to rope_dim (not head_dim)
     freqs, mscale = compute_yarn_freqs(
-        s, rope_dim, scaling_factor=40.0, original_max_position=4096,
-        beta_fast=32, beta_slow=1, mscale_factor=1.0,
+        s,
+        rope_dim,
+        scaling_factor=40.0,
+        original_max_position=4096,
+        beta_fast=32,
+        beta_slow=1,
+        mscale_factor=1.0,
     )
     assert freqs.shape == (s, 1, 1, rope_dim)
 
-    o_gpu, q, k, v = _build_and_run_partial(b, h, h, s, s, head_dim, rope_dim, freqs,
-                                            output_scale=mscale, attn_scale=base_attn)
+    o_gpu, q, k, v = _build_and_run_partial(b, h, h, s, s, head_dim, rope_dim, freqs, output_scale=mscale, attn_scale=base_attn)
     o_ref = _ref_partial_rope_sdpa(q, k, v, freqs, mscale, base_attn, rope_dim)
 
     diff = (o_gpu.float() - o_ref).abs()
@@ -325,8 +343,7 @@ def test_partial_rope_zero_nope_matches_full_rotation():
     freqs, mscale = compute_yarn_freqs(s, d, scaling_factor=1.0)  # plain RoPE
 
     o_full, *_ = _build_and_run(b, h, h, s, s, d, freqs, output_scale=mscale, attn_scale=base_attn)
-    o_part, *_ = _build_and_run_partial(b, h, h, s, s, d, d, freqs,
-                                         output_scale=mscale, attn_scale=base_attn)
+    o_part, *_ = _build_and_run_partial(b, h, h, s, s, d, d, freqs, output_scale=mscale, attn_scale=base_attn)
     diff = (o_full.float() - o_part.float()).abs()
     assert diff.max().item() < 1e-3
 
@@ -336,7 +353,7 @@ def test_partial_rope_zero_nope_matches_full_rotation():
 @_skip_if_no_rope_backend
 def test_yarn_mscale_fold_via_attn_scale():
     """YARN's mscale fold-in equivalence:
-       (output_scale=mscale on Q&K, attn_scale=base) == (output_scale=1, attn_scale=base*mscale^2)
+    (output_scale=mscale on Q&K, attn_scale=base) == (output_scale=1, attn_scale=base*mscale^2)
     """
     b, h, s, d = 1, 4, 128, 64
     base_attn = 1.0 / math.sqrt(d)
