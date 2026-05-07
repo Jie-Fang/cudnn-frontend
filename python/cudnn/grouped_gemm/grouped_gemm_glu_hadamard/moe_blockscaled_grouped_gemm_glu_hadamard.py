@@ -32,7 +32,7 @@ MoE Block-Scaled Grouped GEMM Kernel with GLU (SwiGLU/GeGLU) + Hadamard Transfor
 Supports:
     - Static / Dynamic persistent tile scheduling (MoEPersistentTileScheduler)
     - Dense (contiguous 3-D B) / Discrete (per-expert pointer array B) weight layout
-    - BF16/F16 D output with Hadamard transform (pingpong epilogue)
+    - BF16/F16 D output with GLU activation
     - Optional C output (pre-activation GLU output)
     - AMAX reduction for calibration
     - GLU activation fusion (SwiGLU / GeGLU)
@@ -77,9 +77,10 @@ from ..moe_utils import (
 from .hadamard_utils import (
     hadamard_setup,
     hadamard_compute,
-    hadamard_in,
-    hadamard_out,
+    hadamard_transpose_in,
+    hadamard_transpose_out_amax,
     HADAMARD_SIZE,
+    M_PER_CLUSTER,
 )
 from ..moe_sched_extension import (
     DiscreteWeightScaledGemmSchedExtension,
@@ -253,8 +254,8 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
 
         self.vectorized_f32 = vectorized_f32
 
-        # Amax: only RHT store warps (4) do reduction
-        self.num_epilog_warps = len(self.epilog_rht_store_warp_id)  # = 4
+        # Amax: ACT warps reduce the post-GLU output.
+        self.num_epilog_warps = len(self.epilog_act_warp_id)  # = 4
 
         self.act_func = act_func
         if act_func not in ["swiglu", "geglu"]:
@@ -559,6 +560,7 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
         c: cute.Tensor,
         d: cute.Tensor,
         amax_tensor: Optional[cute.Tensor],
+        post_rht_amax_tensor: Optional[cute.Tensor],
         padded_offsets: cute.Tensor,
         alpha: cute.Tensor,
         prob: cute.Tensor,
@@ -621,6 +623,7 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
         sfa = cute.make_tensor(sfa.iterator, sfa_layout)
 
         self.generate_amax = amax_tensor is not None
+        self.generate_post_rht_amax = post_rht_amax_tensor is not None
 
         tiled_mma = sm100_utils.make_blockscaled_trivial_tiled_mma(
             self.a_dtype,
@@ -835,6 +838,10 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
                 cute.struct.MemRange[cutlass.Float32, self.num_epilog_warps],
                 1,
             ]
+            sPostRhtAmax: cute.struct.Align[
+                cute.struct.MemRange[cutlass.Float32, self.num_epilog_warps],
+                1,
+            ]
 
         self.shared_storage = SharedStorage
 
@@ -855,6 +862,7 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
             tma_atom_d,
             tma_tensor_d,
             amax_tensor,
+            post_rht_amax_tensor,
             padded_offsets,
             alpha,
             bias,
@@ -928,6 +936,18 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
 
     @cute.jit
     def amax_reduction_per_warp_and_cta(self, amax_fp32, warp_idx, amax_smem, amax_gmem):
+        warp_amax = warp_redux_sync(value=amax_fp32, kind=ReduxKind.MAX, mask_and_clamp=0xFFFFFFFF, nan=True)
+        if cute.arch.lane_idx() == 0:
+            amax_smem[warp_idx & 0x3] = cutlass.Float32(warp_amax)
+        self.epilog_sync_barrier_group0.arrive_and_wait()
+        if warp_idx == self.epilog_act_warp_id[0] and cute.arch.lane_idx() == 0:
+            block_amax = cutlass.Float32(0.0)
+            for i in cutlass.range(self.num_epilog_warps):
+                block_amax = cute.arch.fmax(block_amax, amax_smem[i])
+            _ = atomic_max_float32(ptr=amax_gmem, value=block_amax)
+
+    @cute.jit
+    def post_rht_amax_reduction_per_warp_and_cta(self, amax_fp32, warp_idx, amax_smem, amax_gmem):
         warp_amax = warp_redux_sync(value=amax_fp32, kind=ReduxKind.MAX, mask_and_clamp=0xFFFFFFFF, nan=True)
         if cute.arch.lane_idx() == 0:
             amax_smem[warp_idx & 0x3] = cutlass.Float32(warp_amax)
@@ -1159,8 +1179,8 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
         c_bytes = cute.size_in_bytes(c_dtype, c_smem_layout_one) * num_c_stage
         d_bytes = cute.size_in_bytes(d_dtype, d_smem_layout_one) * num_d_stage
         hadamard_bytes = (cutlass.BFloat16.width // 8) * HADAMARD_SIZE * HADAMARD_SIZE if d_dtype == cutlass.BFloat16 else 0
-        # sAmax for 4 RHT store warps
-        amax_bytes = 4 * 4  # 4 Float32 values
+        # sAmax and sPostRhtAmax for the 4 ACT/RHT epilogue warps.
+        amax_bytes = 2 * 4 * 4  # two sets of 4 Float32 values
 
         if bias_dtype is not None:
             num_bias_stage = 2
@@ -1194,6 +1214,7 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
         tma_atom_d: cute.CopyAtom,
         mD_mnl: cute.Tensor,
         mAmax_tensor: Optional[cute.Tensor],
+        mPostRhtAmax_tensor: Optional[cute.Tensor],
         padded_offsets: cute.Tensor,
         alpha: cute.Tensor,
         mBias_nl: Optional[cute.Tensor],
@@ -1391,6 +1412,7 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
         sSFB = storage.sSFB.get_tensor(sfb_smem_layout_staged)
         amax_layout = cute.make_layout((self.num_epilog_warps,))
         sAmax = storage.sAmax.get_tensor(amax_layout)
+        sPostRhtAmax = storage.sPostRhtAmax.get_tensor(amax_layout)
 
         # sInfo from SchedulerStorage
         info_layout = cute.make_layout((4, self.num_tile_stage), stride=(1, 4))
@@ -1841,6 +1863,9 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
             tTR_rC = cute.make_rmem_tensor(tTR_rAcc_gate.shape, self.c_dtype)
             tiled_copy_r2s, tRS_rC, tRS_sC = self.epilog_smem_copy_and_partition(tiled_copy_t2r, tTR_rC, epi_tidx, sC)
 
+            tTR_rD = cute.make_rmem_tensor(tTR_rAcc_gate.shape, self.d_dtype)
+            tiled_copy_r2s_d, tRS_rD, tRS_sD = self.epilog_smem_copy_and_partition(tiled_copy_t2r, tTR_rD, epi_tidx, sD)
+
             #
             # Create per-expert extension (for C/prob tensors inside tile loop)
             #
@@ -1866,6 +1891,15 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
                 producer_group=c_producer_group,
             )
 
+            d_producer_group = pipeline.CooperativeGroup(
+                pipeline.Agent.Thread,
+                self.threads_per_warp * len(self.epilog_act_warp_id),
+            )
+            d_pipeline = pipeline.PipelineTmaStore.create(
+                num_stages=self.num_d_stage,
+                producer_group=d_producer_group,
+            )
+
             tile_info_consumer_state = pipeline.make_pipeline_state(pipeline.PipelineUserType.Consumer, self.num_tile_stage)
 
             if cutlass.const_expr(self.enable_bias):
@@ -1886,6 +1920,7 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
             tile_info_consumer_state.advance()
 
             num_prev_subtiles = cutlass.Int32(0)
+            num_prev_d_subtiles = cutlass.Int32(0)
             while is_valid_tile:
                 # sInfo format: (expert_idx, tile_m_idx, tile_n_idx, k_tile_cnt)
                 epi_work_tile_info = MoEWorkTileInfo(
@@ -1904,6 +1939,9 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
                 alpha_val = alpha[expert_idx]
                 epi_ext.update_expert_info(padded_offsets, epi_work_tile_info.expert_idx)
 
+                if cutlass.const_expr(self.generate_amax):
+                    thread_tile_amax = cutlass.Float32(0.0)
+
                 if cutlass.const_expr(self.enable_bias):
                     bias_consumer_state.reset_count()
                     bias_pipeline.consumer_wait(bias_consumer_state)
@@ -1920,6 +1958,16 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
                 _, bSG_sC, bSG_gC_partitioned = self.epilog_gmem_copy_and_partition(epi_tidx, tma_atom_c, tCgC, self.epi_tile_c, sC)
                 bSG_gC = bSG_gC_partitioned[(None, None, None, *mma_tile_coord_mnl)]
                 bSG_gC = cute.group_modes(bSG_gC, 1, cute.rank(bSG_gC))
+
+                #
+                # Get per-expert D tensor inside tile loop
+                #
+                real_d, _ = epi_ext.get_gmem_tensor("d", mD_mnl, padded_offsets, epi_work_tile_info)
+                gD_mnl_loop = cute.local_tile(real_d, cute.slice_(self.mma_tiler_d, (None, None, 0)), (None, None, None))
+                tCgD = thr_mma_epi_loop.partition_C(gD_mnl_loop)
+                _, bSG_sD, bSG_gD_partitioned = self.epilog_gmem_copy_and_partition(epi_tidx, tma_atom_d, tCgD, epi_tile, sD)
+                bSG_gD = bSG_gD_partitioned[(None, None, None, *mma_tile_coord_mnl)]
+                bSG_gD = cute.group_modes(bSG_gD, 1, cute.rank(bSG_gD))
 
                 #
                 # Get per-expert prob tensor inside tile loop
@@ -1979,13 +2027,6 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
                             with cute.arch.elect_one():
                                 acc_pipeline.consumer_release(acc_consumer_state)
                             acc_consumer_state.advance()
-
-                    #
-                    # Notify pingpong consumer for subtile > 0
-                    #
-                    if subtile_idx != 0:
-                        pingpong_pipeline.producer_commit(pingpong_act_producer_state)
-                        pingpong_act_producer_state.advance()
 
                     #
                     # Apply alpha (+ bias when enabled)
@@ -2100,22 +2141,39 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
                     elif cutlass.const_expr(self.act_func == "swiglu"):
                         self.swiglu_act(tCompute, acc_vec_up, acc_vec_gate, mProb)
 
-                    #
-                    # Convert to BF16 and write to TMEM for Hadamard
-                    #
-                    tCompute_hadamard = cute.make_rmem_tensor(tCompute.layout, cutlass.BFloat16)
-                    tCompute_hadamard.store(tCompute.load().to(tCompute_hadamard.element_type))
+                    if cutlass.const_expr(self.generate_amax):
+                        thread_tile_amax = self.amax_reduction_per_thread(tCompute, thread_tile_amax)
 
                     #
-                    # Pingpong producer acquire for current subtile
+                    # Store post-GLU output to D.
+                    #
+                    acc_vec = tiled_copy_r2s_d.retile(tCompute).load()
+                    tRS_rD.store(acc_vec.to(self.d_dtype))
+                    d_buffer = num_prev_d_subtiles % self.num_d_stage
+                    cute.copy(
+                        tiled_copy_r2s_d,
+                        tRS_rD,
+                        tRS_sD[(None, None, None, d_buffer)],
+                    )
+                    cute.arch.fence_proxy("async.shared", space="cta")
+                    self.epilog_sync_barrier_group0.arrive_and_wait()
+                    if warp_idx == self.epilog_act_warp_id[0]:
+                        cute.copy(
+                            tma_atom_d,
+                            bSG_sD[(None, d_buffer)],
+                            bSG_gD[(None, real_subtile_idx)],
+                        )
+                        d_pipeline.producer_commit()
+                        d_pipeline.producer_acquire()
+                    self.epilog_sync_barrier_group0.arrive_and_wait()
+                    num_prev_d_subtiles = num_prev_d_subtiles + 1
+
+                    #
+                    # Signal the RHT epilogue warps that the post-GLU D tile is in SMEM.
                     #
                     pingpong_pipeline.producer_acquire(pingpong_act_producer_state)
-                    hadamard_in(
-                        tCompute_hadamard,
-                        HADAMARD_SIZE,
-                        self.query_hadamard_tmem_a_ptr(subtile_idx, reverse_subtile, tmem_ptr),
-                        epi_tidx,
-                    )
+                    pingpong_pipeline.producer_commit(pingpong_act_producer_state)
+                    pingpong_act_producer_state.advance()
 
                     #
                     # Delayed TMA store acquire + group sync (always enabled)
@@ -2125,15 +2183,15 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
                             c_pipeline.producer_acquire()
                         self.epilog_sync_barrier_group0.arrive_and_wait()
 
-                #
-                # Pingpong producer commit last subtile
-                #
-                pingpong_pipeline.producer_commit(pingpong_act_producer_state)
-                pingpong_act_producer_state.advance()
+                    self.epilog_sync_barrier.arrive_and_wait()
 
                 #
                 # Full epilogue barrier (ACT + RHT must both arrive)
                 #
+                if cutlass.const_expr(self.generate_amax):
+                    gAmax = mAmax_tensor[(expert_idx, None)].iterator.llvm_ptr  # First element
+                    self.amax_reduction_per_warp_and_cta(thread_tile_amax, warp_idx, sAmax, gAmax)
+
                 self.epilog_sync_barrier.arrive_and_wait()
 
                 #
@@ -2165,6 +2223,7 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
             # Wait for C store / pingpong complete
             #
             c_pipeline.producer_tail()
+            d_pipeline.producer_tail()
             pingpong_pipeline.producer_tail(pingpong_act_producer_state)
 
         # ---------------------------------------------------------------
@@ -2214,25 +2273,9 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
             pingpong_rht_consumer_state = pipeline.make_pipeline_state(pipeline.PipelineUserType.Consumer, self.num_pingpong_stage)
 
             #
-            # D register and smem partition
-            #
-            tTR_rD = cute.make_rmem_tensor(tTR_rAcc_gate.shape, self.d_dtype)
-            tiled_copy_r2s, tRS_rD, tRS_sD = self.epilog_smem_copy_and_partition(tiled_copy_t2r, tTR_rD, epi_tidx, sD)
-
-            #
             # Create per-expert extension (for D tensor inside tile loop)
             #
             epi_ext = self._make_extension(workspace_ptr)
-
-            # Threads/warps participating in TMA store pipeline for D
-            d_producer_group = pipeline.CooperativeGroup(
-                pipeline.Agent.Thread,
-                self.threads_per_warp * len(self.epilog_rht_store_warp_id),
-            )
-            d_pipeline = pipeline.PipelineTmaStore.create(
-                num_stages=self.num_d_stage,
-                producer_group=d_producer_group,
-            )
 
             # Get the first tile info
             tile_info = cute.make_rmem_tensor((4,), cutlass.Int32)
@@ -2254,8 +2297,10 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
                 reverse_subtile = cutlass.Boolean(True) if acc_stage_index == 0 else cutlass.Boolean(False)
             else:
                 acc_stage_index = 0
+                reverse_subtile = cutlass.Boolean(False)
 
             num_prev_subtiles = cutlass.Int32(0)
+            num_prev_d_subtiles = cutlass.Int32(0)
             while is_valid_tile:
                 # sInfo format: (expert_idx, tile_m_idx, tile_n_idx, k_tile_cnt)
                 epi_work_tile_info = MoEWorkTileInfo(
@@ -2272,19 +2317,8 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
                 expert_idx = epi_work_tile_info.expert_idx
                 epi_ext.update_expert_info(padded_offsets, epi_work_tile_info.expert_idx)
 
-                if cutlass.const_expr(self.generate_amax):
-                    thread_tile_amax = cutlass.Float32(0.0)
-
-                #
-                # Get per-expert D tensor inside tile loop
-                #
-                real_d, _ = epi_ext.get_gmem_tensor("d", mD_mnl, padded_offsets, epi_work_tile_info)
-                gD_mnl_loop = cute.local_tile(real_d, cute.slice_(self.mma_tiler_d, (None, None, 0)), (None, None, None))
-                thr_mma_epi_loop = tiled_mma.get_slice(mma_tile_coord_v)
-                tCgD_loop = thr_mma_epi_loop.partition_C(gD_mnl_loop)
-                _, bSG_sD, bSG_gD_partitioned = self.epilog_gmem_copy_and_partition(epi_tidx, tma_atom_d, tCgD_loop, epi_tile, sD)
-                bSG_gD = bSG_gD_partitioned[(None, None, None, *mma_tile_coord_mnl)]
-                bSG_gD = cute.group_modes(bSG_gD, 1, cute.rank(bSG_gD))
+                if cutlass.const_expr(self.generate_post_rht_amax):
+                    thread_tile_post_rht_amax = cutlass.Float32(0.0)
 
                 #
                 # Set tensor memory buffer for current tile
@@ -2298,95 +2332,91 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
                 #
                 subtile_cnt = cute.size(tTR_tAcc.shape, mode=[3])
                 for subtile_idx in cutlass.range(0, subtile_cnt, 2, unroll=1):
-                    real_subtile_idx = subtile_idx // 2
-                    if cutlass.const_expr(self.overlapping_accum):
-                        if reverse_subtile:
-                            real_subtile_idx = self.cta_tile_shape_mnk[1] // self.epi_tile_n_required - 1 - subtile_idx // 2
-
                     #
-                    # Get Hadamard TMEM pointers for this subtile
-                    #
-                    hadamard_tmem_a_ptr = self.query_hadamard_tmem_a_ptr(subtile_idx, reverse_subtile, tmem_ptr)
-                    hadamard_tmem_acc_ptr = self.query_hadamard_tmem_acc_ptr(subtile_idx, reverse_subtile, tmem_ptr)
-                    tCompute = cute.make_rmem_tensor(tTR_rAcc_gate.layout, cutlass.Float32)
-
-                    #
-                    # Cross-CTA sync (prerequisite for Hadamard: both CTAs must have
-                    # written hadamard_in before either starts hadamard_compute)
-                    #
-                    hadamard_prerequisite_empty = hadamard_prerequisite_producer.acquire_and_advance()
-                    hadamard_prerequisite_empty.commit()
-                    hadamard_prerequisite_empty = hadamard_prerequisite_consumer.wait_and_advance()
-                    hadamard_prerequisite_consumer.release(hadamard_prerequisite_empty)
-
-                    #
-                    # Wait for pingpong producer (ACT warp) ready
+                    # Wait for ACT warps to finish writing the post-GLU D tile to SMEM.
                     #
                     pingpong_pipeline.consumer_wait(pingpong_rht_consumer_state)
 
-                    #
-                    # Apply Hadamard transform (reads from TMEM a_ptr, writes to TMEM acc_ptr)
-                    #
-                    hadamard_compute(
-                        tiled_hmma,
-                        hadamard_tmem_a_ptr,
-                        hadamard_tmem_acc_ptr,
-                        storage.sHadamard,
-                        epi_tile,
-                        epi_tidx,
-                        hadamard_producer,
-                    )
-                    hadamard_consumer.wait_and_advance()
-
-                    #
-                    # Get Hadamard result from TMEM to registers
-                    #
-                    hadamard_out(tCompute, epi_tile[1], hadamard_tmem_acc_ptr, epi_tidx)
+                    if cutlass.const_expr(self.generate_post_rht_amax):
+                        d_buffer = num_prev_d_subtiles % self.num_d_stage
+                        hadamard_tmem_a_ptr = self.query_hadamard_tmem_a_ptr(subtile_idx, reverse_subtile, tmem_ptr)
+                        hadamard_tmem_out_ptr = cute.recast_ptr(
+                            hadamard_tmem_a_ptr + 32,
+                            dtype=self.acc_dtype,
+                        )
+                        hadamard_transpose_in(
+                            sD,
+                            d_buffer,
+                            0,
+                            hadamard_tmem_a_ptr,
+                            epi_tidx,
+                        )
+                        hadamard_prerequisite_empty = hadamard_prerequisite_producer.acquire_and_advance()
+                        hadamard_prerequisite_empty.commit()
+                        hadamard_prerequisite_empty = hadamard_prerequisite_consumer.wait_and_advance()
+                        hadamard_prerequisite_consumer.release(hadamard_prerequisite_empty)
+                        hadamard_compute(
+                            tiled_hmma,
+                            hadamard_tmem_a_ptr,
+                            hadamard_tmem_out_ptr,
+                            storage.sHadamard,
+                            (M_PER_CLUSTER, HADAMARD_SIZE),
+                            epi_tidx,
+                            hadamard_producer,
+                        )
+                        hadamard_consumer.wait_and_advance()
+                        thread_tile_post_rht_amax = hadamard_transpose_out_amax(
+                            hadamard_tmem_out_ptr,
+                            epi_tidx,
+                            thread_tile_post_rht_amax,
+                        )
+                        hadamard_transpose_in(
+                            sD,
+                            d_buffer,
+                            HADAMARD_SIZE,
+                            hadamard_tmem_a_ptr,
+                            epi_tidx,
+                        )
+                        hadamard_prerequisite_empty = hadamard_prerequisite_producer.acquire_and_advance()
+                        hadamard_prerequisite_empty.commit()
+                        hadamard_prerequisite_empty = hadamard_prerequisite_consumer.wait_and_advance()
+                        hadamard_prerequisite_consumer.release(hadamard_prerequisite_empty)
+                        hadamard_compute(
+                            tiled_hmma,
+                            hadamard_tmem_a_ptr,
+                            hadamard_tmem_out_ptr,
+                            storage.sHadamard,
+                            (M_PER_CLUSTER, HADAMARD_SIZE),
+                            epi_tidx,
+                            hadamard_producer,
+                        )
+                        hadamard_consumer.wait_and_advance()
+                        thread_tile_post_rht_amax = hadamard_transpose_out_amax(
+                            hadamard_tmem_out_ptr,
+                            epi_tidx,
+                            thread_tile_post_rht_amax,
+                        )
 
                     #
                     # Release pingpong consumer slot
                     #
                     pingpong_pipeline.consumer_release(pingpong_rht_consumer_state)
                     pingpong_rht_consumer_state.advance()
-
-                    #
-                    # Amax accumulation per subtile
-                    #
-                    if cutlass.const_expr(self.generate_amax):
-                        thread_tile_amax = self.amax_reduction_per_thread(tCompute, thread_tile_amax)
-
-                    #
-                    # Convert to D dtype and store D to shared memory
-                    #
-                    acc_vec = tiled_copy_r2s.retile(tCompute).load()
-                    tRS_rD.store(acc_vec.to(self.d_dtype))
-
-                    d_buffer = num_prev_subtiles % self.num_d_stage
-                    num_prev_subtiles = num_prev_subtiles + 1
-                    cute.copy(
-                        tiled_copy_r2s,
-                        tRS_rD,
-                        tRS_sD[(None, None, None, d_buffer)],
-                    )
-                    # Fence and barrier to make sure shared memory store is visible to TMA
-                    cute.arch.fence_proxy("async.shared", space="cta")
-                    self.epilog_sync_barrier_group1.arrive_and_wait()
-                    #
-                    # TMA store D to global memory
-                    #
-                    if warp_idx == self.epilog_rht_store_warp_id[0]:
-                        cute.copy(
-                            tma_atom_d,
-                            bSG_sD[(None, d_buffer)],
-                            bSG_gD[(None, real_subtile_idx)],
-                        )
-                        d_pipeline.producer_commit()
-                        d_pipeline.producer_acquire()
-                    self.epilog_sync_barrier_group1.arrive_and_wait()
+                    num_prev_d_subtiles = num_prev_d_subtiles + 1
+                    self.epilog_sync_barrier.arrive_and_wait()
 
                 #
                 # Full epilogue barrier (ACT + RHT must both arrive)
                 #
+                if cutlass.const_expr(self.generate_post_rht_amax):
+                    gPostRhtAmax = mPostRhtAmax_tensor[(expert_idx, None)].iterator.llvm_ptr
+                    self.post_rht_amax_reduction_per_warp_and_cta(
+                        thread_tile_post_rht_amax,
+                        warp_idx,
+                        sPostRhtAmax,
+                        gPostRhtAmax,
+                    )
+
                 self.epilog_sync_barrier.arrive_and_wait()
 
                 #
@@ -2409,24 +2439,12 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
                 tile_info_pipeline.consumer_release(tile_info_consumer_state)
                 tile_info_consumer_state.advance()
 
-                #
-                # Amax reduction per tile (across warps and CTAs)
-                #
-                if cutlass.const_expr(self.generate_amax):
-                    gAmax = mAmax_tensor[(expert_idx, None)].iterator.llvm_ptr  # First element
-                    self.amax_reduction_per_warp_and_cta(thread_tile_amax, warp_idx, sAmax, gAmax)
-
             #
             # Dealloc the tensor memory buffer
             #
             tmem.relinquish_alloc_permit()
             self.epilog_sync_barrier_group1.arrive_and_wait()
             tmem.free(tmem_ptr)
-            #
-            # Wait for D store complete
-            #
-            d_pipeline.producer_tail()
-
         # END OF KERNEL
 
 
@@ -2505,6 +2523,7 @@ class BlockScaledMoEGroupedGemmGluHadamardCompatKernel(BlockScaledMoEGroupedGemm
             c=c,
             d=d,
             amax_tensor=amax_tensor,
+            post_rht_amax_tensor=None,
             padded_offsets=padded_offsets,
             alpha=alpha,
             prob=prob,

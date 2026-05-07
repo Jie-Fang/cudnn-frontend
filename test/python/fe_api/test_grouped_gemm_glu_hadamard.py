@@ -35,13 +35,20 @@ def _make_cfg(request, *, ab_dtype, sf_dtype, sf_vec_size, enable_bias=False) ->
     )
 
 
-def _apply_hadamard(d_ref: torch.Tensor) -> torch.Tensor:
+def _apply_transpose_hadamard(d_ref: torch.Tensor, aligned_group_m_list) -> torch.Tensor:
     from cudnn.grouped_gemm.grouped_gemm_glu_hadamard.hadamard_utils import HADAMARD_SIZE, hadamard_matrix
 
     valid_m, n_out, _ = d_ref.shape
     hadamard = hadamard_matrix(HADAMARD_SIZE, dtype=torch.float32, device=d_ref.device)
-    ref_view = d_ref.squeeze(-1).to(torch.bfloat16).to(torch.float32).view(valid_m, n_out // HADAMARD_SIZE, HADAMARD_SIZE)
-    return (ref_view @ hadamard).view(valid_m, n_out, 1)
+    out = torch.empty((valid_m, n_out), dtype=torch.float32, device=d_ref.device)
+    start = 0
+    for group_m in aligned_group_m_list:
+        end = start + group_m
+        group_t = d_ref[start:end, :, 0].to(torch.bfloat16).to(torch.float32).T.contiguous()
+        group_t = group_t.view(n_out, group_m // HADAMARD_SIZE, HADAMARD_SIZE)
+        out[start:end, :] = ((group_t @ hadamard) * (HADAMARD_SIZE**-0.5)).view(n_out, group_m).T
+        start = end
+    return out.unsqueeze(-1)
 
 
 def _run_grouped_gemm_glu_ref(inputs: Dict, act_func: str) -> Dict:
@@ -108,11 +115,9 @@ def _check_reference(inputs: Dict, outputs: Dict, cfg: Dict, *, act_func: str) -
         rtol=1e-2,
     )
 
-    d_hadamard_ref = _apply_hadamard(ref_tensors["d_ref"])
-
     torch.testing.assert_close(
         outputs["d_tensor"][: inputs["valid_m"]].cpu().float(),
-        d_hadamard_ref.cpu().to(cfg["d_dtype"]).to(torch.float32),
+        ref_tensors["d_ref"].cpu().to(cfg["d_dtype"]).to(torch.float32),
         atol=1e-1,
         rtol=1e-2,
     )
@@ -122,11 +127,26 @@ def _check_reference(inputs: Dict, outputs: Dict, cfg: Dict, *, act_func: str) -
         start = 0
         for i, group_m in enumerate(inputs["aligned_group_m_list"]):
             end = start + group_m
-            amax_ref[i] = compute_reference_amax(d_hadamard_ref[start:end, :, 0].clone())
+            amax_ref[i] = compute_reference_amax(ref_tensors["d_ref"][start:end, :, 0].clone())
             start = end
         torch.testing.assert_close(
             outputs["amax_tensor"].cpu().reshape(-1),
             amax_ref,
+            atol=1e-1,
+            rtol=1e-2,
+        )
+
+    if outputs["post_rht_amax_tensor"] is not None:
+        d_hadamard_ref = _apply_transpose_hadamard(ref_tensors["d_ref"], inputs["aligned_group_m_list"])
+        post_rht_amax_ref = torch.empty((cfg["l"],), dtype=torch.float32)
+        start = 0
+        for i, group_m in enumerate(inputs["aligned_group_m_list"]):
+            end = start + group_m
+            post_rht_amax_ref[i] = compute_reference_amax(d_hadamard_ref[start:end, :, 0].clone())
+            start = end
+        torch.testing.assert_close(
+            outputs["post_rht_amax_tensor"].cpu().reshape(-1),
+            post_rht_amax_ref,
             atol=1e-1,
             rtol=1e-2,
         )
@@ -143,6 +163,7 @@ def _allocate_outputs(inputs: Dict, cfg: Dict) -> Dict:
         "c_tensor": torch.empty_strided((valid_m, n, 1), (n, 1, valid_m * n), dtype=cfg["c_dtype"], device=device),
         "d_tensor": torch.empty_strided((valid_m, n_out, 1), (n_out, 1, valid_m * n_out), dtype=cfg["d_dtype"], device=device),
         "amax_tensor": torch.full((l, 1), float("-inf"), dtype=torch.float32, device=device),
+        "post_rht_amax_tensor": torch.full((l, 1), float("-inf"), dtype=torch.float32, device=device),
     }
 
 
@@ -175,6 +196,7 @@ def _run_compile_execute(request, *, ab_dtype, sf_dtype, sf_vec_size, act_func="
         sample_alpha=inputs["alpha_tensor"],
         sample_prob=inputs["prob_tensor"],
         sample_amax=outputs["amax_tensor"],
+        sample_post_rht_amax=outputs["post_rht_amax_tensor"],
         sample_bias=inputs["bias_tensor"],
         acc_dtype=cfg["acc_dtype"],
         mma_tiler_mn=cfg["mma_tiler_mn"],
@@ -197,6 +219,7 @@ def _run_compile_execute(request, *, ab_dtype, sf_dtype, sf_vec_size, act_func="
         alpha_tensor=inputs["alpha_tensor"],
         prob_tensor=inputs["prob_tensor"],
         amax_tensor=outputs["amax_tensor"],
+        post_rht_amax_tensor=outputs["post_rht_amax_tensor"],
         bias_tensor=inputs["bias_tensor"],
     )
 
