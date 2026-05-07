@@ -63,6 +63,12 @@ class RoPENode : public NodeCRTP<RoPENode> {
         CUDNN_FRONTEND_UNUSED(operations);
         CUDNN_FE_LOG_LABEL("INFO: Building RoPENode operations " << attributes.name << " ");
 
+#if (CUDNN_VERSION >= 92400)
+        // Compile- and run-time checks: RoPE op was added in cuDNN 9.24.
+        RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 92400,
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "CUDNN_BACKEND_OPERATION_ROPE_FWD_DESCRIPTOR is only available starting cuDNN 9.24.");
+
         auto rope_operation =
             make_shared_backend_pointer((cudnnBackendDescriptorType_t)CUDNN_BACKEND_OPERATION_ROPE_FWD_DESCRIPTOR);
 
@@ -93,6 +99,20 @@ class RoPENode : public NodeCRTP<RoPENode> {
                                                        1,
                                                        &backend_y));
 
+        // Set output_scale (host fp32 scalar; default 1.0)
+        _CUDNN_CHECK_CUDNN_ERROR(detail::set_attribute(rope_operation->get_backend_descriptor(),
+                                                       CUDNN_ATTR_OPERATION_ROPE_FWD_OUTPUT_SCALE,
+                                                       CUDNN_TYPE_FLOAT,
+                                                       1,
+                                                       &attributes.output_scale));
+
+        // Set rope_dim (int64; 0 = full rotation = input's head_dim)
+        _CUDNN_CHECK_CUDNN_ERROR(detail::set_attribute(rope_operation->get_backend_descriptor(),
+                                                       CUDNN_ATTR_OPERATION_ROPE_FWD_ROPE_DIM,
+                                                       CUDNN_TYPE_INT64,
+                                                       1,
+                                                       &attributes.rope_dim));
+
         // Finalize
         _CUDNN_CHECK_CUDNN_ERROR(detail::finalize(rope_operation->get_backend_descriptor()));
 
@@ -107,6 +127,13 @@ class RoPENode : public NodeCRTP<RoPENode> {
         raw_operations.push_back(rope_operation);
 
         return {error_code_t::OK, ""};
+#else
+        CUDNN_FRONTEND_UNUSED(uids_involved_in_operations);
+        CUDNN_FRONTEND_UNUSED(raw_operations);
+        CUDNN_FRONTEND_UNUSED(tensors);
+        return {error_code_t::GRAPH_NOT_SUPPORTED,
+                "CUDNN_BACKEND_OPERATION_ROPE_FWD_DESCRIPTOR is only available starting cuDNN 9.24."};
+#endif
     }
 
 #ifndef CUDNN_FRONTEND_SKIP_JSON_LIB

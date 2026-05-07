@@ -376,6 +376,8 @@ class PyGraph {
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     rope(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input,
          std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& freqs,
+         float output_scale,
+         int64_t rope_dim,
          cudnn_frontend::DataType_t const& compute_data_type,
          std::string const& name);
 

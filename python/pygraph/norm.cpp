@@ -323,6 +323,8 @@ init_pygraph_norm_submodule(py::class_<PyGraph>& m) {
              &PyGraph::rope,
              py::arg("input"),
              py::arg("freqs"),
+             py::arg_v("output_scale", 1.0f),
+             py::arg_v("rope_dim", int64_t{0}),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("name", ""));
 }
@@ -331,9 +333,15 @@ init_pygraph_norm_submodule(py::class_<PyGraph>& m) {
 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
 PyGraph::rope(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input,
               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& freqs,
+              float output_scale,
+              int64_t rope_dim,
               cudnn_frontend::DataType_t const& compute_data_type,
               std::string const& name) {
-    auto attributes = cudnn_frontend::graph::RoPE_attributes().set_compute_data_type(compute_data_type).set_name(name);
+    auto attributes = cudnn_frontend::graph::RoPE_attributes()
+                          .set_output_scale(output_scale)
+                          .set_rope_dim(rope_dim)
+                          .set_compute_data_type(compute_data_type)
+                          .set_name(name);
 
     return graph->rope(input, freqs, attributes);
 }
