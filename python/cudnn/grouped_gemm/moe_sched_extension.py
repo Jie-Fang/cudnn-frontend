@@ -49,6 +49,7 @@ from cutlass.utils.blockscaled_layout import tile_atom_to_shape_SF
 from cutlass.cute.nvgpu.tcgen05 import OperandMajorMode
 from .moe_utils import (
     MoEWeightMode,
+    WGradInputOrder,
     OnlineTensormapDescCreator,
     tensormap_ptr_for_copy,
     compute_expert_token_range,
@@ -340,10 +341,12 @@ class WgradScaledGemmSchedExtension(MoESchedExtension):
         tensormap_ctor,
         sf_vec_size: int,
         weight_mode: MoEWeightMode,
+        input_order: WGradInputOrder = WGradInputOrder.Tensor2D,
     ):
         super().__init__(tensormap_ctor)
         self.sf_vec_size = sf_vec_size
         self.weight_mode = weight_mode
+        self.input_order = input_order
 
     def __extract_mlir_values__(self):
         return extract_mlir_values(self.tensormap_ctor)
@@ -354,6 +357,7 @@ class WgradScaledGemmSchedExtension(MoESchedExtension):
             tensormap_ctor=new_ctor,
             sf_vec_size=self.sf_vec_size,
             weight_mode=self.weight_mode,
+            input_order=self.input_order,
         )
 
     def update_expert_info(self, offs, expert_idx):
@@ -377,6 +381,10 @@ class WgradScaledGemmSchedExtension(MoESchedExtension):
         c1 = cutlass.Int32(1)
 
         if cutlass.const_expr(tensor_name in ("a", "b")):
+            if cutlass.const_expr(self.input_order == WGradInputOrder.TensorRagged):
+                real = rewrite_tensor_shape(gmem_tensor_in_moe_view, (shape[0], tokens_i, c1))
+                desc = tensormap_ptr_for_copy(self.tensormap_ctor.get_desc_ptr(tensor_name, expert_idx))
+                return (real, desc)
             real = cute.domain_offset((0, token_offset, 0), gmem_tensor_in_moe_view)
             real = rewrite_tensor_shape(real, (shape[0], tokens_i, c1))
             return (real, None)
