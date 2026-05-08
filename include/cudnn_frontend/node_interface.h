@@ -150,6 +150,7 @@ class INode {
         DADALAYERNORM,
         SDPA,
         ROPE,
+        ROPE_BWD,
         MOE_GROUPED_MATMUL,
         MOE_GROUPED_MATMUL_BWD,
         DIAGONAL_BAND_MASK,

@@ -381,6 +381,14 @@ class PyGraph {
          cudnn_frontend::DataType_t const& compute_data_type,
          std::string const& name);
 
+    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
+    rope_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& dy,
+                  std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& freqs,
+                  float output_scale,
+                  int64_t rope_dim,
+                  cudnn_frontend::DataType_t const& compute_data_type,
+                  std::string const& name);
+
     std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>
     rmsnorm_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& dy,
                      std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& x,

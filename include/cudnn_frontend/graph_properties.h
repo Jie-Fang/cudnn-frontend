@@ -1758,6 +1758,57 @@ class RoPE_attributes : public Attributes<RoPE_attributes> {
 #endif
 };
 
+class RoPE_backward_attributes : public Attributes<RoPE_backward_attributes> {
+    friend class Attributes<RoPE_backward_attributes>;
+    friend class RoPEBackwardNode;
+    friend class Graph;
+
+   public:
+    enum class input_names { DY, FREQS };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+    enum class output_names { DX };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
+
+    // Same semantics as fwd: cos/sin pre-multiplied by output_scale, and the nope
+    // segment (head_dim - rope_dim) is scaled-pass-through. Should match the fwd's
+    // values for correct gradient flow.
+    float output_scale = 1.0f;
+    int64_t rope_dim   = 0;
+
+    RoPE_backward_attributes&
+    set_output_scale(float scale) {
+        output_scale = scale;
+        return *this;
+    }
+
+    RoPE_backward_attributes&
+    set_rope_dim(int64_t dim) {
+        rope_dim = dim;
+        return *this;
+    }
+
+#ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
+    friend void
+    to_json(nlohmann::json& j, const RoPE_backward_attributes& a) {
+        j["name"]              = a.name;
+        j["compute_data_type"] = a.compute_data_type;
+        j["output_scale"]      = a.output_scale;
+        j["rope_dim"]          = a.rope_dim;
+    }
+    friend void
+    from_json(const nlohmann::json& j, RoPE_backward_attributes& a) {
+        j.at("name").get_to(a.name);
+        j.at("compute_data_type").get_to(a.compute_data_type);
+        if (j.contains("output_scale")) {
+            j.at("output_scale").get_to(a.output_scale);
+        }
+        if (j.contains("rope_dim")) {
+            j.at("rope_dim").get_to(a.rope_dim);
+        }
+    }
+#endif
+};
+
 class Rmsnorm_backward_attributes : public Attributes<Rmsnorm_backward_attributes> {
     friend class Attributes<Rmsnorm_backward_attributes>;
     friend class DRMSNormNode;

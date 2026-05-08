@@ -197,11 +197,15 @@ def test_sdpa_random_bwd_L0(env_info, test_no, request, cudnn_handle):
         is_ragged_or_padded_or_full=RandomChoice({"ragged" : 0, "padded" : 4, "full" : 1}),
         is_deterministic=RandomChoice({True : 3, False : 1}),
         with_sink_token=RandomChoice({True : 1, False : 3}),
+        with_rope=RandomChoice({True : 1, False : 3}),
     ) as randomization_ctx:
         test.cfg = randomization_ctx(rng, data_seed, geom_seed)
 
     test.cfg.is_infer = False
     test.showConfig(test_no, request)
+
+    if getattr(test.cfg, "with_rope", False) and cudnn.backend_version() < 92400:
+        pytest.skip("RoPE requires cuDNN >= 9.24")
 
     exec_sdpa(test.cfg, request, cudnn_handle)
 

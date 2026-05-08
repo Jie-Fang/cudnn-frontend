@@ -20,6 +20,7 @@
 #include "node/instancenorm.h"
 #include "node/rmsnorm.h"
 #include "node/rope.h"
+#include "node/rope_backward.h"
 #include "node/resample.h"
 #include "node/reshape.h"
 #include "node/slice.h"
@@ -1719,6 +1720,10 @@ class Graph : public ICudnn, public INode {
                                             std::shared_ptr<Tensor_attributes>,
                                             RoPE_attributes);
 
+    std::shared_ptr<Tensor_attributes> rope_backward(std::shared_ptr<Tensor_attributes>,
+                                                     std::shared_ptr<Tensor_attributes>,
+                                                     RoPE_backward_attributes);
+
     std::array<std::shared_ptr<Tensor_attributes>, 3> rmsnorm_backward(std::shared_ptr<Tensor_attributes>,
                                                                        std::shared_ptr<Tensor_attributes>,
                                                                        std::shared_ptr<Tensor_attributes>,
@@ -3235,9 +3240,12 @@ inline std::shared_ptr<Tensor_attributes>
 Graph::rope(std::shared_ptr<Tensor_attributes> input,
             std::shared_ptr<Tensor_attributes> freqs,
             RoPE_attributes attributes) {
-    // Set output
+    // RoPE writes to a user-bound buffer (no longer a virtual workspace tensor),
+    // because the rotated Q/K need to be saved across fwd→bwd for the bwd to consume them
+    // as inputs to SDPA bwd.
     auto OUTPUT = attributes.outputs[RoPE_attributes::output_names::OUTPUT] =
         output_tensor(attributes.name + "::OUTPUT");
+    OUTPUT->set_is_virtual(false);
 
     // Set inputs
     attributes.inputs[RoPE_attributes::input_names::INPUT] = input;
@@ -3246,6 +3254,22 @@ Graph::rope(std::shared_ptr<Tensor_attributes> input,
     sub_nodes.emplace_back(std::make_unique<RoPENode>(std::move(attributes), context));
 
     return OUTPUT;
+}
+
+inline std::shared_ptr<Tensor_attributes>
+Graph::rope_backward(std::shared_ptr<Tensor_attributes> dy,
+                     std::shared_ptr<Tensor_attributes> freqs,
+                     RoPE_backward_attributes attributes) {
+    // dX is a real (user-bound) tensor by default — symmetric to fwd RoPE's Y output.
+    auto DX = attributes.outputs[RoPE_backward_attributes::output_names::DX] = output_tensor(attributes.name + "::DX");
+    DX->set_is_virtual(false);
+
+    attributes.inputs[RoPE_backward_attributes::input_names::DY]    = dy;
+    attributes.inputs[RoPE_backward_attributes::input_names::FREQS] = freqs;
+
+    sub_nodes.emplace_back(std::make_unique<RoPEBackwardNode>(std::move(attributes), context));
+
+    return DX;
 }
 
 inline std::array<std::shared_ptr<Tensor_attributes>, 3>

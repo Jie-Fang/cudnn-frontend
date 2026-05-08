@@ -57,6 +57,8 @@ class TensorUid(IntEnum):
     rope_freqs = 31
     q_rot = 32
     k_rot = 33
+    dQ_rot = 34
+    dK_rot = 35
 
 def validate_config(cfg):
     if not all((x > 0 and type(x) == int) for x in (cfg.batches, cfg.d_qk, cfg.d_v, cfg.s_q, cfg.s_kv, cfg.h_q, cfg.h_k, cfg.h_v)):
@@ -183,7 +185,8 @@ def allocate_tensors(cfg, rng_data_gen, perf=False):
         allocs[TensorUid.page_table_k] = (page_table_k, None, None)
         allocs[TensorUid.page_table_v] = (page_table_v, None, None)
 
-    # RoPE: allocate frequency angles and intermediate buffers
+    # RoPE: allocate freqs + the rotated Q/K outputs (now user-bound real tensors,
+    # not virtual workspace). Q_rot and K_rot share dims/strides with Q and K.
     if getattr(cfg, 'with_rope', False) and not cfg.is_ragged:
         d2 = cfg.d_qk // 2
         theta = 10000.0
@@ -195,6 +198,11 @@ def allocate_tensors(cfg, rng_data_gen, perf=False):
         freqs_gpu = torch.zeros(max_s, 1, 1, cfg.d_qk, device="cuda")
         freqs_gpu[:, 0, 0, :d2] = angles
         allocs[TensorUid.rope_freqs] = (freqs_gpu, None, None)
+        allocs[TensorUid.q_rot] = alloc_tensor(cfg.shape_q, cfg.data_type, strides=cfg.stride_q)
+        allocs[TensorUid.k_rot] = alloc_tensor(cfg.shape_k, cfg.data_type, strides=cfg.stride_k)
+        if cfg.is_train:
+            allocs[TensorUid.dQ_rot] = alloc_tensor(cfg.shape_q, cfg.data_type, strides=cfg.stride_q)
+            allocs[TensorUid.dK_rot] = alloc_tensor(cfg.shape_k, cfg.data_type, strides=cfg.stride_k)
 
     tensors = {uid: alloc[0] for uid, alloc in allocs.items()}
     return allocs, tensors, max_t_q, max_t_kv
@@ -267,16 +275,17 @@ def create_forward_graph(cfg, tensors, cudnn_handle):
 
     attn_scale = 0.125
 
-    # RoPE pre-processing: apply RoPE to Q and K if enabled
+    # RoPE pre-processing: apply RoPE to Q and K if enabled. q_rot/k_rot are real outputs
+    # (user-bound), not workspace.
     sdpa_q, sdpa_k = q, k
     if getattr(cfg, 'with_rope', False) and not cfg.is_ragged:
         max_s = max(cfg.s_q, cfg.s_kv)
         freqs = graph.tensor(uid=int(TensorUid.rope_freqs), dim=[max_s, 1, 1, cfg.d_qk],
                              stride=[cfg.d_qk, cfg.d_qk, cfg.d_qk, 1], data_type=cudnn.data_type.FLOAT)
         q_rot = graph.rope(input=q, freqs=freqs, name="RoPE_Q")
-        q_rot.set_data_type(cudnn_dtype).set_dim(cfg.shape_q).set_stride(cfg.stride_q)
+        q_rot.set_uid(int(TensorUid.q_rot)).set_data_type(cudnn_dtype).set_dim(cfg.shape_q).set_stride(cfg.stride_q)
         k_rot = graph.rope(input=k, freqs=freqs, name="RoPE_K")
-        k_rot.set_data_type(cudnn_dtype).set_dim(cfg.shape_k).set_stride(cfg.stride_k)
+        k_rot.set_uid(int(TensorUid.k_rot)).set_data_type(cudnn_dtype).set_dim(cfg.shape_k).set_stride(cfg.stride_k)
         sdpa_q, sdpa_k = q_rot, k_rot
 
     o, stats = graph.sdpa(
@@ -355,8 +364,10 @@ def create_forward_graph(cfg, tensors, cudnn_handle):
         int(TensorUid.seed): tensors.get(TensorUid.seed),
         int(TensorUid.offset): tensors.get(TensorUid.offset),
         int(TensorUid.rng_dump): tensors.get(TensorUid.rng_dump),
-        # RoPE freqs tensor (Q_rot/K_rot are virtual — managed via workspace)
+        # RoPE: freqs + real Q_rot/K_rot output buffers (user-allocated, saved across fwd→bwd).
         int(TensorUid.rope_freqs): tensors.get(TensorUid.rope_freqs),
+        int(TensorUid.q_rot): tensors.get(TensorUid.q_rot),
+        int(TensorUid.k_rot): tensors.get(TensorUid.k_rot),
     }
     variant_pack = {k: v for k, v in variant_pack.items() if v is not None}
 
@@ -377,8 +388,16 @@ def create_backward_graph(cfg, tensors, cudnn_handle, max_t_q, max_t_kv):
         sm_version=sm_version
     )
 
-    q = graph.tensor(uid=int(TensorUid.q), dim=cfg.shape_q, stride=cfg.stride_q, data_type=cudnn_dtype)
-    k = graph.tensor(uid=int(TensorUid.k), dim=cfg.shape_k, stride=cfg.stride_k, data_type=cudnn_dtype)
+    # When RoPE is enabled, SDPA-bwd consumes the rotated Q/K (saved from fwd) and outputs
+    # gradients wrt them; rope_backward then maps those to gradients wrt the original Q/K.
+    rope_active = getattr(cfg, 'with_rope', False) and not cfg.is_ragged
+    q_uid_in = TensorUid.q_rot if rope_active else TensorUid.q
+    k_uid_in = TensorUid.k_rot if rope_active else TensorUid.k
+    dq_uid_out = TensorUid.dQ_rot if rope_active else TensorUid.dQ
+    dk_uid_out = TensorUid.dK_rot if rope_active else TensorUid.dK
+
+    q = graph.tensor(uid=int(q_uid_in), dim=cfg.shape_q, stride=cfg.stride_q, data_type=cudnn_dtype)
+    k = graph.tensor(uid=int(k_uid_in), dim=cfg.shape_k, stride=cfg.stride_k, data_type=cudnn_dtype)
     v = graph.tensor(uid=int(TensorUid.v), dim=cfg.shape_v, stride=cfg.stride_v, data_type=cudnn_dtype)
     o = graph.tensor(uid=int(TensorUid.o), dim=cfg.shape_o, stride=cfg.stride_o, data_type=cudnn_dtype)
     dO = graph.tensor(uid=int(TensorUid.dO), dim=cfg.shape_o, stride=cfg.stride_o, data_type=cudnn_dtype)
@@ -426,9 +445,18 @@ def create_backward_graph(cfg, tensors, cudnn_handle, max_t_q, max_t_kv):
         dSink_token=dSink_token,
     )
 
-    dQ.set_uid(int(TensorUid.dQ)).set_output(True).set_dim(cfg.shape_q).set_stride(cfg.stride_q)
-    dK.set_uid(int(TensorUid.dK)).set_output(True).set_dim(cfg.shape_k).set_stride(cfg.stride_k)
+    dQ.set_uid(int(dq_uid_out)).set_output(True).set_dim(cfg.shape_q).set_stride(cfg.stride_q)
+    dK.set_uid(int(dk_uid_out)).set_output(True).set_dim(cfg.shape_k).set_stride(cfg.stride_k)
     dV.set_uid(int(TensorUid.dV)).set_output(True).set_dim(cfg.shape_v).set_stride(cfg.stride_v)
+
+    if rope_active:
+        max_s = max(cfg.s_q, cfg.s_kv)
+        freqs_b = graph.tensor(uid=int(TensorUid.rope_freqs), dim=[max_s, 1, 1, cfg.d_qk],
+                               stride=[cfg.d_qk, cfg.d_qk, cfg.d_qk, 1], data_type=cudnn.data_type.FLOAT)
+        dQ_orig = graph.rope_backward(dY=dQ, freqs=freqs_b, name="RoPE_BWD_Q")
+        dQ_orig.set_uid(int(TensorUid.dQ)).set_output(True).set_data_type(cudnn_dtype).set_dim(cfg.shape_q).set_stride(cfg.stride_q)
+        dK_orig = graph.rope_backward(dY=dK, freqs=freqs_b, name="RoPE_BWD_K")
+        dK_orig.set_uid(int(TensorUid.dK)).set_output(True).set_data_type(cudnn_dtype).set_dim(cfg.shape_k).set_stride(cfg.stride_k)
 
     if cfg.is_ragged:
         q_ragged_offset = graph.tensor(uid=int(TensorUid.q_ragged_offset), dim=(cfg.batches + 1, 1, 1, 1), stride=(1, 1, 1, 1), data_type=cudnn.data_type.INT64)
@@ -482,6 +510,12 @@ def create_backward_graph(cfg, tensors, cudnn_handle, max_t_q, max_t_kv):
         int(TensorUid.stats_ragged_offset): tensors.get(TensorUid.stats_ragged_offset),
         int(TensorUid.seed): tensors.get(TensorUid.seed),
         int(TensorUid.offset): tensors.get(TensorUid.offset),
+        # RoPE bwd: freqs + saved Q_rot/K_rot inputs + dQ_rot/dK_rot intermediates.
+        int(TensorUid.rope_freqs): tensors.get(TensorUid.rope_freqs),
+        int(TensorUid.q_rot): tensors.get(TensorUid.q_rot),
+        int(TensorUid.k_rot): tensors.get(TensorUid.k_rot),
+        int(TensorUid.dQ_rot): tensors.get(TensorUid.dQ_rot),
+        int(TensorUid.dK_rot): tensors.get(TensorUid.dK_rot),
     }
     variant_pack = {k: v for k, v in variant_pack.items() if v is not None}
 
@@ -668,6 +702,27 @@ def compute_and_compare_reference(cfg, allocs, tensors, diffs):
             torch_type=cfg.data_type,
         )
         dQ_ref, dK_ref, dV_ref, dBias_ref, dSink_token_ref = bwd_ret
+
+        # When RoPE is active, compute_ref_backward returned gradients wrt the rotated Q/K.
+        # Apply RoPE-bwd (rotation by -theta) to obtain gradients wrt the original Q/K.
+        if getattr(cfg, 'with_rope', False) and not cfg.is_ragged:
+            d2 = cfg.d_qk // 2
+            freqs_gpu = tensors.get(TensorUid.rope_freqs)
+            angles_q = freqs_gpu[:cfg.s_q, 0, 0, :d2].float()
+            cos_q = torch.cos(angles_q).unsqueeze(0).unsqueeze(0)
+            sin_q = torch.sin(angles_q).unsqueeze(0).unsqueeze(0)
+            dQ_lo, dQ_hi = dQ_ref[..., :d2], dQ_ref[..., d2:]
+            dQ_ref = torch.cat([dQ_lo * cos_q + dQ_hi * sin_q,
+                                -dQ_lo * sin_q + dQ_hi * cos_q], dim=-1)
+            angles_k = freqs_gpu[:cfg.s_kv, 0, 0, :d2].float()
+            cos_k = torch.cos(angles_k).unsqueeze(0).unsqueeze(0)
+            sin_k = torch.sin(angles_k).unsqueeze(0).unsqueeze(0)
+            dK_lo, dK_hi = dK_ref[..., :d2], dK_ref[..., d2:]
+            dK_ref = torch.cat([dK_lo * cos_k + dK_hi * sin_k,
+                                -dK_lo * sin_k + dK_hi * cos_k], dim=-1)
+            # Match dtype round-trip (rope_bwd kernel writes back in input dtype).
+            dQ_ref = dQ_ref.to(cfg.data_type).float()
+            dK_ref = dK_ref.to(cfg.data_type).float()
 
     if cfg.is_train and cfg.is_padding:
         for i, (m, n) in enumerate(zip(seq_len_q_ref, seq_len_kv_ref)):
