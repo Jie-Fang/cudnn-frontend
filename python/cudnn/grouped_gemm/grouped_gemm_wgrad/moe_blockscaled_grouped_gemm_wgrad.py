@@ -257,6 +257,7 @@ class BlockScaledMoEGroupedGemmWgradKernel:
     def _create_tiled_mma(self):
         return sm100_utils.make_blockscaled_trivial_tiled_mma(
             self.a_dtype,
+            self.b_dtype,
             self.a_major_mode,
             self.b_major_mode,
             self.sf_dtype,
@@ -268,6 +269,7 @@ class BlockScaledMoEGroupedGemmWgradKernel:
     def _create_tiled_mma_sfb(self):
         return sm100_utils.make_blockscaled_trivial_tiled_mma(
             self.a_dtype,
+            self.b_dtype,
             self.a_major_mode,
             self.b_major_mode,
             self.sf_dtype,
@@ -778,11 +780,11 @@ class BlockScaledMoEGroupedGemmWgradKernel:
             num_threads=32 * len((self.mma_warp_id, *self.epilogue_warp_id)),
         )
         tmem = utils.TmemAllocator(
-            storage.tmem_holding_buf,
+            storage.tmem_holding_buf.ptr,
             barrier_for_retrieve=tmem_alloc_barrier,
             allocator_warp_id=self.epilogue_warp_id[0],
             is_two_cta=use_2cta_instrs,
-            two_cta_tmem_dealloc_mbar_ptr=storage.tmem_dealloc_mbar_ptr,
+            two_cta_tmem_dealloc_mbar_ptr=storage.tmem_dealloc_mbar_ptr.ptr,
         )
 
         # Scheduler (CLC-based for 2Dx2D)

@@ -46,7 +46,6 @@ import cutlass
 import cutlass.cute as cute
 import cutlass.cute.testing as testing
 from cutlass.cute.nvgpu import cpasync, tcgen05
-from cutlass.cute.nvgpu.tcgen05 import OperandMajorMode
 from cutlass.cutlass_dsl import T, dsl_user_op
 import cutlass.utils as utils
 import cutlass.utils.blackwell_helpers as sm100_utils

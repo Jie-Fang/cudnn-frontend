@@ -11,7 +11,7 @@ from cuda.bindings import driver as cuda
 import cutlass
 import cutlass.cute as cute
 import torch
-from cutlass.cute.nvgpu.tcgen05 import OperandMajorMode
+from cutlass.cute.nvgpu import OperandMajorMode
 from cutlass.cute.runtime import from_dlpack, make_fake_stream
 
 from cudnn.api_base import APIBase, TupleDict, ceil_div, is_power_of_2

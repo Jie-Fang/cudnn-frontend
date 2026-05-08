@@ -8,7 +8,8 @@ import cutlass.cute as cute
 import cutlass.pipeline as pipeline
 import cutlass.utils.blackwell_helpers as sm100_utils
 from cutlass.cute.nvgpu import tcgen05
-from cutlass.cute.nvgpu.tcgen05 import OperandMajorMode, OperandSource
+from cutlass.cute.nvgpu import OperandMajorMode
+from cutlass.cute.nvgpu.tcgen05 import OperandSource
 import torch
 
 HADAMARD_SIZE = 16
@@ -19,6 +20,7 @@ M_PER_CLUSTER = 256
 @cute.jit
 def hadamard_setup(g_hadamard, s_hadamard, tidx):
     tiled_hmma = sm100_utils.make_trivial_tiled_mma(
+        cutlass.BFloat16,
         cutlass.BFloat16,
         OperandMajorMode.K,
         OperandMajorMode.K,
