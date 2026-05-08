@@ -6,6 +6,7 @@ import pytest
 import torch
 
 from test_utils import torch_fork_set_rng
+from fe_api.test_discrete_grouped_gemm_swiglu_utils import allocate_discrete_input_tensors
 from fe_api.test_fe_api_utils import DYNAMIC_SHAPES_M_VALUES, compute_reference_amax
 from fe_api.test_grouped_gemm_swiglu_utils import allocate_grouped_gemm_input_tensors, grouped_gemm_swiglu_init
 
@@ -267,6 +268,51 @@ def _run_wrapper(request, *, ab_dtype, sf_dtype, sf_vec_size, act_func="swiglu",
     _check_reference(inputs, outputs, cfg, act_func=act_func)
 
 
+def _run_discrete_wrapper(request, *, ab_dtype, sf_dtype, sf_vec_size, act_func="swiglu"):
+    cfg = _make_cfg(request, ab_dtype=ab_dtype, sf_dtype=sf_dtype, sf_vec_size=sf_vec_size)
+    inputs = allocate_discrete_input_tensors(
+        n=cfg["n"],
+        k=cfg["k"],
+        num_experts=cfg["l"],
+        group_m_list=cfg["group_m_list"],
+        ab_dtype=cfg["ab_dtype"],
+        sf_dtype=cfg["sf_dtype"],
+        sf_vec_size=cfg["sf_vec_size"],
+        m_aligned=cfg["m_aligned"],
+        b_major=cfg["b_major"],
+    )
+    inputs["b_ref"] = torch.cat(inputs["b_ref_list"], dim=2)
+    inputs["sfb_ref"] = torch.cat(inputs["sfb_ref_list"], dim=2)
+
+    from cudnn import grouped_gemm_glu_hadamard_wrapper_sm100
+
+    outputs = grouped_gemm_glu_hadamard_wrapper_sm100(
+        a_tensor=inputs["a_tensor"],
+        b_ptrs=inputs["b_ptrs_tensor"],
+        sfa_tensor=inputs["sfa_tensor"],
+        sfb_ptrs=inputs["sfb_ptrs_tensor"],
+        padded_offsets=inputs["padded_offsets_tensor"],
+        alpha_tensor=inputs["alpha_tensor"],
+        prob_tensor=inputs["prob_tensor"],
+        n=cfg["n"],
+        b_dtype=inputs["b_list"][0].dtype,
+        b_major=cfg["b_major"],
+        bias_tensor=inputs["bias_tensor"],
+        acc_dtype=cfg["acc_dtype"],
+        c_dtype=cfg["c_dtype"],
+        d_dtype=cfg["d_dtype"],
+        cd_major=cfg["cd_major"],
+        mma_tiler_mn=cfg["mma_tiler_mn"],
+        cluster_shape_mn=cfg["cluster_shape_mn"],
+        sf_vec_size=cfg["sf_vec_size"],
+        vector_f32=cfg["vector_f32"],
+        m_aligned=cfg["m_aligned"],
+        act_func=act_func,
+    )
+
+    _check_reference(inputs, outputs, cfg, act_func=act_func)
+
+
 @pytest.mark.L0
 @torch_fork_set_rng(seed=0)
 @pytest.mark.parametrize("ab_dtype,sf_dtype,sf_vec_size", FP4_EXECUTION_CASES)
@@ -290,6 +336,18 @@ def test_grouped_gemm_glu_hadamard_wrapper_fp4(request, ab_dtype, sf_dtype, sf_v
         sf_dtype=sf_dtype,
         sf_vec_size=sf_vec_size,
         act_func=act_func,
+    )
+
+
+@pytest.mark.L0
+@torch_fork_set_rng(seed=0)
+def test_grouped_gemm_glu_hadamard_wrapper_discrete_fp4(request):
+    _run_discrete_wrapper(
+        request,
+        ab_dtype=torch.float4_e2m1fn_x2,
+        sf_dtype=torch.float8_e8m0fnu,
+        sf_vec_size=16,
+        act_func="swiglu",
     )
 
 
