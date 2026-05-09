@@ -350,9 +350,9 @@ def run_grouped_gemm_dsrelu_ref(
     Based on the reference in contiguous_blockscaled_grouped_gemm_dsrelu_quant_fusion.py
 
     The dSReLU backward pass computes:
-    1. GEMM: ref = alpha^2 * (SFA * A) @ (SFB * B)^T per group
-    2. dprob = sum over N of (relu(ref)^2 * C)
-    3. D = 2 * relu(ref) * C * prob
+    1. GEMM: ref = alpha * (SFA * A) @ (SFB * B)^T per group
+    2. dprob = sum over N of (relu(C)^2 * ref)
+    3. D = 2 * relu(C) * ref * prob
 
     :param a_ref: A tensor (tensor_m, k, 1) in float32
     :param b_ref: B tensor (n, k, l) in float32
@@ -386,21 +386,21 @@ def run_grouped_gemm_dsrelu_ref(
             sfa_ref[start:end, :, 0],
         )
         res_b = torch.einsum("nk,nk->nk", b_ref[:, :, i], sfb_ref[:, :, i])
-        ref[0, start:end, :] = torch.einsum("mk,nk->mn", res_a * alpha_tensor[i].item(), res_b * alpha_tensor[i].item())
+        ref[0, start:end, :] = torch.einsum("mk,nk->mn", res_a, res_b) * alpha_tensor[i].item()
         start = end
     ref = ref.permute((1, 2, 0))  # shape [M, N, 1]
 
     # Step 2: Apply dsquared-ReLU backward elementwise
     c_full = c_ref.clone()
-    relu_ref = torch.relu(ref)
-    ref_dprob = relu_ref**2 * c_full
+    c_relu = torch.relu(c_full)
+    ref_dprob = c_relu**2 * ref
     chunk_sums = [torch.sum(chunk, dim=1, keepdim=True) for chunk in torch.split(ref_dprob, 32, dim=1)]
     ref_dprob = torch.sum(torch.cat(chunk_sums, dim=1), dim=1, keepdim=True)
     ref_tensors["dprob_ref"] = ref_dprob
 
     # Step 3: Compute dSReLU formula
     prob = prob_tensor.expand(-1, n, -1)
-    ref_d = 2 * relu_ref * c_full * prob
+    ref_d = 2 * c_relu * ref * prob
 
     ref_tensors["d_ref"] = ref_d.clone()
 

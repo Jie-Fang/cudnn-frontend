@@ -9,17 +9,18 @@ Supports:
     - Dense (contiguous 3-D B) / Discrete (per-expert pointer array B) weight layout
     - FP8/FP4 output quantization with row/column scale factors (SFD)
     - Optional routing-probability (prob) fusion
-    - DSRELU backward epilogue: dA = relu(acc)·C·2·prob; dprob = Σ_n(relu(acc)²·C)
+    - DSRELU backward epilogue: dA = acc·relu(C)·2·prob; dprob = Σ_n(relu(C)²·acc)
     - NONE epilogue for testing (identity, no SReLU gate)
 
 EpilogueType.NONE:
     out[m,n] = alpha · (SFA·A ★ SFB·B)[m,n] · prob[m]
 
-EpilogueType.DSRELU (backward through srelu):
-    out[m,n] = relu(alpha · acc[m,n]) · C[m,n] · 2 · prob[m]
-    dprob[m] += Σ_n( relu(alpha · acc[m,n])² · C[m,n] )
+EpilogueType.DSRELU (backward through scaled srelu):
+    out[m,n] = alpha · acc[m,n] · relu(C[m,n]) · 2 · prob[m]
+    dprob[m] += Σ_n( relu(C[m,n])² · alpha · acc[m,n] )
 
-C is the upstream gradient (same shape as forward SReLU output D).
+C is the forward SReLU input, and alpha · acc is the upstream gradient
+from the following GEMM.
 """
 
 from enum import Enum
@@ -94,8 +95,8 @@ class BlockScaledMoEGroupedGemmQuantBwdKernel:
     """Block-scaled grouped GEMM backward kernel with MoE tile scheduling and DSRELU.
 
     Computes the backward pass through the SReLU epilogue:
-        out[m,n] = relu(alpha * acc[m,n]) * C[m,n] * 2 * prob[m]   (DSRELU)
-        dprob[m] += sum_n( relu(alpha * acc[m,n])^2 * C[m,n] )      (DSRELU)
+        out[m,n] = alpha * acc[m,n] * relu(C[m,n]) * 2 * prob[m]   (DSRELU)
+        dprob[m] += sum_n( relu(C[m,n])^2 * alpha * acc[m,n] )      (DSRELU)
     or identity (NONE epilogue):
         out[m,n] = alpha * acc[m,n] * prob[m]
 
@@ -2067,16 +2068,21 @@ class BlockScaledMoEGroupedGemmQuantBwdKernel:
                     tCompute = cute.make_rmem_tensor(acc_vec.shape, self.acc_dtype)
 
                     if cutlass.const_expr(self.epilogue_type == EpilogueType.DSRELU.value):
-                        # DSRELU backward: dA = relu(acc) * C * 2 * prob
-                        acc_relu = cute.where(acc_vec > 0, acc_vec, cute.full_like(acc_vec, 0))
+                        # DSRELU backward for scaled SReLU:
+                        #   dC = upstream_grad * relu(C) * 2 * prob
+                        #   dprob = sum(relu(C)^2 * upstream_grad)
+                        # Here acc_vec is the upstream gradient from the following GEMM,
+                        # and c_vec is the saved forward SReLU input.
+                        c_forward = c_vec.load()
+                        c_relu = cute.where(c_forward > 0, c_forward, cute.full_like(c_forward, 0))
                         tRelu = cute.make_rmem_tensor(acc_vec.shape, self.acc_dtype)
-                        tRelu.store(acc_relu)
+                        tRelu.store(c_relu)
                         probx2 = 2 * mProb
                         if cutlass.const_expr(self.vectorized_f32):
                             for i in cutlass.range_constexpr(0, cute.size(tTR_rAcc), 2):
                                 tCompute[i], tCompute[i + 1] = cute.arch.mul_packed_f32x2(
                                     (tRelu[i], tRelu[i + 1]),
-                                    (c_vec[i].to(self.acc_dtype), c_vec[i + 1].to(self.acc_dtype)),
+                                    (acc_vec[i], acc_vec[i + 1]),
                                     rnd="rn",
                                     ftz=False,
                                 )
@@ -2088,9 +2094,9 @@ class BlockScaledMoEGroupedGemmQuantBwdKernel:
                                 )
                         else:
                             for i in cutlass.range_constexpr(cute.size(tTR_rAcc)):
-                                tCompute[i] = tRelu[i] * c_vec[i].to(self.acc_dtype) * cutlass.Float32(probx2)
+                                tCompute[i] = tRelu[i] * acc_vec[i] * cutlass.Float32(probx2)
 
-                        # Accumulate dprob: dprob[m] += sum_n(relu(acc)^2 * C)
+                        # Accumulate dprob: dprob[m] += sum_n(relu(C)^2 * upstream_grad)
                         if cutlass.const_expr(dprob is not None):
                             tDprob = cute.make_rmem_tensor(acc_vec.shape, self.acc_dtype)
                             if cutlass.const_expr(self.vectorized_f32):
@@ -2103,13 +2109,13 @@ class BlockScaledMoEGroupedGemmQuantBwdKernel:
                                     )
                                     tDprob[i], tDprob[i + 1] = cute.arch.mul_packed_f32x2(
                                         (tDprob[i], tDprob[i + 1]),
-                                        (c_vec[i].to(self.acc_dtype), c_vec[i + 1].to(self.acc_dtype)),
+                                        (acc_vec[i], acc_vec[i + 1]),
                                         rnd="rn",
                                         ftz=False,
                                     )
                             else:
                                 for i in cutlass.range_constexpr(cute.size(tTR_rAcc)):
-                                    tDprob[i] = tRelu[i] * tRelu[i] * c_vec[i].to(self.acc_dtype)
+                                    tDprob[i] = tRelu[i] * tRelu[i] * acc_vec[i]
                             dProbVal = dProbVal + tDprob.load().reduce(cute.ReductionOp.ADD, cutlass.Float32(0.0), 0)
                     else:
                         # NONE epilogue: dA = acc * prob (identity, no SReLU gate)

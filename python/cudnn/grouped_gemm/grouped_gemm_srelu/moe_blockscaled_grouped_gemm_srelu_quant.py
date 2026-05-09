@@ -1434,8 +1434,18 @@ class BlockScaledMoEGroupedGemmQuantKernel:
                     mma_n_coord = tile_info[2]
                     expert_idx = tile_info[0]
 
-                    # Direct L-indexing — no ext, no domain_offset
                     gBias_tile = gBias_nl[(None, mma_n_coord, expert_idx)]
+                    # Dynamic MNKL can drop the 128-bit alignment proof, but
+                    # the runtime bias pointer is 16-byte aligned.
+                    gBias_tile = cute.make_tensor(
+                        cute.make_ptr(
+                            gBias_tile.element_type,
+                            gBias_tile.iterator.toint(),
+                            AddressSpace.gmem,
+                            assumed_align=16,
+                        ),
+                        gBias_tile.layout,
+                    )
                     tBs_gBias = thr_bias_g2s.partition_S(gBias_tile)
 
                     # Predicate: this thread's chunk must be within valid N
@@ -1959,12 +1969,6 @@ class BlockScaledMoEGroupedGemmQuantKernel:
                             for i in cutlass.range_constexpr(0, cute.size(tTR_rAcc), 2):
                                 bias_f32_0 = bias_vec[i].to(cutlass.Float32)
                                 bias_f32_1 = bias_vec[i + 1].to(cutlass.Float32)
-                                bias_f32_0, bias_f32_1 = cute.arch.mul_packed_f32x2(
-                                    (mProb, mProb),
-                                    (bias_f32_0, bias_f32_1),
-                                    rnd="rn",
-                                    ftz=False,
-                                )
                                 tTR_rAcc[i], tTR_rAcc[i + 1] = cute.arch.fma_packed_f32x2(
                                     (tTR_rAcc[i], tTR_rAcc[i + 1]),
                                     (cutlass.Float32(alpha_val), cutlass.Float32(alpha_val)),
@@ -1974,7 +1978,7 @@ class BlockScaledMoEGroupedGemmQuantKernel:
                                 )
                         else:
                             for i in cutlass.range_constexpr(cute.size(tTR_rAcc)):
-                                tTR_rAcc[i] = tTR_rAcc[i] * cutlass.Float32(alpha_val) + bias_vec[i].to(cutlass.Float32) * mProb
+                                tTR_rAcc[i] = tTR_rAcc[i] * cutlass.Float32(alpha_val) + bias_vec[i].to(cutlass.Float32)
                     else:
                         if cutlass.const_expr(self.vectorized_f32):
                             for i in cutlass.range_constexpr(0, cute.size(tTR_rAcc), 2):
@@ -2016,21 +2020,18 @@ class BlockScaledMoEGroupedGemmQuantKernel:
                             )
                         acc_vec = tTR_rAcc.load()
 
-                    if cutlass.const_expr(not self.enable_bias):
-                        tCompute = cute.make_rmem_tensor(acc_vec.shape, self.acc_dtype)
-                        if cutlass.const_expr(self.vectorized_f32):
-                            for i in cutlass.range_constexpr(0, cute.size(tTR_rAcc), 2):
-                                tCompute[i], tCompute[i + 1] = cute.arch.mul_packed_f32x2(
-                                    (acc_vec[i], acc_vec[i + 1]),
-                                    (mProb, mProb),
-                                    rnd="rn",
-                                    ftz=False,
-                                )
-                        else:
-                            for i in cutlass.range_constexpr(cute.size(tTR_rAcc)):
-                                tCompute[i] = acc_vec[i] * mProb
+                    tCompute = cute.make_rmem_tensor(acc_vec.shape, self.acc_dtype)
+                    if cutlass.const_expr(self.vectorized_f32):
+                        for i in cutlass.range_constexpr(0, cute.size(tTR_rAcc), 2):
+                            tCompute[i], tCompute[i + 1] = cute.arch.mul_packed_f32x2(
+                                (acc_vec[i], acc_vec[i + 1]),
+                                (mProb, mProb),
+                                rnd="rn",
+                                ftz=False,
+                            )
                     else:
-                        tCompute = tTR_rAcc
+                        for i in cutlass.range_constexpr(cute.size(tTR_rAcc)):
+                            tCompute[i] = acc_vec[i] * mProb
 
                     if cutlass.const_expr(self.generate_amax):
                         thread_tile_amax = amax_reduction_per_thread(tCompute, thread_tile_amax)
