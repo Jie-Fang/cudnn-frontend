@@ -60,6 +60,7 @@ class GroupedGemmGluHadamardSm100(APIBase):
         m_aligned: int = 256,
         act_func: str = "swiglu",
         use_dynamic_sched: bool = False,
+        use_tmem_post_rht_amax: bool = False,
     ):
         super().__init__()
 
@@ -129,6 +130,7 @@ class GroupedGemmGluHadamardSm100(APIBase):
         self.m_aligned = m_aligned
         self.act_func = act_func
         self.use_dynamic_sched = use_dynamic_sched
+        self.use_tmem_post_rht_amax = use_tmem_post_rht_amax
         self._kernel = BlockScaledMoEGroupedGemmGluHadamardKernel
         self.num_cluster_overlap_margin = int(os.getenv("CUDNNFE_CLUSTER_OVERLAP_MARGIN", "0"))
         self._workspace = None
@@ -292,6 +294,7 @@ class GroupedGemmGluHadamardSm100(APIBase):
             use_dynamic_sched=self.use_dynamic_sched,
             act_func=self.act_func,
             enable_bias=self.bias_desc is not None,
+            use_tmem_post_rht_amax=self.use_tmem_post_rht_amax,
         )
 
         hardware_info = cutlass.utils.HardwareInfo()
@@ -592,6 +595,7 @@ def grouped_gemm_glu_hadamard_wrapper_sm100(
     m_aligned: int = 256,
     act_func: str = "swiglu",
     use_dynamic_sched: bool = False,
+    use_tmem_post_rht_amax: bool = False,
     current_stream: Optional[cuda.CUstream] = None,
 ) -> TupleDict:
     """High-level wrapper for grouped GEMM GLU + Hadamard forward fusion."""
@@ -638,7 +642,6 @@ def grouped_gemm_glu_hadamard_wrapper_sm100(
 
     if valid_m == 0:
         return TupleDict(c_tensor=c_tensor, d_tensor=d_tensor, amax_tensor=amax_tensor, post_rht_amax_tensor=post_rht_amax_tensor)
-
     def stride_order(tensor: torch.Tensor) -> Tuple[int, ...]:
         return tuple(i for i, _ in sorted(enumerate(tensor.stride()), key=lambda item: item[1]))
 
@@ -681,6 +684,7 @@ def grouped_gemm_glu_hadamard_wrapper_sm100(
         vector_f32,
         m_aligned,
         use_dynamic_sched,
+        use_tmem_post_rht_amax,
         *((tuple(b_ptrs.shape), tuple(b_ptrs.stride()), b_ptrs.dtype, l) if is_discrete else ()),
     )
 
@@ -706,6 +710,7 @@ def grouped_gemm_glu_hadamard_wrapper_sm100(
             m_aligned=m_aligned,
             act_func=act_func,
             use_dynamic_sched=use_dynamic_sched,
+            use_tmem_post_rht_amax=use_tmem_post_rht_amax,
         )
         if is_dense:
             api = GroupedGemmGluHadamardSm100(sample_b=b_tensor, sample_sfb=sfb_tensor, **common_kwargs)

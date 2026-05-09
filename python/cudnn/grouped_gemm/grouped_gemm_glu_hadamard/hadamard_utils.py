@@ -122,7 +122,6 @@ def hadamard_transpose_in(sD, d_buffer, feature_offset: cutlass.Constexpr, tmem_
 
     t_d_st = thr_st.partition_D(tmem_tensor)
     cute.copy(thr_st, cute.recast_tensor(rmem_src, cutlass.Float32), t_d_st)
-    cute.arch.fence_view_async_tmem_store()
 
 
 @cute.jit
@@ -185,13 +184,52 @@ def hadamard_transpose_out_amax(tmem_ptr, tidx, amax_fp32):
     )
     rmem_dst = cute.make_rmem_tensor(t_d_ld.shape, cutlass.Float32)
     cute.copy(thr_ld, t_d_ld, rmem_dst)
-    cute.arch.fence_view_async_tmem_load()
 
     import cutlass._mlir.dialects.math as _math
 
-    norm = cutlass.Float32(0.25)
     for i in cutlass.range_constexpr(cute.size(rmem_dst)):
-        abs_val = cutlass.Float32(_math.absf(rmem_dst[i].ir_value())) * norm
+        abs_val = cutlass.Float32(_math.absf(rmem_dst[i].ir_value()))
+        amax_fp32 = cute.arch.fmax(amax_fp32, abs_val)
+    return amax_fp32
+
+
+@cute.jit
+def hadamard_smem_transpose_fwht_amax(sD, d_buffer, feature_offset: cutlass.Constexpr, tidx, amax_fp32):
+    token_block = tidx // HADAMARD_SIZE
+    feature = (tidx % HADAMARD_SIZE) + feature_offset
+    token_base = token_block * HADAMARD_SIZE
+
+    rmem_vals = cute.make_rmem_tensor((HADAMARD_SIZE,), cutlass.Float32)
+    for i in cutlass.range_constexpr(HADAMARD_SIZE):
+        rmem_vals[i] = sD[(token_base + i, feature, d_buffer)].to(cutlass.BFloat16).to(cutlass.Float32)
+
+    for base in cutlass.range_constexpr(0, HADAMARD_SIZE, 2):
+        x = rmem_vals[base]
+        y = rmem_vals[base + 1]
+        rmem_vals[base] = x + y
+        rmem_vals[base + 1] = x - y
+    for base in cutlass.range_constexpr(0, HADAMARD_SIZE, 4):
+        for i in cutlass.range_constexpr(2):
+            x = rmem_vals[base + i]
+            y = rmem_vals[base + i + 2]
+            rmem_vals[base + i] = x + y
+            rmem_vals[base + i + 2] = x - y
+    for base in cutlass.range_constexpr(0, HADAMARD_SIZE, 8):
+        for i in cutlass.range_constexpr(4):
+            x = rmem_vals[base + i]
+            y = rmem_vals[base + i + 4]
+            rmem_vals[base + i] = x + y
+            rmem_vals[base + i + 4] = x - y
+    for i in cutlass.range_constexpr(8):
+        x = rmem_vals[i]
+        y = rmem_vals[i + 8]
+        rmem_vals[i] = x + y
+        rmem_vals[i + 8] = x - y
+
+    import cutlass._mlir.dialects.math as _math
+
+    for i in cutlass.range_constexpr(HADAMARD_SIZE):
+        abs_val = cutlass.Float32(_math.absf(rmem_vals[i].ir_value()))
         amax_fp32 = cute.arch.fmax(amax_fp32, abs_val)
     return amax_fp32
 

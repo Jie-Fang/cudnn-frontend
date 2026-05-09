@@ -38,8 +38,8 @@ Supports:
     - GLU activation fusion (SwiGLU / GeGLU)
 
 Warp assignment (8 epilogue warps, pingpong):
-    warps 0-3  : ACT warps  — TMEM→reg, alpha scale, GLU activation, C store, hadamard_in
-    warps 4-7  : RHT store warps — hadamard_compute, D store
+    warps 0-3  : ACT warps  — TMEM→reg, alpha scale, GLU activation, C/D store
+    warps 4-7  : RHT store warps — post-RHT amax from D SMEM
     warp  8    : MMA warp
     warp  9    : TMA load warp
     warp  10   : Scheduler warp (MoEPersistentTileScheduler)
@@ -77,6 +77,7 @@ from ..moe_utils import (
 from .hadamard_utils import (
     hadamard_setup,
     hadamard_compute,
+    hadamard_smem_transpose_fwht_amax,
     hadamard_transpose_in,
     hadamard_transpose_out_amax,
     HADAMARD_SIZE,
@@ -173,6 +174,7 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
         use_dynamic_sched: bool = False,
         act_func: str = "swiglu",
         enable_bias: bool = False,
+        use_tmem_post_rht_amax: bool = False,
     ):
         mma_tile_m = mma_tiler_mn[0]
         if self.FIX_PAD_SIZE % mma_tile_m != 0:
@@ -191,6 +193,7 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
         self.weight_mode = weight_mode
         self.use_dynamic_sched = use_dynamic_sched
         self.enable_bias = enable_bias
+        self.use_tmem_post_rht_amax = use_tmem_post_rht_amax
 
         # Always use pingpong epilogue for Hadamard
         self.epilogue_pingpong = True
@@ -230,9 +233,10 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
             barrier_id=2,
             num_threads=32 * len(self.epilog_warp_id),
         )
+        tmem_alloc_warp_ids = self.epilog_warp_id if self.use_tmem_post_rht_amax else self.epilog_act_warp_id
         self.tmem_alloc_barrier = pipeline.NamedBarrier(
             barrier_id=3,
-            num_threads=32 * len((self.mma_warp_id, *self.epilog_warp_id)),
+            num_threads=32 * len((self.mma_warp_id, *tmem_alloc_warp_ids)),
         )
         self.sched_sync_barrier = pipeline.NamedBarrier(
             barrier_id=4,
@@ -376,6 +380,7 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
             self.num_smem_capacity,
             self.occupancy,
             self.bias_dtype if self.enable_bias else None,
+            self.use_tmem_post_rht_amax,
         )
 
         self.a_smem_layout_staged = sm100_utils.make_smem_layout_a(
@@ -429,12 +434,14 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
         self.num_sfa_tmem_cols = (self.cta_tile_shape_mnk[0] // sf_atom_mn) * mma_inst_tile_k
         self.num_sfb_tmem_cols = (self.cta_tile_shape_mnk_sfb[1] // sf_atom_mn) * mma_inst_tile_k
         self.num_sf_tmem_cols = self.num_sfa_tmem_cols + self.num_sfb_tmem_cols
+        self.num_rht_tmem_cols = HADAMARD_SIZE if self.use_tmem_post_rht_amax else 0
+        self.num_reserved_tmem_cols = self.num_sf_tmem_cols + self.num_rht_tmem_cols
         self.num_accumulator_tmem_cols = (
-            self.cta_tile_shape_mnk[1] * self.num_acc_stage if not self.overlapping_accum else self.cta_tile_shape_mnk[1] * 2 - self.num_sf_tmem_cols
+            self.cta_tile_shape_mnk[1] * self.num_acc_stage if not self.overlapping_accum else self.cta_tile_shape_mnk[1] * 2 - self.num_reserved_tmem_cols
         )
 
         self.epi_tile_n_required = 2 * cute.size(self.epi_tile[1])
-        self.iter_acc_early_release_in_epilogue = ((self.num_sf_tmem_cols + self.epi_tile_n_required - 1) // self.epi_tile_n_required - 1) * 2
+        self.iter_acc_early_release_in_epilogue = ((self.num_reserved_tmem_cols + self.epi_tile_n_required - 1) // self.epi_tile_n_required - 1) * 2
 
     def get_desc_workspace_bytes(self) -> int:
         """Return descriptor workspace size in bytes."""
@@ -795,11 +802,12 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
         class SharedStorage:
             ab_mbar_ptr: cute.struct.MemRange[cutlass.Int64, self.num_ab_stage * 2]
             acc_mbar_ptr: cute.struct.MemRange[cutlass.Int64, self.num_acc_stage * 2]
-            hadamard_mbar_ptr: cute.struct.MemRange[cutlass.Int64, 1 * 2]
-            hadamard_prerequisite_mbar_ptr: cute.struct.MemRange[cutlass.Int64, 1 * 2]
             pingpong_mbar_ptr: cute.struct.MemRange[cutlass.Int64, self.num_pingpong_stage * 2]
             if cutlass.const_expr(self.enable_bias):
                 bias_mbar_ptr: cute.struct.MemRange[cutlass.Int64, self.num_bias_stage * 2]
+            if cutlass.const_expr(self.use_tmem_post_rht_amax):
+                hadamard_mbar_ptr: cute.struct.MemRange[cutlass.Int64, 1 * 2]
+                hadamard_prerequisite_mbar_ptr: cute.struct.MemRange[cutlass.Int64, 1 * 2]
             scheduler: SchedulerStorage
             tmem_dealloc_mbar_ptr: cutlass.Int64
             tmem_holding_buf: cutlass.Int32
@@ -832,8 +840,8 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
                     cute.struct.MemRange[self.bias_dtype, cute.cosize(self.bias_smem_layout_staged)],
                     16,
                 ]
-            sHadamard: cute.struct.Align[cute.struct.MemRange[cutlass.BFloat16, HADAMARD_SIZE * HADAMARD_SIZE], 16]
-            sBH: cute.struct.Align[cute.struct.MemRange[cutlass.BFloat16, HADAMARD_SIZE * HADAMARD_SIZE], 16]
+            if cutlass.const_expr(self.use_tmem_post_rht_amax):
+                sHadamard: cute.struct.Align[cute.struct.MemRange[cutlass.BFloat16, HADAMARD_SIZE * HADAMARD_SIZE], 16]
             sAmax: cute.struct.Align[
                 cute.struct.MemRange[cutlass.Float32, self.num_epilog_warps],
                 1,
@@ -956,6 +964,7 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
             block_amax = cutlass.Float32(0.0)
             for i in cutlass.range(self.num_epilog_warps):
                 block_amax = cute.arch.fmax(block_amax, amax_smem[i])
+            block_amax = block_amax * cutlass.Float32(0.25)
             _ = atomic_max_float32(ptr=amax_gmem, value=block_amax)
 
     @cute.jit
@@ -1083,16 +1092,12 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
 
     @cute.jit
     def query_hadamard_tmem_a_ptr(self, tile_idx, reverse_subtile, tmem_ptr):
-        hadamard_tmem_offset = 256 + (HADAMARD_SIZE + self.epi_tile[1]) * (tile_idx // 2)
-        if reverse_subtile:
-            hadamard_tmem_offset = 256 - self.num_sf_tmem_cols - HADAMARD_SIZE - (HADAMARD_SIZE + self.epi_tile[1]) * (tile_idx // 2)
+        hadamard_tmem_offset = self.num_accumulator_tmem_cols + self.num_sf_tmem_cols
         return cute.recast_ptr(tmem_ptr + hadamard_tmem_offset, dtype=self.acc_dtype)
 
     @cute.jit
     def query_hadamard_tmem_acc_ptr(self, tile_idx, reverse_subtile, tmem_ptr):
-        hadamard_tmem_offset = 256 + (HADAMARD_SIZE + self.epi_tile[1]) * (tile_idx // 2) + HADAMARD_SIZE
-        if reverse_subtile:
-            hadamard_tmem_offset = 256 - self.num_sf_tmem_cols - HADAMARD_SIZE - (HADAMARD_SIZE + self.epi_tile[1]) * (tile_idx // 2) - self.epi_tile[1]
+        hadamard_tmem_offset = self.num_accumulator_tmem_cols + self.num_sf_tmem_cols
         return cute.recast_ptr(tmem_ptr + hadamard_tmem_offset, dtype=self.acc_dtype)
 
     def epilog_tmem_copy_and_partition(self, tidx, tAcc, gD_mnl, epi_tile, use_2cta_instrs):
@@ -1153,6 +1158,7 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
         num_smem_capacity,
         occupancy,
         bias_dtype,
+        use_tmem_post_rht_amax,
     ):
         num_acc_stage = 1 if mma_tiler_mnk[1] == 256 else 2
         num_c_stage = 1
@@ -1178,7 +1184,7 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
         sinfo_bytes = 4 * 4 * num_tile_stage
         c_bytes = cute.size_in_bytes(c_dtype, c_smem_layout_one) * num_c_stage
         d_bytes = cute.size_in_bytes(d_dtype, d_smem_layout_one) * num_d_stage
-        hadamard_bytes = (cutlass.BFloat16.width // 8) * HADAMARD_SIZE * HADAMARD_SIZE if d_dtype == cutlass.BFloat16 else 0
+        hadamard_bytes = (cutlass.BFloat16.width // 8) * HADAMARD_SIZE * HADAMARD_SIZE if use_tmem_post_rht_amax else 0
         # sAmax and sPostRhtAmax for the 4 ACT/RHT epilogue warps.
         amax_bytes = 2 * 4 * 4  # two sets of 4 Float32 values
 
@@ -1189,7 +1195,8 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
             num_bias_stage = 0
             bias_bytes = 0
 
-        epi_bytes = c_bytes + d_bytes + hadamard_bytes + amax_bytes + bias_bytes
+        epi_bytes = c_bytes + d_bytes + amax_bytes + bias_bytes
+        epi_bytes += hadamard_bytes
 
         num_ab_stage = (num_smem_capacity // occupancy - (mbar_helpers_bytes + epi_bytes + sinfo_bytes)) // ab_bytes_per_stage
 
@@ -1294,45 +1301,46 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
             cta_layout_vmnk=cluster_layout_vmnk,
         )
 
-        # Hadamard SMEM tensor
-        hadamard_b_layout_staged = cute.make_layout((16, 8), stride=(1, 16))
-        sHadamard = storage.sHadamard.get_tensor(hadamard_b_layout_staged)
-        hadamard_h_iter = hadamard_tensor.iterator + (cutlass.Int32(128) if cta_rank == 1 else cutlass.Int32(0))
-        hadamard_tensor_local = cute.make_tensor(
-            cute.make_ptr(
-                cutlass.BFloat16,
-                hadamard_h_iter.toint(),
-                hadamard_h_iter.memspace,
-                assumed_align=16,
-            ),
-            hadamard_b_layout_staged,
-        )
+        if cutlass.const_expr(self.use_tmem_post_rht_amax):
+            # Hadamard SMEM tensor
+            hadamard_b_layout_staged = cute.make_layout((16, 8), stride=(1, 16))
+            sHadamard = storage.sHadamard.get_tensor(hadamard_b_layout_staged)
+            hadamard_h_iter = hadamard_tensor.iterator + (cutlass.Int32(128) if cta_rank == 1 else cutlass.Int32(0))
+            hadamard_tensor_local = cute.make_tensor(
+                cute.make_ptr(
+                    cutlass.BFloat16,
+                    hadamard_h_iter.toint(),
+                    hadamard_h_iter.memspace,
+                    assumed_align=16,
+                ),
+                hadamard_b_layout_staged,
+            )
 
-        # Hadamard UMMA pipeline (1 stage)
-        hadamard_pipeline_producer_group = pipeline.CooperativeGroup(pipeline.Agent.Thread)
-        num_hadamard_consumer_threads = 128 * (2 if use_2cta_instrs else 1)
-        hadamard_pipeline_consumer_group = pipeline.CooperativeGroup(pipeline.Agent.Thread, num_hadamard_consumer_threads)
-        hadamard_producer, hadamard_consumer = pipeline.PipelineUmmaAsync.create(
-            barrier_storage=storage.hadamard_mbar_ptr.data_ptr(),
-            num_stages=1,
-            producer_group=hadamard_pipeline_producer_group,
-            consumer_group=hadamard_pipeline_consumer_group,
-            cta_layout_vmnk=cluster_layout_vmnk,
-        ).make_participants()
+            # Hadamard UMMA pipeline (1 stage)
+            hadamard_pipeline_producer_group = pipeline.CooperativeGroup(pipeline.Agent.Thread)
+            num_hadamard_consumer_threads = 128 * (2 if use_2cta_instrs else 1)
+            hadamard_pipeline_consumer_group = pipeline.CooperativeGroup(pipeline.Agent.Thread, num_hadamard_consumer_threads)
+            hadamard_producer, hadamard_consumer = pipeline.PipelineUmmaAsync.create(
+                barrier_storage=storage.hadamard_mbar_ptr.data_ptr(),
+                num_stages=1,
+                producer_group=hadamard_pipeline_producer_group,
+                consumer_group=hadamard_pipeline_consumer_group,
+                cta_layout_vmnk=cluster_layout_vmnk,
+            ).make_participants()
 
-        # Hadamard prerequisite pipeline (cross-CTA sync, 1 stage)
-        num_hadamard_prerequisite_threads = 128
-        hadamard_prerequisite_pipeline_producer_group = pipeline.CooperativeGroup(pipeline.Agent.Thread, num_hadamard_prerequisite_threads)
-        hadamard_prerequisite_pipeline_consumer_group = pipeline.CooperativeGroup(pipeline.Agent.Thread, num_hadamard_prerequisite_threads)
-        peer_rank = cutlass.Int32(1) - cta_rank
-        hadamard_prerequisite_producer, hadamard_prerequisite_consumer = pipeline.PipelineAsync.create(
-            barrier_storage=storage.hadamard_prerequisite_mbar_ptr.data_ptr(),
-            num_stages=1,
-            producer_group=hadamard_prerequisite_pipeline_producer_group,
-            consumer_group=hadamard_prerequisite_pipeline_consumer_group,
-            producer_mask=peer_rank,
-            defer_sync=True,
-        ).make_participants()
+            # Hadamard prerequisite pipeline (cross-CTA sync, 1 stage)
+            num_hadamard_prerequisite_threads = 128
+            hadamard_prerequisite_pipeline_producer_group = pipeline.CooperativeGroup(pipeline.Agent.Thread, num_hadamard_prerequisite_threads)
+            hadamard_prerequisite_pipeline_consumer_group = pipeline.CooperativeGroup(pipeline.Agent.Thread, num_hadamard_prerequisite_threads)
+            peer_rank = cutlass.Int32(1) - cta_rank
+            hadamard_prerequisite_producer, hadamard_prerequisite_consumer = pipeline.PipelineAsync.create(
+                barrier_storage=storage.hadamard_prerequisite_mbar_ptr.data_ptr(),
+                num_stages=1,
+                producer_group=hadamard_prerequisite_pipeline_producer_group,
+                consumer_group=hadamard_prerequisite_pipeline_consumer_group,
+                producer_mask=peer_rank,
+                defer_sync=True,
+            ).make_participants()
 
         # Pingpong pipeline
         pingpong_producer_group = pipeline.CooperativeGroup(pipeline.Agent.Thread, len(self.epilog_act_warp_id) * self.threads_per_warp)
@@ -1444,7 +1452,7 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
                         tCtAcc_fake.stride[0],
                         tCtAcc_fake.stride[1],
                         tCtAcc_fake.stride[2],
-                        (256 - self.num_sf_tmem_cols) * tCtAcc_fake.stride[0][1],
+                        (256 - self.num_reserved_tmem_cols) * tCtAcc_fake.stride[0][1],
                     ),
                 ),
             )
@@ -2164,9 +2172,6 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
                             bSG_gD[(None, real_subtile_idx)],
                         )
                         d_pipeline.producer_commit()
-                        d_pipeline.producer_acquire()
-                    self.epilog_sync_barrier_group0.arrive_and_wait()
-                    num_prev_d_subtiles = num_prev_d_subtiles + 1
 
                     #
                     # Signal the RHT epilogue warps that the post-GLU D tile is in SMEM.
@@ -2175,11 +2180,14 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
                     pingpong_pipeline.producer_commit(pingpong_act_producer_state)
                     pingpong_act_producer_state.advance()
 
+                    num_prev_d_subtiles = num_prev_d_subtiles + 1
+
                     #
                     # Delayed TMA store acquire + group sync (always enabled)
                     #
                     if cutlass.const_expr(self.delay_tma_store_acquire_sync):
                         if warp_idx == self.epilog_act_warp_id[0]:
+                            d_pipeline.producer_acquire()
                             c_pipeline.producer_acquire()
                         self.epilog_sync_barrier_group0.arrive_and_wait()
 
@@ -2227,45 +2235,46 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
             pingpong_pipeline.producer_tail(pingpong_act_producer_state)
 
         # ---------------------------------------------------------------
-        # Specialized RHT store warps (4-7): hadamard_compute + D store
+        # Specialized RHT store warps (4-7): post-RHT amax from D SMEM
         # ---------------------------------------------------------------
         if warp_idx < self.mma_warp_id and warp_idx >= self.epilog_rht_store_warp_id[0] and total_token > 0:
             epi_tidx = tidx % 128
 
-            #
-            # Alloc tensor memory buffer
-            #
-            tmem.allocate(self.num_tmem_alloc_cols)
+            if cutlass.const_expr(self.use_tmem_post_rht_amax):
+                #
+                # Alloc tensor memory buffer
+                #
+                tmem.allocate(self.num_tmem_alloc_cols)
 
-            #
-            # Bar sync for retrieve tensor memory ptr from shared memory
-            #
-            tmem.wait_for_alloc()
+                #
+                # Bar sync for retrieve tensor memory ptr from shared memory
+                #
+                tmem.wait_for_alloc()
 
-            #
-            # Retrieving tensor memory ptr
-            #
-            tmem_ptr = tmem.retrieve_ptr(self.acc_dtype)
+                #
+                # Retrieving tensor memory ptr
+                #
+                tmem_ptr = tmem.retrieve_ptr(self.acc_dtype)
 
-            #
-            # Hadamard setup (loads Hadamard matrix from GMEM to SMEM)
-            #
-            tiled_hmma = hadamard_setup(hadamard_tensor_local, sHadamard, epi_tidx)
+                #
+                # Hadamard setup (loads Hadamard matrix from GMEM to SMEM)
+                #
+                tiled_hmma = hadamard_setup(hadamard_tensor_local, sHadamard, epi_tidx)
 
-            #
-            # Partition for epilogue (shape-only via mD_mnl)
-            #
-            tCtAcc_base = cute.make_tensor(tmem_ptr, tCtAcc_fake.layout)
-            thr_mma_epi = tiled_mma.get_slice(mma_tile_coord_v)
-            gD_mnl_shape = cute.local_tile(mD_mnl, cute.slice_(self.mma_tiler_d, (None, None, 0)), (None, None, None))
-            tCgD_shape = thr_mma_epi.partition_C(gD_mnl_shape)
+                #
+                # Partition for epilogue (shape-only via mD_mnl)
+                #
+                tCtAcc_base = cute.make_tensor(tmem_ptr, tCtAcc_fake.layout)
+                thr_mma_epi = tiled_mma.get_slice(mma_tile_coord_v)
+                gD_mnl_shape = cute.local_tile(mD_mnl, cute.slice_(self.mma_tiler_d, (None, None, 0)), (None, None, None))
+                tCgD_shape = thr_mma_epi.partition_C(gD_mnl_shape)
 
-            (
-                tiled_copy_t2r,
-                tTR_tAcc_base,
-                tTR_rAcc_gate,
-                tTR_rAcc_up,
-            ) = self.epilog_tmem_copy_and_partition(epi_tidx, tCtAcc_base, tCgD_shape, epi_tile, use_2cta_instrs)
+                (
+                    tiled_copy_t2r,
+                    tTR_tAcc_base,
+                    tTR_rAcc_gate,
+                    tTR_rAcc_up,
+                ) = self.epilog_tmem_copy_and_partition(epi_tidx, tCtAcc_base, tCgD_shape, epi_tile, use_2cta_instrs)
 
             #
             # Pingpong consumer state
@@ -2289,17 +2298,18 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
             tile_info_pipeline.consumer_release(tile_info_consumer_state)
             tile_info_consumer_state.advance()
 
-            #
-            # Accumulator stage index (for overlapping_accum)
-            #
-            if cutlass.const_expr(self.overlapping_accum):
-                acc_stage_index = 0
-                reverse_subtile = cutlass.Boolean(True) if acc_stage_index == 0 else cutlass.Boolean(False)
-            else:
-                acc_stage_index = 0
-                reverse_subtile = cutlass.Boolean(False)
+            if cutlass.const_expr(self.use_tmem_post_rht_amax):
+                #
+                # Accumulator stage index (for overlapping_accum)
+                #
+                if cutlass.const_expr(self.overlapping_accum):
+                    acc_stage_index = 0
+                    reverse_subtile = cutlass.Boolean(True) if acc_stage_index == 0 else cutlass.Boolean(False)
+                else:
+                    acc_stage_index = 0
+                    reverse_subtile = cutlass.Boolean(False)
 
-            num_prev_subtiles = cutlass.Int32(0)
+                num_prev_subtiles = cutlass.Int32(0)
             num_prev_d_subtiles = cutlass.Int32(0)
             while is_valid_tile:
                 # sInfo format: (expert_idx, tile_m_idx, tile_n_idx, k_tile_cnt)
@@ -2320,17 +2330,21 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
                 if cutlass.const_expr(self.generate_post_rht_amax):
                     thread_tile_post_rht_amax = cutlass.Float32(0.0)
 
-                #
-                # Set tensor memory buffer for current tile
-                # (T2R, T2R_M, T2R_N, EPI_M, EPI_N, STAGE)
-                #
-                tTR_tAcc = tTR_tAcc_base[(None, None, None, None, None, acc_stage_index)]
-                tTR_tAcc = cute.group_modes(tTR_tAcc, 3, cute.rank(tTR_tAcc))
+                if cutlass.const_expr(self.use_tmem_post_rht_amax):
+                    #
+                    # Set tensor memory buffer for current tile
+                    # (T2R, T2R_M, T2R_N, EPI_M, EPI_N, STAGE)
+                    #
+                    tTR_tAcc = tTR_tAcc_base[(None, None, None, None, None, acc_stage_index)]
+                    tTR_tAcc = cute.group_modes(tTR_tAcc, 3, cute.rank(tTR_tAcc))
 
                 #
                 # Store accumulator to global memory in subtiles
                 #
-                subtile_cnt = cute.size(tTR_tAcc.shape, mode=[3])
+                if cutlass.const_expr(self.use_tmem_post_rht_amax):
+                    subtile_cnt = cute.size(tTR_tAcc.shape, mode=[3])
+                else:
+                    subtile_cnt = self.cta_tile_shape_mnk[1] // cute.size(self.epi_tile[1])
                 for subtile_idx in cutlass.range(0, subtile_cnt, 2, unroll=1):
                     #
                     # Wait for ACT warps to finish writing the post-GLU D tile to SMEM.
@@ -2339,63 +2353,76 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
 
                     if cutlass.const_expr(self.generate_post_rht_amax):
                         d_buffer = num_prev_d_subtiles % self.num_d_stage
-                        hadamard_tmem_a_ptr = self.query_hadamard_tmem_a_ptr(subtile_idx, reverse_subtile, tmem_ptr)
-                        hadamard_tmem_out_ptr = cute.recast_ptr(
-                            hadamard_tmem_a_ptr + 32,
-                            dtype=self.acc_dtype,
-                        )
-                        hadamard_transpose_in(
-                            sD,
-                            d_buffer,
-                            0,
-                            hadamard_tmem_a_ptr,
-                            epi_tidx,
-                        )
-                        hadamard_prerequisite_empty = hadamard_prerequisite_producer.acquire_and_advance()
-                        hadamard_prerequisite_empty.commit()
-                        hadamard_prerequisite_empty = hadamard_prerequisite_consumer.wait_and_advance()
-                        hadamard_prerequisite_consumer.release(hadamard_prerequisite_empty)
-                        hadamard_compute(
-                            tiled_hmma,
-                            hadamard_tmem_a_ptr,
-                            hadamard_tmem_out_ptr,
-                            storage.sHadamard,
-                            (M_PER_CLUSTER, HADAMARD_SIZE),
-                            epi_tidx,
-                            hadamard_producer,
-                        )
-                        hadamard_consumer.wait_and_advance()
-                        thread_tile_post_rht_amax = hadamard_transpose_out_amax(
-                            hadamard_tmem_out_ptr,
-                            epi_tidx,
-                            thread_tile_post_rht_amax,
-                        )
-                        hadamard_transpose_in(
-                            sD,
-                            d_buffer,
-                            HADAMARD_SIZE,
-                            hadamard_tmem_a_ptr,
-                            epi_tidx,
-                        )
-                        hadamard_prerequisite_empty = hadamard_prerequisite_producer.acquire_and_advance()
-                        hadamard_prerequisite_empty.commit()
-                        hadamard_prerequisite_empty = hadamard_prerequisite_consumer.wait_and_advance()
-                        hadamard_prerequisite_consumer.release(hadamard_prerequisite_empty)
-                        hadamard_compute(
-                            tiled_hmma,
-                            hadamard_tmem_a_ptr,
-                            hadamard_tmem_out_ptr,
-                            storage.sHadamard,
-                            (M_PER_CLUSTER, HADAMARD_SIZE),
-                            epi_tidx,
-                            hadamard_producer,
-                        )
-                        hadamard_consumer.wait_and_advance()
-                        thread_tile_post_rht_amax = hadamard_transpose_out_amax(
-                            hadamard_tmem_out_ptr,
-                            epi_tidx,
-                            thread_tile_post_rht_amax,
-                        )
+                        if cutlass.const_expr(self.use_tmem_post_rht_amax):
+                            hadamard_tmem_a_ptr = self.query_hadamard_tmem_a_ptr(subtile_idx, reverse_subtile, tmem_ptr)
+                            hadamard_tmem_out_ptr = self.query_hadamard_tmem_acc_ptr(subtile_idx, reverse_subtile, tmem_ptr)
+                            hadamard_transpose_in(
+                                sD,
+                                d_buffer,
+                                0,
+                                hadamard_tmem_a_ptr,
+                                epi_tidx,
+                            )
+                            hadamard_prerequisite_empty = hadamard_prerequisite_producer.acquire_and_advance()
+                            hadamard_prerequisite_empty.commit()
+                            hadamard_prerequisite_empty = hadamard_prerequisite_consumer.wait_and_advance()
+                            hadamard_prerequisite_consumer.release(hadamard_prerequisite_empty)
+                            hadamard_compute(
+                                tiled_hmma,
+                                hadamard_tmem_a_ptr,
+                                hadamard_tmem_out_ptr,
+                                storage.sHadamard,
+                                (M_PER_CLUSTER, HADAMARD_SIZE),
+                                epi_tidx,
+                                hadamard_producer,
+                            )
+                            hadamard_consumer.wait_and_advance()
+                            thread_tile_post_rht_amax = hadamard_transpose_out_amax(
+                                hadamard_tmem_out_ptr,
+                                epi_tidx,
+                                thread_tile_post_rht_amax,
+                            )
+                            hadamard_transpose_in(
+                                sD,
+                                d_buffer,
+                                HADAMARD_SIZE,
+                                hadamard_tmem_a_ptr,
+                                epi_tidx,
+                            )
+                            hadamard_prerequisite_empty = hadamard_prerequisite_producer.acquire_and_advance()
+                            hadamard_prerequisite_empty.commit()
+                            hadamard_prerequisite_empty = hadamard_prerequisite_consumer.wait_and_advance()
+                            hadamard_prerequisite_consumer.release(hadamard_prerequisite_empty)
+                            hadamard_compute(
+                                tiled_hmma,
+                                hadamard_tmem_a_ptr,
+                                hadamard_tmem_out_ptr,
+                                storage.sHadamard,
+                                (M_PER_CLUSTER, HADAMARD_SIZE),
+                                epi_tidx,
+                                hadamard_producer,
+                            )
+                            hadamard_consumer.wait_and_advance()
+                            thread_tile_post_rht_amax = hadamard_transpose_out_amax(
+                                hadamard_tmem_out_ptr,
+                                epi_tidx,
+                                thread_tile_post_rht_amax,
+                            )
+                        else:
+                            thread_tile_post_rht_amax = hadamard_smem_transpose_fwht_amax(
+                                sD,
+                                d_buffer,
+                                0,
+                                epi_tidx,
+                                thread_tile_post_rht_amax,
+                            )
+                            thread_tile_post_rht_amax = hadamard_smem_transpose_fwht_amax(
+                                sD,
+                                d_buffer,
+                                HADAMARD_SIZE,
+                                epi_tidx,
+                                thread_tile_post_rht_amax,
+                            )
 
                     #
                     # Release pingpong consumer slot
@@ -2419,14 +2446,15 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
 
                 self.epilog_sync_barrier.arrive_and_wait()
 
-                #
-                # Update overlapping_accum stage index for next tile
-                #
-                if cutlass.const_expr(self.overlapping_accum):
-                    acc_stage_index = acc_stage_index ^ 1
-                    reverse_subtile = cutlass.Boolean(True) if acc_stage_index == 0 else cutlass.Boolean(False)
-                else:
-                    acc_stage_index = 0
+                if cutlass.const_expr(self.use_tmem_post_rht_amax):
+                    #
+                    # Update overlapping_accum stage index for next tile
+                    #
+                    if cutlass.const_expr(self.overlapping_accum):
+                        acc_stage_index = acc_stage_index ^ 1
+                        reverse_subtile = cutlass.Boolean(True) if acc_stage_index == 0 else cutlass.Boolean(False)
+                    else:
+                        acc_stage_index = 0
 
                 #
                 # Advance to next tile
@@ -2439,12 +2467,13 @@ class BlockScaledMoEGroupedGemmGluHadamardKernel:
                 tile_info_pipeline.consumer_release(tile_info_consumer_state)
                 tile_info_consumer_state.advance()
 
-            #
-            # Dealloc the tensor memory buffer
-            #
-            tmem.relinquish_alloc_permit()
-            self.epilog_sync_barrier_group1.arrive_and_wait()
-            tmem.free(tmem_ptr)
+            if cutlass.const_expr(self.use_tmem_post_rht_amax):
+                #
+                # Dealloc the tensor memory buffer
+                #
+                tmem.relinquish_alloc_permit()
+                self.epilog_sync_barrier_group1.arrive_and_wait()
+                tmem.free(tmem_ptr)
         # END OF KERNEL
 
 
