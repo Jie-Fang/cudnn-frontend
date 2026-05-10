@@ -320,9 +320,7 @@ def test_grouped_gemm_srelu_wrapper_uint8_raw_fp4_bias_ref(request, vector_f32):
         m_aligned=cfg["m_aligned"],
         enable_bias=cfg["enable_bias"],
     )
-    inputs["alpha_tensor"].copy_(
-        torch.tensor([1.0, -1.25], dtype=torch.float32, device=inputs["alpha_tensor"].device)
-    )
+    inputs["alpha_tensor"].copy_(torch.tensor([1.0, -1.25], dtype=torch.float32, device=inputs["alpha_tensor"].device))
     inputs["prob_tensor"].uniform_(0.5, 1.5)
 
     outputs = grouped_gemm_srelu_wrapper_sm100(

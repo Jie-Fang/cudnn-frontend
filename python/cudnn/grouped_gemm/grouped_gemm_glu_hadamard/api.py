@@ -339,7 +339,11 @@ class GroupedGemmGluHadamardSm100(APIBase):
             stride=(16, 4, self.sfa_desc.stride[2], 1, 512, stride_tensor_m_128),
         )
         if self.weight_mode == MoEWeightMode.DENSE:
-            b_cute_arg = _reinterpret_raw_grouped_fp4_tensor(self._sample_b_tensor) if self.b_desc.dtype == torch.uint8 else self._make_fake_cute_tensor_from_desc(self.b_desc, assumed_align=16)
+            b_cute_arg = (
+                _reinterpret_raw_grouped_fp4_tensor(self._sample_b_tensor)
+                if self.b_desc.dtype == torch.uint8
+                else self._make_fake_cute_tensor_from_desc(self.b_desc, assumed_align=16)
+            )
             sfb_cute_arg = self._make_fake_cute_tensor_from_desc(self.sfb_desc, assumed_align=16)
             n_arg = cutlass.Int32(0)
             k_arg = cutlass.Int32(0)
