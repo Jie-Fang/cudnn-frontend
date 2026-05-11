@@ -1737,11 +1737,33 @@ class test_tensor_ir:
             )
 
             if broadcast_tensor_type != input_tensor.type:
-                broadcast_tensor = nv_tensor_ir.broadcast(
-                    broadcast_tensor_type,
-                    input_tensor,
-                )
-                node_map[node] = broadcast_tensor
+                # Only emit when input is actually broadcastable UP to target.
+                # Mirror isShapeBroadcastable() in tensor_ir/lib/Utils/Utils.cpp:
+                # dim is broadcastable if both dynamic, equal, or fromDim==1.
+                # Skips spurious broadcast injection when the final graph
+                # output is smaller than leaf inputs (e.g. graphs ending in a
+                # reduction, like dBias / MatmulEpilog*Bias). The proper
+                # per-edge target-shape fix is tracked by CL-19939.
+                def _is_broadcastable_to(from_shape, to_shape):
+                    if len(from_shape) != len(to_shape):
+                        return False
+                    for fd, td in zip(from_shape, to_shape):
+                        if fd == -1 and td == -1:
+                            continue
+                        if fd == -1:
+                            return False  # dyn from, static to: can't prove
+                        if fd == td or fd == 1:
+                            continue
+                        return False
+                    return True
+
+                input_info = self.determine_tensor_ir_inout_tensor_type(node)
+                if _is_broadcastable_to(input_info.shape, output_tensor_info.shape):
+                    broadcast_tensor = nv_tensor_ir.broadcast(
+                        broadcast_tensor_type,
+                        input_tensor,
+                    )
+                    node_map[node] = broadcast_tensor
 
         # Skip if node is already processed
         if node in node_map.keys():
