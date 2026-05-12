@@ -165,5 +165,5 @@ def extract_and_annotate(raw_line: str, payload: dict, full_log_text: Optional[s
     seed = utils.sha1_seed(raw_line)
     phase1_json = json.loads(json.dumps(payload))
     phase1_json["repro_metadata"] = extract_seq_and_ragged(phase1_json, seed)
-    phase1_json["repro_metadata"]["ragged_tensor_names"] = utils.parse_ragged_tensor_names(full_log_text)
+    utils.add_ragged_tensor_names(phase1_json, full_log_text)
     return phase1_json

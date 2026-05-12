@@ -256,6 +256,13 @@ def parse_ragged_tensor_names(log_text: Optional[str]) -> list[str]:
     return ragged_tensor_names
 
 
+def add_ragged_tensor_names(payload: dict, log_text: Optional[str]) -> None:
+    ragged_uids = (entry.get("ragged_offset_uid") for entry in payload.get("tensors", {}).values())
+    has_ragged_uids = any(parse_optional_int(uid) is not None for uid in ragged_uids)
+    names = [] if payload.get("graph_uid") is not None or has_ragged_uids else parse_ragged_tensor_names(log_text)
+    payload["repro_metadata"]["ragged_tensor_names"] = names
+
+
 def json_with_max_indent(value: Any, depth: int = 0, indent: int = 2, max_indent_level: int = 3) -> str:
     """Format JSON with limited indentation depth."""
     if isinstance(value, dict):

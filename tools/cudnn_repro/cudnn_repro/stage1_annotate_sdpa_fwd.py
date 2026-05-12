@@ -88,6 +88,8 @@ def build_cfg(raw_line: str, payload: dict, seed: Optional[int] = None) -> dict:
     cfg["with_score_max"] = "Max" in outputs
     cfg["with_score_sum_exp"] = "Sum_exp" in outputs
     cfg["with_sink_token"] = "SINK_TOKEN" in inputs
+    if "unfuse_fma" in node:
+        cfg["with_unfuse_fma"] = bool(node.get("unfuse_fma", False))
     left_bound = utils.parse_optional_int(node.get("left_bound"))
     right_bound = utils.parse_optional_int(node.get("right_bound"))
     if right_bound is None and node.get("causal_mask", False):
@@ -175,5 +177,5 @@ def extract_and_annotate(raw_line: str, payload: dict, full_log_text: Optional[s
     seed = utils.sha1_seed(raw_line)
     phase1_json = json.loads(json.dumps(payload))
     phase1_json["repro_metadata"] = extract_seq_and_ragged(phase1_json, seed)
-    phase1_json["repro_metadata"]["ragged_tensor_names"] = utils.parse_ragged_tensor_names(full_log_text)
+    utils.add_ragged_tensor_names(phase1_json, full_log_text)
     return phase1_json

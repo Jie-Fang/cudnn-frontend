@@ -1,4 +1,34 @@
 import cudnn_repro as repro
+import cudnn_repro.stage1_annotate_sdpa_fwd as stage1_fwd
+
+
+def fwd_payload(*, graph_uid=1, unfuse_fma=False):
+    payload = {
+        "context": {"io_data_type": "FLOAT16"},
+        "nodes": [
+            {
+                "tag": "SDPA_FWD",
+                "name": "sdpa_fwd",
+                "inputs": {"Q": 1, "K": 2, "V": 3},
+                "outputs": {"O": 4},
+                "diagonal_alignment": "BOTTOM_RIGHT",
+                "implementation": "UNIFIED",
+                "unfuse_fma": unfuse_fma,
+                "left_bound": None,
+                "right_bound": None,
+                "padding_mask": False,
+            }
+        ],
+        "tensors": {
+            "1": {"uid": 1, "name": "", "dim": [1, 3, 16, 64], "stride": [3072, 64, 192, 1]},
+            "2": {"uid": 2, "name": "", "dim": [1, 1, 16, 64], "stride": [1024, 64, 64, 1]},
+            "3": {"uid": 3, "name": "", "dim": [1, 1, 16, 64], "stride": [1024, 64, 64, 1]},
+            "4": {"uid": 4, "name": "sdpa_fwd::O", "dim": [1, 3, 16, 64], "stride": [3072, 64, 192, 1]},
+        },
+    }
+    if graph_uid is not None:
+        payload["graph_uid"] = graph_uid
+    return payload
 
 
 def test_build_cfg_maps_causal_without_explicit_right_bound():
@@ -92,3 +122,41 @@ def test_build_command_normalizes_enum_fields():
     command = repro._build_command(cfg)
     assert "cudnn.diagonal_alignment.TOP_LEFT" in command
     assert "cudnn.attention_implementation.AUTO" in command
+
+
+def test_build_cfg_preserves_unfuse_fma():
+    cfg = repro._build_cfg("{}", fwd_payload(unfuse_fma=True))
+    command = repro._build_command(cfg)
+
+    assert cfg["with_unfuse_fma"] is True
+    assert "'with_unfuse_fma': True" in command
+
+
+def test_graph_uid_payload_ignores_unrelated_ragged_log_text():
+    payload = fwd_payload(graph_uid=9)
+    log_text = (
+        "Backend Tensor named 'sdpa_fwd::O' with UID 4\n"
+        "Id: 4\n"
+        "raggedOffset: Enabled UID: 99\n"
+    )
+
+    stage1_json = stage1_fwd.extract_and_annotate("{}", payload, log_text)
+    cfg = stage1_fwd.build_cfg("{}", stage1_json, seed=123)
+
+    assert stage1_json["repro_metadata"]["ragged_tensor_names"] == []
+    assert cfg["is_ragged"] is False
+
+
+def test_legacy_payload_keeps_ragged_log_text_fallback():
+    payload = fwd_payload(graph_uid=None)
+    log_text = (
+        "Backend Tensor named 'sdpa_fwd::O' with UID 4\n"
+        "Id: 4\n"
+        "raggedOffset: Enabled UID: 99\n"
+    )
+
+    stage1_json = stage1_fwd.extract_and_annotate("{}", payload, log_text)
+    cfg = stage1_fwd.build_cfg("{}", stage1_json, seed=123)
+
+    assert stage1_json["repro_metadata"]["ragged_tensor_names"] == ["sdpa_fwd::O"]
+    assert cfg["is_ragged"] is True

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <unordered_map>
 #include <stdexcept>
 #include <string>
@@ -47,6 +48,7 @@ class Graph : public ICudnn, public INode {
     std::unordered_set<std::shared_ptr<Tensor_attributes>> full_graph_inputs;
     std::unordered_set<Tensor_attributes::uid_t> used_uids;
     int64_t fe_workspace_size = 0;
+    uint64_t graph_uid;
 
     std::unordered_set<std::shared_ptr<Tensor_attributes>> deserialized_tensor_properties;
     std::unordered_map<uid_t, pass_by_values_t> deserialized_pass_by_value;
@@ -269,6 +271,7 @@ class Graph : public ICudnn, public INode {
 #ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
         json j;
         serialize(j);
+        j.erase("graph_uid");
         if (remove_shape) {
             for (auto &tensor : j["tensors"]) {
                 tensor["dim"].clear();
@@ -597,7 +600,10 @@ class Graph : public ICudnn, public INode {
     }
 
    public:
-    Graph() : INode(detail::Context{}) {}
+    Graph() : INode(detail::Context{}) {
+        static std::atomic<uint64_t> next_graph_uid{1};
+        graph_uid = next_graph_uid.fetch_add(1, std::memory_order_relaxed);
+    }
 
     error_t
     update_cuda_graph(cudnnHandle_t handle,
@@ -1408,6 +1414,8 @@ class Graph : public ICudnn, public INode {
         // 4. Run auxiliary kernels (e.g. SDPA reduction accumulator init)
         CHECK_CUDNN_FRONTEND_ERROR(run_auxiliary_kernels(handle, workspace, cached_workspace_modifications));
 
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: Executing graph_uid " << graph_uid);
+
         // 5. Dispatch
         void *engine_workspace = static_cast<char *>(workspace) + fe_workspace_size;
 
@@ -1618,6 +1626,10 @@ class Graph : public ICudnn, public INode {
 
 #ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
         json j = json::from_ubjson(data);
+
+        if (j.contains("graph_uid") && !j["graph_uid"].is_null()) {
+            graph_uid = j["graph_uid"].get<uint64_t>();
+        }
 
         if (j.contains("tensors")) {
             auto tensor_map = j["tensors"].get<std::unordered_map<std::string, json>>();
@@ -2257,6 +2269,7 @@ class Graph : public ICudnn, public INode {
         full_json["context"]["sm_count"]                  = context.get_target_sm_count();
         full_json["context"]["is_dynamic_shape_enabled"]  = context.get_dynamic_shape_enabled();
         full_json["context"]["is_override_shape_enabled"] = context.get_override_shape_enabled();
+        full_json["graph_uid"]                            = graph_uid;
 
         full_json.update(R"( {"tag": "GRAPH"})"_json);
         full_json["nodes"];
@@ -2266,7 +2279,8 @@ class Graph : public ICudnn, public INode {
             full_json["nodes"].push_back(j_sub_node);
         }
 
-        j["context"] = full_json["context"];
+        j["context"]   = full_json["context"];
+        j["graph_uid"] = full_json["graph_uid"];
 
         j["json_version"]           = "1.0";
         j["cudnn_backend_version"]  = detail::get_backend_version_string();
@@ -2406,6 +2420,10 @@ class Graph : public ICudnn, public INode {
             if (j_context.contains("is_override_shape_enabled") && !j_context["is_override_shape_enabled"].is_null()) {
                 context.set_override_shape_enabled(j_context["is_override_shape_enabled"].get<bool>());
             }
+        }
+
+        if (j.contains("graph_uid") && !j["graph_uid"].is_null()) {
+            graph_uid = j["graph_uid"].get<uint64_t>();
         }
 
         std::map<std::string, std::shared_ptr<Tensor_attributes>> created_tensors;
