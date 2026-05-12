@@ -117,10 +117,8 @@ class RoPENode : public NodeCRTP<RoPENode> {
         // Finalize
         _CUDNN_CHECK_CUDNN_ERROR(detail::finalize(rope_operation->get_backend_descriptor()));
 
-        uids_involved_in_operations.insert(X->get_uid());
-        uids_involved_in_operations.insert(FREQS->get_uid());
-        // Y is a real (user-bound) output tensor; the user allocates it and binds it at execute time.
-        uids_involved_in_operations.insert(Y->get_uid());
+        auto const& non_virtual_uids = attributes.get_non_virtual_uids();
+        uids_involved_in_operations.insert(non_virtual_uids.begin(), non_virtual_uids.end());
 
         raw_operations.push_back(rope_operation);
 
@@ -137,7 +135,8 @@ class RoPENode : public NodeCRTP<RoPENode> {
 #ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
     virtual void
     serialize(json& j) const override final {
-        j = {{"tag", "ROPE"}, { "name", attributes.name }};
+        j = attributes;
+        j.update(R"({"tag": "ROPE"})"_json);
     }
 #endif
 };

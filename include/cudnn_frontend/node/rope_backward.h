@@ -114,9 +114,8 @@ class RoPEBackwardNode : public NodeCRTP<RoPEBackwardNode> {
 
         _CUDNN_CHECK_CUDNN_ERROR(detail::finalize(rope_bwd_operation->get_backend_descriptor()));
 
-        uids_involved_in_operations.insert(DY->get_uid());
-        uids_involved_in_operations.insert(FREQS->get_uid());
-        uids_involved_in_operations.insert(DX->get_uid());
+        auto const& non_virtual_uids = attributes.get_non_virtual_uids();
+        uids_involved_in_operations.insert(non_virtual_uids.begin(), non_virtual_uids.end());
 
         raw_operations.push_back(rope_bwd_operation);
 
@@ -133,7 +132,8 @@ class RoPEBackwardNode : public NodeCRTP<RoPEBackwardNode> {
 #ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
     virtual void
     serialize(json& j) const override final {
-        j = {{"tag", "ROPE_BWD"}, { "name", attributes.name }};
+        j = attributes;
+        j.update(R"({"tag": "ROPE_BWD"})"_json);
     }
 #endif
 };

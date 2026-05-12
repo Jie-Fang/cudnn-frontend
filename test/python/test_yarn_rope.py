@@ -154,9 +154,19 @@ def _build_and_run(b, h_q, h_k, s_q, s_kv, d, freqs, output_scale, attn_scale, d
 
     handle = cudnn.create_handle()
     o = torch.empty(b, h_q, s_q, d, device="cuda", dtype=dtype)
+    q_rot = torch.empty_like(q)
+    k_rot = torch.empty_like(k)
     ws = torch.empty(max(int(g.get_workspace_size()), 1), device="cuda", dtype=torch.uint8)
     g.execute(
-        {Q.get_uid(): q.data_ptr(), K.get_uid(): k.data_ptr(), V.get_uid(): v.data_ptr(), F.get_uid(): freqs.data_ptr(), O.get_uid(): o.data_ptr()},
+        {
+            Q.get_uid(): q.data_ptr(),
+            K.get_uid(): k.data_ptr(),
+            V.get_uid(): v.data_ptr(),
+            F.get_uid(): freqs.data_ptr(),
+            Qr.get_uid(): q_rot.data_ptr(),
+            Kr.get_uid(): k_rot.data_ptr(),
+            O.get_uid(): o.data_ptr(),
+        },
         ws.data_ptr(),
         handle,
     )
@@ -263,9 +273,19 @@ def _build_and_run_partial(b, h_q, h_k, s_q, s_kv, head_dim, rope_dim, freqs, ou
 
     handle = cudnn.create_handle()
     o = torch.empty(b, h_q, s_q, head_dim, device="cuda", dtype=dtype)
+    q_rot = torch.empty_like(q)
+    k_rot = torch.empty_like(k)
     ws = torch.empty(max(int(g.get_workspace_size()), 1), device="cuda", dtype=torch.uint8)
     g.execute(
-        {Q.get_uid(): q.data_ptr(), K.get_uid(): k.data_ptr(), V.get_uid(): v.data_ptr(), F.get_uid(): freqs.data_ptr(), O.get_uid(): o.data_ptr()},
+        {
+            Q.get_uid(): q.data_ptr(),
+            K.get_uid(): k.data_ptr(),
+            V.get_uid(): v.data_ptr(),
+            F.get_uid(): freqs.data_ptr(),
+            Qr.get_uid(): q_rot.data_ptr(),
+            Kr.get_uid(): k_rot.data_ptr(),
+            O.get_uid(): o.data_ptr(),
+        },
         ws.data_ptr(),
         handle,
     )
