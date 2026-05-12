@@ -26,7 +26,7 @@ default:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_13.2.0
 
 .cudnn_ga_image:template:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.21.0.82_13.2.0
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.22.0.52_13.2.0
 
 .device_matrix:template:
     parallel:
