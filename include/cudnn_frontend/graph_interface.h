@@ -1940,8 +1940,8 @@ class Graph : public ICudnn, public INode {
         varpack_template = VariantPackTemplate{};
 
         // 1. Start with variant_pack_uids + any replacement source UIDs not already included.
-        //    Replacement sources (e.g. full tensor before slicing) may not be in variant_pack_uids
-        //    because the backend only needs the sliced view, but we need the source to compute it.
+        //    Replacement sources (e.g. slice input on cuDNN < 9.22 pointer-arithmetic fallback) may not
+        //    be in variant_pack_uids; we still need a slot for the source pointer when replacements apply.
         varpack_template.all_uids.assign(variant_pack_uids.begin(), variant_pack_uids.end());
         for (auto const &[from_uid, value] : variant_pack_replacements) {
             if (variant_pack_uids.find(from_uid) == variant_pack_uids.end()) {
@@ -2012,12 +2012,12 @@ class Graph : public ICudnn, public INode {
 
         // 7. Pre-compute replacement slot indices
         // variant_pack_replacements: key = from_uid (source), value = {to_uid (destination), byte_offset}
-        // Meaning: ptr[to_uid] = ptr[from_uid] + byte_offset
+        // Meaning: ptr[to_uid] = ptr[from_uid] + byte_offset (e.g. legacy slice fallback on cuDNN < 9.22)
         for (auto const &[from_uid, value] : variant_pack_replacements) {
             const auto &[to_uid, byte_offset] = value;
             auto it_src                       = uid_to_slot.find(from_uid);
             auto it_dst                       = uid_to_slot.find(to_uid);
-            // Replacement: dst_ptr = src_ptr + byte_offset (currently only Slice nodes)
+            // Replacement: dst_ptr = src_ptr + byte_offset
             if (it_src != uid_to_slot.end() && it_dst != uid_to_slot.end()) {
                 varpack_template.replacement_slots.emplace_back(it_dst->second,
                                                                 std::make_pair(it_src->second, byte_offset));
