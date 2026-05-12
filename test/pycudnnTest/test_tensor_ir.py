@@ -1310,6 +1310,29 @@ class test_tensor_ir:
                 return beta_tensor.item() if beta_tensor.numel() == 1 else beta_tensor.flatten()[0].item()
         return None
 
+    def _get_reduction_output_identity(self, node, torch_dtype):
+        if not (isinstance(node, tg.operation) and node.op_name == "reduction"):
+            return None
+
+        mode = str(node.kwargs.get("mode", ""))
+        if "reduction_mode.ADD" in mode or "reduction_mode.AMAX" in mode:
+            return 0.0
+        if "reduction_mode.MUL" in mode:
+            return 1.0
+        if "reduction_mode.MAX" in mode:
+            if torch_dtype.is_floating_point:
+                return torch.finfo(torch_dtype).min
+            if torch_dtype == torch.bool:
+                return False
+            return torch.iinfo(torch_dtype).min
+        if "reduction_mode.MIN" in mode:
+            if torch_dtype.is_floating_point:
+                return torch.finfo(torch_dtype).max
+            if torch_dtype == torch.bool:
+                return True
+            return torch.iinfo(torch_dtype).max
+        return None
+
     def run_tensor_ir_module(
         self,
         module,
@@ -1352,19 +1375,20 @@ class test_tensor_ir:
             self.calc_ref()
 
         # Create output tensors on GPU.
-        outputs_gpu = [
-            torch.as_strided(
-                torch.empty(
-                    tuple(node.output[0].dim),
-                    dtype=eval(convert_datatype(node.output[0].data_type, "torch")),
-                    device=device,
-                ),
+        output_nodes = [node for node in self.test_graph.nodes if node.is_output_node()]
+        outputs_gpu = []
+        for node in output_nodes:
+            output_dtype = eval(convert_datatype(node.output[0].data_type, "torch"))
+            output_tensor = torch.empty_strided(
                 size=tuple(node.output[0].dim),
                 stride=tuple(node.output[0].stride),
+                dtype=output_dtype,
+                device=device,
             )
-            for node in self.test_graph.nodes
-            if node.is_output_node()
-        ]
+            reduction_identity = self._get_reduction_output_identity(node, output_dtype)
+            if reduction_identity is not None:
+                output_tensor.fill_(reduction_identity)
+            outputs_gpu.append(output_tensor)
 
         # Add output tensors to DLPack inputs
         desc_outputs = [nv_tensor_ir.TensorIRTensorDescriptor(gpu_tensor) for gpu_tensor in outputs_gpu]
