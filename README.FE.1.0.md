@@ -214,6 +214,21 @@ Can also take in a plan index to query workspace for. This may be used when auto
 `int64_t get_workspace_size() const`
 `int64_t get_workspace_size_plan_index(int64_t plan_index) const`
 
+For graphs that execute with override shapes, query workspace with the runtime override metadata before allocating the workspace:
+
+```
+cudnn_frontend::error_t
+cudnn_frontend::graph::Graph::get_workspace_size(
+    cudnnHandle_t handle,
+    int64_t& workspace_size,
+    std::vector<int64_t> const& override_uids,
+    std::vector<std::vector<int64_t>> const& override_shapes,
+    std::vector<std::vector<int64_t>> const& override_strides
+) const;
+```
+
+Use this size for the workspace passed to the matching override-shape `execute(...)` call.
+
 Get workspace to run autotune on all plans.
 
 `get_autotune_workspace_size() const`

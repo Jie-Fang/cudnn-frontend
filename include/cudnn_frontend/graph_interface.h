@@ -1006,6 +1006,16 @@ class Graph : public ICudnn, public INode {
     }
 
     error_t
+    get_workspace_size(cudnnHandle_t handle,
+                       int64_t &cudnn_workspace_size,
+                       std::vector<int64_t> const &override_uids,
+                       std::vector<std::vector<int64_t>> const &override_shapes,
+                       std::vector<std::vector<int64_t>> const &override_strides) const {
+        return get_workspace_size_plan_at_index(
+            handle, plans.candidate, cudnn_workspace_size, override_uids, override_shapes, override_strides);
+    }
+
+    error_t
     get_workspace_size_plan_at_index(int64_t plan_index, int64_t &cudnn_workspace_size) const {
         // OSS SDPA engine workspace: 16 bytes for tile_id_counter
         if (plan_index == graph::Execution_plan_list::OSS_SDPA_ENGINE_CANDIDATE) {
@@ -1032,15 +1042,117 @@ class Graph : public ICudnn, public INode {
         return {error_code_t::OK, ""};
     }
 
+    error_t
+    get_workspace_size_plan_at_index(cudnnHandle_t handle,
+                                     int64_t plan_index,
+                                     int64_t &cudnn_workspace_size,
+                                     std::vector<int64_t> const &override_uids,
+                                     std::vector<std::vector<int64_t>> const &override_shapes,
+                                     std::vector<std::vector<int64_t>> const &override_strides) const {
+        RETURN_CUDNN_FRONTEND_ERROR_IF(override_uids.size() != override_shapes.size(),
+                                       error_code_t::INVALID_VALUE,
+                                       "override_uids and override_shapes must have the same size.");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(override_uids.size() != override_strides.size(),
+                                       error_code_t::INVALID_VALUE,
+                                       "override_uids and override_strides must have the same size.");
+
+        if (override_uids.empty()) {
+            return get_workspace_size_plan_at_index(plan_index, cudnn_workspace_size);
+        }
+
+        // OSS engines are not backed by cuDNN execution plans, so their workspace stays frontend-owned.
+        if (plan_index == graph::Execution_plan_list::OSS_SDPA_ENGINE_CANDIDATE ||
+            plan_index == graph::Execution_plan_list::OSS_RMS_NORM_SILU_ENGINE_CANDIDATE) {
+            return get_workspace_size_plan_at_index(plan_index, cudnn_workspace_size);
+        }
+
+        auto cudnn_ver_error = error_t{error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "Runtime workspace query with override shapes requires cuDNN v9.23.0"};
+        NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(92300, cudnn_ver_error);
+
+#if (CUDNN_VERSION < 92300)
+        return cudnn_ver_error;
+#endif
+
+        CHECK_CUDNN_FRONTEND_ERROR(plans.is_plan_index_executable(plan_index));
+
+        detail::backend_descriptor variant_pack_descriptor(CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR);
+        RETURN_CUDNN_FRONTEND_ERROR_IF(variant_pack_descriptor.get_status() != CUDNN_STATUS_SUCCESS,
+                                       error_code_t::CUDNN_BACKEND_API_FAILED,
+                                       "Failed to create variant pack's backend descriptor.");
+
+#if (CUDNN_VERSION >= 92100)
+        _CUDNN_CHECK_CUDNN_ERROR(detail::set_attribute(variant_pack_descriptor.get_ptr(),
+                                                       CUDNN_ATTR_VARIANT_PACK_OVERRIDE_UNIQUE_IDS,
+                                                       CUDNN_TYPE_INT64,
+                                                       override_uids.size(),
+                                                       override_uids.data()));
+
+        _CUDNN_CHECK_CUDNN_ERROR(detail::set_attribute(variant_pack_descriptor.get_ptr(),
+                                                       CUDNN_ATTR_VARIANT_PACK_OVERRIDE_SHAPES,
+                                                       CUDNN_TYPE_VOID_PTR,
+                                                       1,
+                                                       (void *)&override_shapes));
+
+        _CUDNN_CHECK_CUDNN_ERROR(detail::set_attribute(variant_pack_descriptor.get_ptr(),
+                                                       CUDNN_ATTR_VARIANT_PACK_OVERRIDE_STRIDES,
+                                                       CUDNN_TYPE_VOID_PTR,
+                                                       1,
+                                                       (void *)&override_strides));
+#else
+        CUDNN_FRONTEND_UNUSED(override_uids);
+        CUDNN_FRONTEND_UNUSED(override_shapes);
+        CUDNN_FRONTEND_UNUSED(override_strides);
+#endif
+
+        _CUDNN_CHECK_CUDNN_ERROR(detail::finalize(variant_pack_descriptor.get_ptr()));
+
+        size_t cudnn_ws = 0;
+        _CUDNN_CHECK_CUDNN_ERROR(detail::get_execution_plan_workspace_size(
+            handle, plans.execution_plans[plan_index]->get_raw_desc(), variant_pack_descriptor.get_ptr(), &cudnn_ws));
+        cudnn_workspace_size = cudnn_ws + fe_workspace_size;
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: get_workspace_size() is " << cudnn_workspace_size
+                                                                 << " (runtime override shape)");
+        return {error_code_t::OK, ""};
+    }
+
     int64_t
     get_workspace_size() const {
         return get_workspace_size_plan_at_index(plans.candidate);
     }
 
     int64_t
+    get_workspace_size(cudnnHandle_t handle,
+                       std::vector<int64_t> const &override_uids,
+                       std::vector<std::vector<int64_t>> const &override_shapes,
+                       std::vector<std::vector<int64_t>> const &override_strides) const {
+        int64_t cudnn_workspace = 0;
+        auto status = get_workspace_size(handle, cudnn_workspace, override_uids, override_shapes, override_strides);
+        if (status.is_bad()) {
+            CUDNN_FE_LOG_LABEL_ENDL("ERROR: Querying workspace failed.");
+        }
+        return cudnn_workspace;
+    }
+
+    int64_t
     get_workspace_size_plan_at_index(int64_t plan_index) const {
         int64_t cudnn_workspace = 0;
         auto status             = get_workspace_size_plan_at_index(plan_index, cudnn_workspace);
+        if (status.is_bad()) {
+            CUDNN_FE_LOG_LABEL_ENDL("ERROR: Querying workspace failed.");
+        }
+        return cudnn_workspace;
+    }
+
+    int64_t
+    get_workspace_size_plan_at_index(cudnnHandle_t handle,
+                                     int64_t plan_index,
+                                     std::vector<int64_t> const &override_uids,
+                                     std::vector<std::vector<int64_t>> const &override_shapes,
+                                     std::vector<std::vector<int64_t>> const &override_strides) const {
+        int64_t cudnn_workspace = 0;
+        auto status             = get_workspace_size_plan_at_index(
+            handle, plan_index, cudnn_workspace, override_uids, override_shapes, override_strides);
         if (status.is_bad()) {
             CUDNN_FE_LOG_LABEL_ENDL("ERROR: Querying workspace failed.");
         }
