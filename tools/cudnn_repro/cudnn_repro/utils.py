@@ -62,6 +62,10 @@ def node_by_tag(payload: dict, *tags: str) -> Optional[dict]:
     return None
 
 
+def has_rope(payload: dict) -> bool:
+    return any(str(node.get("tag", "")).startswith("ROPE_") for node in payload.get("nodes", []))
+
+
 def parse_optional_int(value: Any) -> Optional[int]:
     """Parse an optional integer value."""
     if value is None:

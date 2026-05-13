@@ -1,4 +1,4 @@
-"""Stage 1: Extract and annotate SDPA forward config from JSON payload."""
+"""Extract and annotate SDPA forward config from JSON payload."""
 
 import json
 from collections import OrderedDict
@@ -88,6 +88,8 @@ def build_cfg(raw_line: str, payload: dict, seed: Optional[int] = None) -> dict:
     cfg["with_score_max"] = "Max" in outputs
     cfg["with_score_sum_exp"] = "Sum_exp" in outputs
     cfg["with_sink_token"] = "SINK_TOKEN" in inputs
+    if utils.has_rope(payload):
+        cfg["with_rope"] = True
     if "unfuse_fma" in node:
         cfg["with_unfuse_fma"] = bool(node.get("unfuse_fma", False))
     left_bound = utils.parse_optional_int(node.get("left_bound"))

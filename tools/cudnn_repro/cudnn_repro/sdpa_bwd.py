@@ -1,9 +1,9 @@
-"""Stage 1: Extract and annotate SDPA backward config from JSON payload."""
+"""Extract and annotate SDPA backward config from JSON payload."""
 
 import json
 from typing import Optional
 
-from . import stage1_annotate_sdpa_fwd as stage1_fwd
+from . import sdpa_fwd
 from . import utils
 
 
@@ -60,11 +60,13 @@ def build_cfg(raw_line: str, payload: dict, seed: Optional[int] = None) -> dict:
         joined = ", ".join(unsupported)
         raise NotImplementedError(f"Simple SDPA backward repro does not yet support: {joined}")
 
-    cfg = stage1_fwd.build_cfg(raw_line, _as_forward_payload(payload, node), seed)
+    cfg = sdpa_fwd.build_cfg(raw_line, _as_forward_payload(payload, node), seed)
     stats_entry = utils.tensor_entry(payload.get("tensors", {}), node.get("name"), "Stats", node.get("inputs", {}).get("Stats"))
     cfg["is_determin"] = bool(node.get("is_deterministic_algorithm", False))
     cfg["shape_stats"] = utils.shape(stats_entry)
     cfg["stride_stats"] = utils.stride(stats_entry)
+    if utils.has_rope(payload):
+        cfg["with_rope"] = True
     return cfg
 
 

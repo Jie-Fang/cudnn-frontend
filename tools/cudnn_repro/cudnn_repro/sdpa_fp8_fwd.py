@@ -1,4 +1,4 @@
-"""Stage 1: Extract and annotate SDPA FP8 backward config from JSON payload."""
+"""Extract and annotate SDPA FP8 forward config from JSON payload."""
 
 import json
 from collections import OrderedDict
@@ -8,14 +8,14 @@ from . import utils
 
 
 def _find_node(payload: dict) -> dict:
-    node = utils.node_by_tag(payload, "SDPA_MXFP8_BWD", "SDPA_FP8_BWD")
+    node = utils.node_by_tag(payload, "SDPA_MXFP8_FWD", "SDPA_FP8_FWD")
     if node is None:
-        raise ValueError("SDPA FP8/MXFP8 backward node not found in log")
+        raise ValueError("SDPA FP8/MXFP8 forward node not found in log")
     return node
 
 
 def build_cfg(raw_line: str, payload: dict, seed: Optional[int] = None) -> dict:
-    """Build FP8 backward test configuration from JSON payload."""
+    """Build FP8 forward test configuration from JSON payload."""
     node = _find_node(payload)
     is_mxfp8 = utils.is_mxfp8_payload(payload, node)
 
@@ -27,18 +27,11 @@ def build_cfg(raw_line: str, payload: dict, seed: Optional[int] = None) -> dict:
     q_entry = utils.tensor_entry(tensors, node_name, "Q", inputs.get("Q"))
     k_entry = utils.tensor_entry(tensors, node_name, "K", inputs.get("K"))
     v_entry = utils.tensor_entry(tensors, node_name, "V", inputs.get("V"))
-    o_entry = utils.tensor_entry(tensors, node_name, "O", inputs.get("O"))
-    stats_entry = utils.tensor_entry(tensors, node_name, "Stats", inputs.get("Stats"))
-    dq_entry = utils.tensor_entry(tensors, node_name, "dQ", outputs.get("dQ"))
-    dk_entry = utils.tensor_entry(tensors, node_name, "dK", outputs.get("dK"))
-    dv_entry = utils.tensor_entry(tensors, node_name, "dV", outputs.get("dV"))
+    o_entry = utils.tensor_entry(tensors, node_name, "O", outputs.get("O"))
+    stats_entry = utils.tensor_entry(tensors, node_name, "Stats", outputs.get("Stats"))
     seq_q_entry = utils.tensor_entry(tensors, node_name, "SEQ_LEN_Q", inputs.get("SEQ_LEN_Q"))
     seq_kv_entry = utils.tensor_entry(tensors, node_name, "SEQ_LEN_KV", inputs.get("SEQ_LEN_KV"))
     page_table_k_entry = utils.tensor_entry(tensors, node_name, "Page_table_K", inputs.get("Page_table_K"))
-
-    output_dtypes = {dtype for dtype in (utils.tensor_dtype(dq_entry), utils.tensor_dtype(dk_entry), utils.tensor_dtype(dv_entry)) if dtype is not None}
-    if len(output_dtypes) > 1:
-        raise ValueError(f"Inconsistent FP8 backward output dtypes: {sorted(output_dtypes)}")
 
     shape_q = utils.shape(q_entry)
     shape_k = utils.shape(k_entry)
@@ -57,48 +50,57 @@ def build_cfg(raw_line: str, payload: dict, seed: Optional[int] = None) -> dict:
     seq_len_kv = utils.seq_len(seq_kv_entry)
 
     is_paged = any(label.startswith("Page_table_") or "PAGED_ATTENTION" in label for label in inputs)
+    batches = shape_q[0] if shape_q else None
+    h_q = shape_q[1] if shape_q else None
+    s_q = shape_q[2] if shape_q else None
+    d_qk = shape_q[3] if shape_q else None
+    d_v = shape_o[3] if shape_o else (shape_v[3] if shape_v else None)
+    h_k = shape_k[1] if shape_k else (shape_v[1] if shape_v else None)
+    h_v = shape_v[1] if shape_v else None
+    s_kv = utils.parse_optional_int(node.get("max_seq_len_kv")) if is_paged else None
+    if s_kv is None and is_paged and seq_len_kv:
+        s_kv = max(seq_len_kv)
+    if s_kv is None:
+        s_kv = shape_v[2] if shape_v else (shape_k[2] if shape_k else None)
+
+    logical_shape_k = (batches, h_k, s_kv, d_qk) if None not in (batches, h_k, s_kv, d_qk) else shape_k
+    logical_shape_v = (batches, h_v, s_kv, d_v) if None not in (batches, h_v, s_kv, d_v) else shape_v
+
+    diag_align_map = {"TOP_LEFT": 0, "BOTTOM_RIGHT": 1}
+    diag_align = diag_align_map.get(node.get("diagonal_alignment", "TOP_LEFT"), 0)
+    dropout_prob = utils.parse_hex_float(node.get("dropout_probability")) or 0.0
     repro_metadata = payload.get("repro_metadata", {})
     ragged_tensor_names = set(repro_metadata.get("ragged_tensor_names", []))
     is_ragged = any(
         entry is not None and (
             utils.parse_optional_int(entry.get("ragged_offset_uid")) is not None or entry.get("name") in ragged_tensor_names
         )
-        for entry in (q_entry, k_entry, v_entry, o_entry, dq_entry, dk_entry, dv_entry)
+        for entry in (q_entry, k_entry, v_entry, o_entry)
     )
 
-    batches = shape_q[0] if shape_q else None
-    h_q = shape_q[1] if shape_q else None
-    s_q = shape_q[2] if shape_q else None
-    d_qk = shape_q[3] if shape_q else None
-    h_k = shape_k[1] if shape_k else None
-    h_v = shape_v[1] if shape_v else None
-    d_v = shape_o[3] if shape_o else (shape_v[3] if shape_v else None)
-    s_kv = max(seq_len_kv) if is_paged and seq_len_kv else None
-    if s_kv is None:
-        s_kv = shape_v[2] if shape_v else (shape_k[2] if shape_k else None)
-
-    diag_align_map = {"TOP_LEFT": 0, "BOTTOM_RIGHT": 1}
-    diag_align = diag_align_map.get(node.get("diagonal_alignment", "TOP_LEFT"), 0)
-    dropout_prob = utils.parse_hex_float(node.get("dropout_probability")) or 0.0
-    block_size = utils.infer_block_size(page_table_k_entry, seq_len_kv, k_entry) if is_paged else None
+    block_size = (shape_k[2] if shape_k and len(shape_k) > 2 else None) if is_paged else None
+    if block_size is None and is_paged:
+        block_size = utils.infer_block_size(page_table_k_entry, seq_len_kv, k_entry)
 
     cfg = OrderedDict()
     cfg["data_type"] = utils.torch_dtype(payload.get("context", {}).get("io_data_type"))
-    cfg["output_type"] = next(iter(output_dtypes), None)
+    cfg["output_type"] = utils.tensor_dtype(o_entry)
     cfg["rng_data_seed"] = seed if seed is not None else utils.sha1_seed(raw_line)
     cfg["is_alibi"] = node.get("alibi_mask")
-    cfg["is_infer"] = False
+    cfg["is_infer"] = True
     cfg["is_paged"] = is_paged
     cfg["is_bias"] = utils.bool_from_inputs(inputs, "BIAS")
     cfg["is_block_mask"] = utils.bool_from_inputs(inputs, "BLOCK_MASK")
     cfg["is_padding"] = node.get("padding_mask") or bool(seq_len_q or seq_len_kv)
     cfg["is_ragged"] = is_ragged
     cfg["is_dropout"] = dropout_prob > 0.0
-    cfg["is_determin"] = bool(node.get("is_deterministic_algorithm", False))
+    cfg["is_determin"] = None
     cfg["is_mxfp8"] = is_mxfp8
     cfg["with_score_max"] = "Max" in outputs
     cfg["with_score_sum_exp"] = "Sum_exp" in outputs
-    cfg["with_sink_token"] = "SINK_TOKEN" in inputs or "DSINK_TOKEN" in outputs
+    cfg["with_sink_token"] = "SINK_TOKEN" in inputs
+    if "unfuse_fma" in node:
+        cfg["with_unfuse_fma"] = bool(node.get("unfuse_fma", False))
     if "rescale_threshold" in node:
         cfg["rescale_threshold"] = utils.parse_hex_float(node.get("rescale_threshold"))
 
@@ -125,9 +127,9 @@ def build_cfg(raw_line: str, payload: dict, seed: Optional[int] = None) -> dict:
     cfg["block_size"] = block_size
     cfg["shape_q"] = shape_q
     cfg["stride_q"] = stride_q
-    cfg["shape_k"] = (batches, h_k, s_kv, d_qk) if None not in (batches, h_k, s_kv, d_qk) else shape_k
+    cfg["shape_k"] = logical_shape_k
     cfg["stride_k"] = None if is_paged else stride_k
-    cfg["shape_v"] = (batches, h_v, s_kv, d_v) if None not in (batches, h_v, s_kv, d_v) else shape_v
+    cfg["shape_v"] = logical_shape_v
     cfg["stride_v"] = None if is_paged else stride_v
     cfg["shape_o"] = shape_o
     cfg["stride_o"] = stride_o
@@ -146,7 +148,7 @@ def build_cfg(raw_line: str, payload: dict, seed: Optional[int] = None) -> dict:
 
 
 def extract_seq_and_ragged(payload: dict, seed: int) -> dict:
-    """Extract sequence lengths and ragged offsets from an FP8 backward payload."""
+    """Extract sequence lengths and ragged offsets from an FP8 forward payload."""
     node = _find_node(payload)
     tensors = payload.get("tensors", {})
     node_name = node.get("name")
@@ -161,7 +163,7 @@ def extract_seq_and_ragged(payload: dict, seed: int) -> dict:
 
 
 def extract_and_annotate(raw_line: str, payload: dict, full_log_text: Optional[str] = None) -> dict:
-    """Phase 1: Extract config and annotate with repro metadata for FP8 backward."""
+    """Phase 1: Extract config and annotate with repro metadata for FP8 forward."""
     seed = utils.sha1_seed(raw_line)
     phase1_json = json.loads(json.dumps(payload))
     phase1_json["repro_metadata"] = extract_seq_and_ragged(phase1_json, seed)

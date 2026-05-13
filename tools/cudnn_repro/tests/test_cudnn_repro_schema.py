@@ -1,5 +1,6 @@
-import cudnn_repro as repro
-import cudnn_repro.stage1_annotate_sdpa_fwd as stage1_fwd
+import cudnn_repro.operations as operations
+import cudnn_repro.repro_command as repro_command
+import cudnn_repro.sdpa_fwd as sdpa_fwd
 
 
 def fwd_payload(*, graph_uid=1, unfuse_fma=False):
@@ -54,7 +55,7 @@ def test_build_cfg_maps_causal_without_explicit_right_bound():
         },
     }
 
-    cfg = repro._build_cfg("{}", payload)
+    cfg = operations.select_operation(payload).build_cfg("{}", payload)
     assert cfg["left_bound"] is None
     assert cfg["right_bound"] == 0
     assert cfg["diag_align"] == 0
@@ -82,7 +83,7 @@ def test_build_cfg_preserves_logged_tensor_layout():
         },
     }
 
-    cfg = repro._build_cfg("{}", payload)
+    cfg = operations.select_operation(payload).build_cfg("{}", payload)
     assert cfg["shape_q"] == (2, 128, 4, 64)
     assert cfg["stride_q"] == (32768, 64, 8192, 1)
     assert cfg["h_q"] == 128
@@ -119,17 +120,29 @@ def test_build_command_normalizes_enum_fields():
         "implementation": "AUTO",
     }
 
-    command = repro._build_command(cfg)
+    command = repro_command.build_command(cfg)
     assert "cudnn.diagonal_alignment.TOP_LEFT" in command
     assert "cudnn.attention_implementation.AUTO" in command
 
 
 def test_build_cfg_preserves_unfuse_fma():
-    cfg = repro._build_cfg("{}", fwd_payload(unfuse_fma=True))
-    command = repro._build_command(cfg)
+    payload = fwd_payload(unfuse_fma=True)
+    cfg = operations.select_operation(payload).build_cfg("{}", payload)
+    command = repro_command.build_command(cfg)
 
     assert cfg["with_unfuse_fma"] is True
     assert "'with_unfuse_fma': True" in command
+
+
+def test_build_cfg_preserves_rope():
+    payload = fwd_payload()
+    payload["nodes"].append({"tag": "ROPE_FWD", "name": "RoPE_Q"})
+
+    cfg = operations.select_operation(payload).build_cfg("{}", payload)
+    command = repro_command.build_command(cfg)
+
+    assert cfg["with_rope"] is True
+    assert "'with_rope': True" in command
 
 
 def test_graph_uid_payload_ignores_unrelated_ragged_log_text():
@@ -140,10 +153,10 @@ def test_graph_uid_payload_ignores_unrelated_ragged_log_text():
         "raggedOffset: Enabled UID: 99\n"
     )
 
-    stage1_json = stage1_fwd.extract_and_annotate("{}", payload, log_text)
-    cfg = stage1_fwd.build_cfg("{}", stage1_json, seed=123)
+    annotated_payload = sdpa_fwd.extract_and_annotate("{}", payload, log_text)
+    cfg = sdpa_fwd.build_cfg("{}", annotated_payload, seed=123)
 
-    assert stage1_json["repro_metadata"]["ragged_tensor_names"] == []
+    assert annotated_payload["repro_metadata"]["ragged_tensor_names"] == []
     assert cfg["is_ragged"] is False
 
 
@@ -155,8 +168,8 @@ def test_legacy_payload_keeps_ragged_log_text_fallback():
         "raggedOffset: Enabled UID: 99\n"
     )
 
-    stage1_json = stage1_fwd.extract_and_annotate("{}", payload, log_text)
-    cfg = stage1_fwd.build_cfg("{}", stage1_json, seed=123)
+    annotated_payload = sdpa_fwd.extract_and_annotate("{}", payload, log_text)
+    cfg = sdpa_fwd.build_cfg("{}", annotated_payload, seed=123)
 
-    assert stage1_json["repro_metadata"]["ragged_tensor_names"] == ["sdpa_fwd::O"]
+    assert annotated_payload["repro_metadata"]["ragged_tensor_names"] == ["sdpa_fwd::O"]
     assert cfg["is_ragged"] is True

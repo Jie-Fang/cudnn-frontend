@@ -1,4 +1,4 @@
-"""Stage 0: Log reading and JSON context entry extraction."""
+"""Log reading and JSON context entry extraction."""
 
 import json
 import re
