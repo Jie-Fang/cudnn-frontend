@@ -1076,7 +1076,7 @@ class Graph : public ICudnn, public INode {
                                        "Runtime workspace query with override shapes requires cuDNN v9.23.0"};
         NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(92300, cudnn_ver_error);
 
-#if (CUDNN_VERSION < 92300)
+#if (CUDNN_VERSION < 92300) || (CUDNN_VERSION >= 99900)
         return cudnn_ver_error;
 #endif
 
