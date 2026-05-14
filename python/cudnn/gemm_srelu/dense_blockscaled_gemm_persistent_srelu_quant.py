@@ -86,10 +86,6 @@ class Sm100BlockScaledPersistentDenseGemmKernel:
         - Float32
         - Float16/BFloat16
         - Float8E4M3FN/Float8E5M2
-        # {$nv-internal-release begin}
-        # Note: We don't have SFD generation support in this example for now, so Float4E2M1FN output is only for internal testing and will not be released.
-        - Float4E2M1FN
-        # {$nv-internal-release end}
 
     :note: Constraints:
         - MMA tiler M must be 128 or 256 (use_2cta_instrs)
@@ -418,7 +414,6 @@ class Sm100BlockScaledPersistentDenseGemmKernel:
             self.mma_inst_shape_mn,
         )
 
-        # For 2CTA blockscaled kernels, SFB needs to be replicated across peer CTAs. # {$nv-internal-release}
         tiled_mma_sfb = sm100_utils.make_blockscaled_trivial_tiled_mma(
             self.a_dtype,
             self.b_dtype,
@@ -481,10 +476,6 @@ class Sm100BlockScaledPersistentDenseGemmKernel:
             internal_type=cutlass.Int16,
         )
 
-        # {$nv-internal-release begin}
-        # This modifies the layout to handle overlapping 256x(# of scale factors for a single column of B (nNSF))
-        # logical blocks for SFB when cta_tile_shape_n=192.
-        # {$nv-internal-release end}
         if cutlass.const_expr(self.cta_tile_shape_mnk_c[1] == 192):
             x = tma_tensor_sfb.stride[0][1]
             y = cute.ceil_div(tma_tensor_sfb.shape[0][1], 4)
@@ -937,7 +928,6 @@ class Sm100BlockScaledPersistentDenseGemmKernel:
                 # ((atom_v, rest_v), RestK)
                 tAgSFA_slice = tAgSFA[(None, mma_tile_coord_mnl[0], None, mma_tile_coord_mnl[2])]
 
-                # Apply SFB slicing hack when cta_tile_shape_n=64 # {$nv-internal-release}
                 slice_n = mma_tile_coord_mnl[1]
                 if cutlass.const_expr(self.cta_tile_shape_mnk[1] == 64):
                     slice_n = mma_tile_coord_mnl[1] // 2
@@ -1095,7 +1085,6 @@ class Sm100BlockScaledPersistentDenseGemmKernel:
                 if is_leader_cta:
                     acc_pipeline.producer_acquire(acc_producer_state)
 
-                # Apply TMEM pointer offset hack when cta_tile_shape_n=192 or cta_tile_shape_n=64 # {$nv-internal-release}
                 tCtSFB_mma = tCtSFB
                 if cutlass.const_expr(self.cta_tile_shape_mnk[1] == 192):
                     # If this is an ODD tile, shift the TMEM start address for cta_tile_shape_n=192 case by two words (ignores first 64 columns of SFB)
@@ -1891,7 +1880,7 @@ class Sm100BlockScaledPersistentDenseGemmKernel:
             cutlass.BFloat16,
             cutlass.Float8E5M2,
             cutlass.Float8E4M3FN,
-            cutlass.Float4E2M1FN,  # {$nv-internal-release}
+            cutlass.Float4E2M1FN,
         }:
             is_valid = False
 
@@ -1924,13 +1913,11 @@ class Sm100BlockScaledPersistentDenseGemmKernel:
         """
         is_valid = True
 
-        # {$nv-internal-release begin}
         if ab_dtype is cutlass.Float4E2M1FN and not (a_major == "k" and b_major == "k"):
             is_valid = False
         # TODO: Currently we don't support m major output for Float4E2M1FN
         if c_dtype is cutlass.Float4E2M1FN and c_major == "m":
             is_valid = False
-        # {$nv-internal-release end}
 
         return is_valid
 
