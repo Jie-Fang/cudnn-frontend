@@ -25,7 +25,7 @@ import cuda.bindings.driver as cuda
 import cutlass
 import cutlass.cute as cute
 from cutlass.cute.nvgpu import cpasync, tcgen05
-from cutlass.cute.nvgpu import OperandMajorMode
+from cutlass.cute.nvgpu.tcgen05 import OperandMajorMode
 import cutlass.utils as utils
 import cutlass.pipeline as pipeline
 import cutlass.utils.blackwell_helpers as sm100_utils
@@ -58,6 +58,8 @@ from ..moe_kernel_helpers import (
     amax_reduction_per_thread,
     epilog_gmem_copy_and_partition,
     get_dtype_rcp_limits,
+    quant_sfd_row as _quant_sfd_row,
+    quant_sfd_col as _quant_sfd_col,
 )
 
 
@@ -235,7 +237,6 @@ class BlockScaledMoEGroupedGemmQuantKernel:
 
         tiled_mma = sm100_utils.make_blockscaled_trivial_tiled_mma(
             self.a_dtype,
-            self.b_dtype,
             self.a_major_mode,
             self.b_major_mode,
             self.sf_dtype,
@@ -245,7 +246,6 @@ class BlockScaledMoEGroupedGemmQuantKernel:
         )
         tiled_mma_sfb = sm100_utils.make_blockscaled_trivial_tiled_mma(
             self.a_dtype,
-            self.b_dtype,
             self.a_major_mode,
             self.b_major_mode,
             self.sf_dtype,
@@ -377,6 +377,7 @@ class BlockScaledMoEGroupedGemmQuantKernel:
             self.bias_smem_layout_staged = cute.make_layout((1, 1))
 
         self.overlapping_accum = self.num_acc_stage == 1 and self.mma_tiler[1] == 256
+        self.use_fp8_ptx_cvt = True
 
         sf_atom_mn = 32
         self.num_sfa_tmem_cols = (self.cta_tile_shape_mnk[0] // sf_atom_mn) * mma_inst_tile_k
@@ -680,7 +681,6 @@ class BlockScaledMoEGroupedGemmQuantKernel:
         # ---- TMA atoms ----
         tiled_mma = sm100_utils.make_blockscaled_trivial_tiled_mma(
             self.a_dtype,
-            self.b_dtype,
             self.a_major_mode,
             self.b_major_mode,
             self.sf_dtype,
@@ -690,7 +690,6 @@ class BlockScaledMoEGroupedGemmQuantKernel:
         )
         tiled_mma_sfb = sm100_utils.make_blockscaled_trivial_tiled_mma(
             self.a_dtype,
-            self.b_dtype,
             self.a_major_mode,
             self.b_major_mode,
             self.sf_dtype,
@@ -998,82 +997,36 @@ class BlockScaledMoEGroupedGemmQuantKernel:
 
     @cute.jit
     def quant_sfd_row(self, tile_idx, tiled_copy_r2s, src, pvscale, norm_const, rcp_limit, tRSrD):
-        tTR_rAcc_frg = cute.logical_divide(src, cute.make_layout(self.sf_vec_size))
-        acc_frg = tTR_rAcc_frg.load()
-        abs_acc_frg_ir = cutlass._mlir.dialects.math.absf(acc_frg.ir_value())
-        abs_acc_frg = type(acc_frg)(abs_acc_frg_ir, acc_frg.shape, acc_frg.dtype)
-        pvscale_f32x4 = cute.make_rmem_tensor(4, cutlass.Float32)
-        sfd_f8x4 = cute.make_rmem_tensor(4, self.sf_dtype)
-        tmp_f32 = abs_acc_frg[None, 0].reduce(cute.ReductionOp.MAX, cutlass.Float32(0.0), 0) * rcp_limit * norm_const
-        if tile_idx == 0:
-            pvscale[0] = tmp_f32
-        elif tile_idx == 1:
-            pvscale[1] = tmp_f32
-        elif tile_idx == 2:
-            pvscale[2] = tmp_f32
-        elif tile_idx == 3:
-            pvscale[3] = tmp_f32
-        pvscale_f32x4[0] = tmp_f32
-        sfd_f8x4.store(pvscale_f32x4.load().to(self.sf_dtype))
-        pvscale_f32x4.store(sfd_f8x4.load().to(cutlass.Float32))
-        qpvscale_up = pvscale_f32x4[0]
-        fp32_max = cutlass.Float32(3.40282346638528859812e38)
-        acc_scale = norm_const * cute.arch.rcp_approx(qpvscale_up)
-        acc_scale = fmin(acc_scale, fp32_max, nan=True)
-        if cutlass.const_expr(self.vectorized_f32):
-            vec = tTR_rAcc_frg[None, 0]
-            for ei in cutlass.range_constexpr(0, self.sf_vec_size, 2):
-                vec[ei], vec[ei + 1] = cute.arch.mul_packed_f32x2(
-                    (vec[ei], vec[ei + 1]),
-                    (acc_scale, acc_scale),
-                    rnd="rn",
-                    ftz=False,
-                )
-        else:
-            vec = tTR_rAcc_frg[None, 0]
-            for ei in cutlass.range_constexpr(self.sf_vec_size):
-                vec[ei] = vec[ei] * acc_scale
-        acc_vec = tiled_copy_r2s.retile(src).load()
-        tRSrD.store(acc_vec.to(self.d_dtype))
+        _quant_sfd_row(
+            tile_idx,
+            tiled_copy_r2s,
+            src,
+            pvscale,
+            norm_const,
+            rcp_limit,
+            tRSrD,
+            self.sf_vec_size,
+            self.vectorized_f32,
+            self.sf_dtype,
+            self.d_dtype,
+            self.use_fp8_ptx_cvt,
+        )
 
     @cute.jit
     def quant_sfd_col(self, tile_idx, tiled_copy_r2s, src, pvscale, norm_const, rcp_limit, tRSrD):
-        tTR_rAcc_frg = cute.logical_divide(src, cute.make_layout(self.sf_vec_size))
-        acc_frg = tTR_rAcc_frg.load()
-        abs_acc_frg_ir = cutlass._mlir.dialects.math.absf(acc_frg.ir_value())
-        acc_frg = type(acc_frg)(abs_acc_frg_ir, acc_frg.shape, acc_frg.dtype)
-        tmp_f32 = cutlass.Float32(0.0)
-        for vi in cutlass.range_constexpr(acc_frg.shape[0]):
-            max_value_original = (
-                cutlass.Float32(
-                    warp_redux_sync(
-                        value=acc_frg[vi, 0],
-                        kind=ReduxKind.MAX,
-                        mask_and_clamp=0xFFFFFFFF,
-                        nan=True,
-                    )
-                )
-                * rcp_limit
-                * norm_const
-            )
-            max_value_vec = cute.full(4, max_value_original, dtype=cutlass.Float32)
-            max_value_vec_f8 = max_value_vec.to(cutlass.Float8E8M0FNU)
-            max_value_vec_f32_chunked = max_value_vec_f8.to(cutlass.Float32)
-            max_value = max_value_vec_f32_chunked[0]
-            tidx = cute.arch.thread_idx()[0]
-            if tidx % 32 == vi:
-                tmp_f32 = max_value
-            acc_scale_col = cutlass.Float32(0.0)
-            if max_value_vec_f32_chunked[0] == 0.000000:
-                acc_scale_col = cutlass.Float32(0.0)
-            else:
-                acc_scale_col = norm_const * cute.arch.rcp_approx(max_value_vec_f32_chunked[0])
-            fp32_max = cutlass.Float32(3.40282346638528859812e38)
-            acc_scale_col = fmin(acc_scale_col, fp32_max)
-            tTR_rAcc_frg[vi] = tTR_rAcc_frg[vi] * acc_scale_col
-        pvscale[None, None, tile_idx][0] = tmp_f32
-        acc_vec = tiled_copy_r2s.retile(src).load()
-        tRSrD.store(acc_vec.to(self.d_dtype))
+        _quant_sfd_col(
+            tile_idx,
+            tiled_copy_r2s,
+            src,
+            pvscale,
+            norm_const,
+            rcp_limit,
+            tRSrD,
+            self.sf_vec_size,
+            self.sf_dtype,
+            self.d_dtype,
+            self.use_fp8_ptx_cvt,
+        )
 
     @cute.jit
     def tile_info_to_mn_idx(self, tile_info: cute.Tensor):
@@ -1282,11 +1235,11 @@ class BlockScaledMoEGroupedGemmQuantKernel:
         scheduler.internal_init()
 
         tmem = utils.TmemAllocator(
-            storage.tmem_holding_buf.ptr,
+            storage.tmem_holding_buf,
             barrier_for_retrieve=self.tmem_alloc_barrier,
             allocator_warp_id=self.epilog_warp_id[0],
             is_two_cta=use_2cta_instrs,
-            two_cta_tmem_dealloc_mbar_ptr=storage.tmem_dealloc_mbar_ptr.ptr,
+            two_cta_tmem_dealloc_mbar_ptr=storage.tmem_dealloc_mbar_ptr,
         )
 
         if cute.size(self.cluster_shape_mn) > 1:

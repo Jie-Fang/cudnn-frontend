@@ -23,7 +23,7 @@ from typing import Literal, Tuple, Union
 
 import cutlass
 import cutlass.cute as cute
-from cutlass.cute.nvgpu import OperandMajorMode
+from cutlass.cute.nvgpu.tcgen05 import OperandMajorMode
 from cutlass.cute.typing import AddressSpace, Pointer
 from cutlass.cutlass_dsl import dsl_user_op, Int32, extract_mlir_values, new_from_mlir_values
 from cutlass._mlir import ir
