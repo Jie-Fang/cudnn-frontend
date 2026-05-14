@@ -642,6 +642,7 @@ def grouped_gemm_glu_hadamard_wrapper_sm100(
 
     if valid_m == 0:
         return TupleDict(c_tensor=c_tensor, d_tensor=d_tensor, amax_tensor=amax_tensor, post_rht_amax_tensor=post_rht_amax_tensor)
+
     def stride_order(tensor: torch.Tensor) -> Tuple[int, ...]:
         return tuple(i for i, _ in sorted(enumerate(tensor.stride()), key=lambda item: item[1]))
 
