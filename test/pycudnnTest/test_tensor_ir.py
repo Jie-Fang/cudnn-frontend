@@ -1781,8 +1781,19 @@ class test_tensor_ir:
                         return False
                     return True
 
+                # Skip if the broadcast wouldn't actually change shape (e.g.
+                # leaf has same shape as target but a different layout attr).
+                # The dialect's BroadcastOp::verify rejects no-op broadcasts;
+                # the type-mismatch we observed above was on dtype/layout, not
+                # shape. Layout-only changes flow naturally without a
+                # broadcast op — the consumer handles them.
+                def _shapes_equal(from_shape, to_shape):
+                    if len(from_shape) != len(to_shape):
+                        return False
+                    return all(fd == td for fd, td in zip(from_shape, to_shape))
+
                 input_info = self.determine_tensor_ir_inout_tensor_type(node)
-                if _is_broadcastable_to(input_info.shape, output_tensor_info.shape):
+                if _is_broadcastable_to(input_info.shape, output_tensor_info.shape) and not _shapes_equal(input_info.shape, output_tensor_info.shape):
                     broadcast_tensor = nv_tensor_ir.broadcast(
                         broadcast_tensor_type,
                         input_tensor,
