@@ -1025,7 +1025,7 @@ class CompositeSDPABackwardNode : public NodeCRTP<CompositeSDPABackwardNode> {
         workaround_padding_mask_seq_len_kv;                                  // Will be edited in pre_validate_node()
     mutable int64_t batch_size_for_workaround_padding_mask         = 0;      // Will be edited in pre_validate_node()
     mutable bool is_deterministic_algorithm_supported_on_blackwell = false;  // Will be edited in pre_validate_node()
-    mutable bool is_d256_on_blackwell = false;  // Will be edited in pre_validate_node()
+    mutable bool is_d256_on_blackwell                              = false;  // Will be edited in pre_validate_node()
 
    public:
     mutable SDPA_backward_attributes attributes;  // Will be edited in pre_validate_node() for workaround padding mask
@@ -2229,7 +2229,8 @@ class UnifiedSDPANode : public SDPANodeBase<UnifiedSDPANode> {
         managed_backend_descriptor_t& raw_operations,
         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) const override final {
         CUDNN_FRONTEND_UNUSED(operations);
-        CUDNN_FE_LOG_LABEL("INFO: " << "Building UnifiedSDPANode operations " << attributes.name << " ");
+        CUDNN_FE_LOG_LABEL("INFO: "
+                           << "Building UnifiedSDPANode operations " << attributes.name << " ");
         auto cudnn_ver_error = error_t{error_code_t::GRAPH_NOT_SUPPORTED, "Unified SDPA node requires cuDNN 9.13.1"};
 
 #if (CUDNN_VERSION >= 91301)

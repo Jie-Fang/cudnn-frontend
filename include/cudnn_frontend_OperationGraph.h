@@ -153,10 +153,9 @@ class OperationGraphBuilder_v8 {
     auto
     setOperationGraph(int64_t numOps_, Operation_v8 const **ops_) -> OperationGraphBuilder_v8 & {
         if (numOps_ > MAX_OPGRAPH_OPS) {
-            set_error_and_throw_exception(
-                &m_operationGraph,
-                CUDNN_STATUS_BAD_PARAM,
-                "CUDNN_BACKEND_OPERATIONGRAPH_DESCRIPTOR: numOps exceeds MAX_OPGRAPH_OPS");
+            set_error_and_throw_exception(&m_operationGraph,
+                                          CUDNN_STATUS_BAD_PARAM,
+                                          "CUDNN_BACKEND_OPERATIONGRAPH_DESCRIPTOR: numOps exceeds MAX_OPGRAPH_OPS");
             return *this;
         }
         m_operationGraph.numOps = numOps_;
@@ -173,10 +172,9 @@ class OperationGraphBuilder_v8 {
     auto
     setOperationGraph(std::vector<Operation> const &ops_) -> OperationGraphBuilder_v8 & {
         if (ops_.size() > static_cast<size_t>(MAX_OPGRAPH_OPS)) {
-            set_error_and_throw_exception(
-                &m_operationGraph,
-                CUDNN_STATUS_BAD_PARAM,
-                "CUDNN_BACKEND_OPERATIONGRAPH_DESCRIPTOR: numOps exceeds MAX_OPGRAPH_OPS");
+            set_error_and_throw_exception(&m_operationGraph,
+                                          CUDNN_STATUS_BAD_PARAM,
+                                          "CUDNN_BACKEND_OPERATIONGRAPH_DESCRIPTOR: numOps exceeds MAX_OPGRAPH_OPS");
             return *this;
         }
         m_operationGraph.numOps = ops_.size();
@@ -192,10 +190,9 @@ class OperationGraphBuilder_v8 {
     auto
     addOperation(ManagedOpaqueDescriptor desc) -> OperationGraphBuilder_v8 & {
         if (m_operationGraph.numOps >= MAX_OPGRAPH_OPS) {
-            set_error_and_throw_exception(
-                &m_operationGraph,
-                CUDNN_STATUS_BAD_PARAM,
-                "CUDNN_BACKEND_OPERATIONGRAPH_DESCRIPTOR: numOps exceeds MAX_OPGRAPH_OPS");
+            set_error_and_throw_exception(&m_operationGraph,
+                                          CUDNN_STATUS_BAD_PARAM,
+                                          "CUDNN_BACKEND_OPERATIONGRAPH_DESCRIPTOR: numOps exceeds MAX_OPGRAPH_OPS");
             return *this;
         }
         m_operationGraph.ops[m_operationGraph.numOps] = desc;
@@ -228,10 +225,9 @@ class OperationGraphBuilder_v8 {
             return std::move(m_operationGraph);
         }
         if (m_operationGraph.numOps > MAX_OPGRAPH_OPS) {
-            set_error_and_throw_exception(
-                &m_operationGraph,
-                CUDNN_STATUS_BAD_PARAM,
-                "CUDNN_BACKEND_OPERATIONGRAPH_DESCRIPTOR: numOps exceeds MAX_OPGRAPH_OPS");
+            set_error_and_throw_exception(&m_operationGraph,
+                                          CUDNN_STATUS_BAD_PARAM,
+                                          "CUDNN_BACKEND_OPERATIONGRAPH_DESCRIPTOR: numOps exceeds MAX_OPGRAPH_OPS");
             return std::move(m_operationGraph);
         }
         if (m_operationGraph.ops[0] == nullptr) {
