@@ -361,13 +361,7 @@ def cvt_f32x4_to_f8x4_pack_i32(fp32x4, fp8_type, loc=None, ip=None):
         return
 
     asm_tmpl = (
-        "{\n"
-        "  .reg .b16 lo;\n"
-        "  .reg .b16 hi;\n"
-        f"  {cvt_instruction} lo, $2, $1;\n"
-        f"  {cvt_instruction} hi, $4, $3;\n"
-        "  mov.b32 $0, {lo, hi};\n"
-        "}"
+        "{\n" "  .reg .b16 lo;\n" "  .reg .b16 hi;\n" f"  {cvt_instruction} lo, $2, $1;\n" f"  {cvt_instruction} hi, $4, $3;\n" "  mov.b32 $0, {lo, hi};\n" "}"
     )
     packed_i32 = llvm.inline_asm(
         T.i32(),
@@ -404,13 +398,7 @@ def cvt_f32_to_f8_to_f32(fp32x1, fp8_type, loc=None, ip=None):
             cute.printf("error: unsupported fp8 element type")
         return
 
-    asm_tmpl = (
-        "{\n"
-        "  .reg .b16 bf_lo;\n"
-        f"  {cvt_instruction_downcast} bf_lo, 0f00000000, $1;\n"
-        f"  {cvt_instruction_upcast}  $0, bf_lo;\n"
-        "}"
-    )
+    asm_tmpl = "{\n" "  .reg .b16 bf_lo;\n" f"  {cvt_instruction_downcast} bf_lo, 0f00000000, $1;\n" f"  {cvt_instruction_upcast}  $0, bf_lo;\n" "}"
     packed_i32 = llvm.inline_asm(
         T.i32(),
         [src_fp32],
@@ -1065,8 +1053,8 @@ def quant_sfd_col(
         max_value3 = cutlass.Float32(warp_redux_sync(value=acc_frg[vi + 3, 0], kind=ReduxKind.MAX, mask_and_clamp=0xFFFFFFFF, nan=True))
 
         scale = rcp_limit * norm_const
-        (max_value0, max_value1) = cute.arch.mul_packed_f32x2((max_value0, max_value1), (scale, scale), rnd="rn", ftz=False)
-        (max_value2, max_value3) = cute.arch.mul_packed_f32x2((max_value2, max_value3), (scale, scale), rnd="rn", ftz=False)
+        max_value0, max_value1 = cute.arch.mul_packed_f32x2((max_value0, max_value1), (scale, scale), rnd="rn", ftz=False)
+        max_value2, max_value3 = cute.arch.mul_packed_f32x2((max_value2, max_value3), (scale, scale), rnd="rn", ftz=False)
 
         if tidx % 32 == vi:
             avg_fp32 = max_value0
@@ -1105,11 +1093,15 @@ def quant_sfd_col(
         max_value_rcp2 = fmin(max_value_rcp2, fp32_max, nan=True)
         max_value_rcp3 = fmin(max_value_rcp3, fp32_max, nan=True)
 
-        (acc_scale_col0, acc_scale_col1) = cute.arch.mul_packed_f32x2((norm_const, norm_const), (max_value_rcp0, max_value_rcp1), rnd="rn", ftz=False)
-        (acc_scale_col2, acc_scale_col3) = cute.arch.mul_packed_f32x2((norm_const, norm_const), (max_value_rcp2, max_value_rcp3), rnd="rn", ftz=False)
+        acc_scale_col0, acc_scale_col1 = cute.arch.mul_packed_f32x2((norm_const, norm_const), (max_value_rcp0, max_value_rcp1), rnd="rn", ftz=False)
+        acc_scale_col2, acc_scale_col3 = cute.arch.mul_packed_f32x2((norm_const, norm_const), (max_value_rcp2, max_value_rcp3), rnd="rn", ftz=False)
 
-        (tTR_rAcc_frg[vi], tTR_rAcc_frg[vi + 1]) = cute.arch.mul_packed_f32x2((tTR_rAcc_frg[vi], tTR_rAcc_frg[vi + 1]), (acc_scale_col0, acc_scale_col1), rnd="rn", ftz=False)
-        (tTR_rAcc_frg[vi + 2], tTR_rAcc_frg[vi + 3]) = cute.arch.mul_packed_f32x2((tTR_rAcc_frg[vi + 2], tTR_rAcc_frg[vi + 3]), (acc_scale_col2, acc_scale_col3), rnd="rn", ftz=False)
+        tTR_rAcc_frg[vi], tTR_rAcc_frg[vi + 1] = cute.arch.mul_packed_f32x2(
+            (tTR_rAcc_frg[vi], tTR_rAcc_frg[vi + 1]), (acc_scale_col0, acc_scale_col1), rnd="rn", ftz=False
+        )
+        tTR_rAcc_frg[vi + 2], tTR_rAcc_frg[vi + 3] = cute.arch.mul_packed_f32x2(
+            (tTR_rAcc_frg[vi + 2], tTR_rAcc_frg[vi + 3]), (acc_scale_col2, acc_scale_col3), rnd="rn", ftz=False
+        )
 
     pvscale[None, None, tile_idx][0] = avg_fp32
     acc_vec = tiled_copy_r2s.retile(src).load()
