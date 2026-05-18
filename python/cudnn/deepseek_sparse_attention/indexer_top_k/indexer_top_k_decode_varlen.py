@@ -81,9 +81,7 @@ class ComputeDynamicCTAOffsets:
                 ctas = 1
 
         # Block-wide inclusive prefix sum
-        prefix_ctas, _ = block_prefix_sum_kernel(
-            ctas, s_warp_sums, tidx, self.NUM_THREADS, num_warps, barrier_id=1
-        )
+        prefix_ctas, _ = block_prefix_sum_kernel(ctas, s_warp_sums, tidx, self.NUM_THREADS, num_warps, barrier_id=1)
 
         # Write exclusive prefix sum (shifted by 1)
         if tidx == 0:
@@ -190,17 +188,13 @@ class IndexerTopKKernelVarlenDecode(IndexerTopKKernelVarlen):
         # only used for debug info
         if cutlass.const_expr(debug):
             print(f"dtype: {self.dtype}, vec_size: {self.vec_size}")
-            print(
-                f"max_num_cols: {self.max_num_cols}, num_threads_per_cta: {self.num_threads_per_cta}"
-            )
+            print(f"max_num_cols: {self.max_num_cols}, num_threads_per_cta: {self.num_threads_per_cta}")
             print(f"indexer_topk_smem_input_size: {self.indexer_topk_smem_input_size}")
             print(f"enable_gmem_store: {self.enable_gmem_store}")
             print(f"return_val: {self.return_val}")
             print(f"large_occupancy: {large_occupancy}")
             print(f"indexer_topk_smem_input_size: {self.indexer_topk_smem_input_size}")
-            print(
-                f"first_refine_shift: {self.first_refine_shift}, num_refine_rounds: {self.num_refine_rounds}"
-            )
+            print(f"first_refine_shift: {self.first_refine_shift}, num_refine_rounds: {self.num_refine_rounds}")
 
     @cute.jit
     def run_kernel(
@@ -326,9 +320,7 @@ class IndexerTopKKernelVarlenDecode(IndexerTopKKernelVarlen):
             layout=cute.make_ordered_layout((1), order=(0)),
             byte_alignment=128,
         )
-        num_warps = cutlass.const_expr(
-            min(self.radix, self.num_threads_per_cta) // cutlass.Int32(32)
-        )
+        num_warps = cutlass.const_expr(min(self.radix, self.num_threads_per_cta) // cutlass.Int32(32))
         s_warp_sums = smem.allocate_tensor(
             element_type=cute.Int32,
             layout=cute.make_ordered_layout((num_warps,), order=(0,)),
@@ -361,12 +353,8 @@ class IndexerTopKKernelVarlenDecode(IndexerTopKKernelVarlen):
                 row_start = self.chunk_size_per_cta * bidy
                 row_end = min(row_end, row_start + self.chunk_size_per_cta)
                 length = row_end - row_start
-                output_indices = cute.flat_divide(output_indices, (1, self.top_k))[
-                    0, None, bidx, bidy
-                ]
-                output_values = cute.flat_divide(output_values, (1, self.top_k))[
-                    0, None, bidx, bidy
-                ]
+                output_indices = cute.flat_divide(output_indices, (1, self.top_k))[0, None, bidx, bidy]
+                output_values = cute.flat_divide(output_values, (1, self.top_k))[0, None, bidx, bidy]
 
             if cutlass.const_expr(self.merge_blocks):
                 if cutlass.const_expr(self.varlen_merge_input):
@@ -481,9 +469,7 @@ class IndexerTopKKernelVarlenDecode(IndexerTopKKernelVarlen):
             work_remaining = task_id < num_rows
             while work_remaining:
                 if tidx == 0:
-                    s_row_id[0] = (
-                        atomicAdd(g_global_counter.iterator, cutlass.Int32(1)) + grid_size_x
-                    )
+                    s_row_id[0] = atomicAdd(g_global_counter.iterator, cutlass.Int32(1)) + grid_size_x
                 cute.arch.barrier()
 
                 row_id = s_row_id[0]
@@ -537,9 +523,9 @@ class IndexerTopKKernelVarlenDecode(IndexerTopKKernelVarlen):
     ):
         """Host function for the indexer topk kernel"""
         # now we don't support it.
-        assert not (self.enable_multi_cta and enable_persistent_dynamic_scheduling), (
-            "enable_multi_cta and enable_persistent_dynamic_scheduling cannot both be True"
-        )
+        assert not (
+            self.enable_multi_cta and enable_persistent_dynamic_scheduling
+        ), "enable_multi_cta and enable_persistent_dynamic_scheduling cannot both be True"
 
         num_rows = input_values.shape[0]
         # each cta processes one row of input.
@@ -635,9 +621,7 @@ def cute_dsl_topk_wrapper(
         n_rows = cute.sym_int()
         n_cols = cute.sym_int()
         n_batch = cute.sym_int()
-        input_fake = cute.runtime.make_fake_compact_tensor(
-            dtype, (n_rows, n_cols), stride_order=(1, 0), assumed_align=32
-        )
+        input_fake = cute.runtime.make_fake_compact_tensor(dtype, (n_rows, n_cols), stride_order=(1, 0), assumed_align=32)
         buffer_fake = cute.runtime.make_fake_compact_tensor(
             cutlass.Int32,
             (cute.sym_int(), cute.sym_int(), cute.sym_int()),

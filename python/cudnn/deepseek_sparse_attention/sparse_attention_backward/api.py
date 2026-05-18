@@ -20,13 +20,13 @@ from . import _interface_sm100 as _iface_sm100
 class SparseAttentionBackward(APIBase):
     def __init__(
         self,
-        sample_q: torch.Tensor,              # (total_S_q, H, D) BF16
-        sample_kv: torch.Tensor,             # (total_S_kv, D) BF16 (K=V)
-        sample_out: torch.Tensor,            # (total_S_q, H, D_v)
-        sample_dout: torch.Tensor,           # (total_S_q, H, D_v)
-        sample_lse: torch.Tensor,            # (total_S_q, H) FP32, KV-only LSE
-        sample_attn_sink: torch.Tensor,      # (H,) FP32
-        sample_topk_idxs: torch.Tensor,      # (total_S_q, topk_max) INT32
+        sample_q: torch.Tensor,  # (total_S_q, H, D) BF16
+        sample_kv: torch.Tensor,  # (total_S_kv, D) BF16 (K=V)
+        sample_out: torch.Tensor,  # (total_S_q, H, D_v)
+        sample_dout: torch.Tensor,  # (total_S_q, H, D_v)
+        sample_lse: torch.Tensor,  # (total_S_q, H) FP32, KV-only LSE
+        sample_attn_sink: torch.Tensor,  # (H,) FP32
+        sample_topk_idxs: torch.Tensor,  # (total_S_q, topk_max) INT32
         sample_dq: Optional[torch.Tensor] = None,
         sample_dkv: Optional[torch.Tensor] = None,
         sample_topk_length: Optional[torch.Tensor] = None,
@@ -61,7 +61,9 @@ class SparseAttentionBackward(APIBase):
         )
         self._check_dtype(self.q_desc, [torch.float16, torch.bfloat16], name="Q")
         self._check_dtype(
-            self.kv_desc, self.q_desc.dtype, name="KV",
+            self.kv_desc,
+            self.q_desc.dtype,
+            name="KV",
             extra_error_msg="KV must have same dtype as Q",
         )
         self._check_dtype(self.lse_desc, torch.float32, name="LSE")
@@ -98,19 +100,31 @@ class SparseAttentionBackward(APIBase):
             from . import _interface_sm90 as _iface_sm90
 
             return _iface_sm90.flash_attn_bwd_sm90(
-                q, kv, out, dout, lse,
+                q,
+                kv,
+                out,
+                dout,
+                lse,
                 attn_sink=attn_sink,
                 topk_idxs=topk_idxs,
                 softmax_scale=scale,
                 topk_length=topk_length,
-                dq=dq, dkv=dkv,
+                dq=dq,
+                dkv=dkv,
                 need_d_sink=True,
             )
         return _iface_sm100.flash_attn_bwd_sm100(
-            q, kv, out, dout, lse, attn_sink, topk_idxs,
+            q,
+            kv,
+            out,
+            dout,
+            lse,
+            attn_sink,
+            topk_idxs,
             softmax_scale=scale,
             topk_length=topk_length,
-            dq=dq, dkv=dkv,
+            dq=dq,
+            dkv=dkv,
         )
 
 
@@ -138,27 +152,48 @@ def sparse_attention_backward_wrapper(
     ``d_sink`` is computed from ``attn_sink`` and ``dout``.
     """
     key = (
-        q.dtype, q.shape, kv.shape, out.shape, dout.shape,
-        lse.shape, attn_sink.shape, topk_idxs.shape,
+        q.dtype,
+        q.shape,
+        kv.shape,
+        out.shape,
+        dout.shape,
+        lse.shape,
+        attn_sink.shape,
+        topk_idxs.shape,
         topk_length is not None,
-        int(block_tile), softmax_scale,
+        int(block_tile),
+        softmax_scale,
     )
     obj = _cache_of_SparseAttentionBackwardObjects.get(key)
     if obj is None:
         obj = SparseAttentionBackward(
-            sample_q=q, sample_kv=kv, sample_out=out, sample_dout=dout,
-            sample_lse=lse, sample_attn_sink=attn_sink,
+            sample_q=q,
+            sample_kv=kv,
+            sample_out=out,
+            sample_dout=dout,
+            sample_lse=lse,
+            sample_attn_sink=attn_sink,
             sample_topk_idxs=topk_idxs,
             sample_topk_length=topk_length,
-            softmax_scale=softmax_scale, block_tile=block_tile,
+            softmax_scale=softmax_scale,
+            block_tile=block_tile,
         )
         assert obj.check_support()
         obj.compile()
         _cache_of_SparseAttentionBackwardObjects[key] = obj
 
     dq_out, dkv_out, d_sink_out = obj.execute(
-        q, kv, out, dout, lse, attn_sink, topk_idxs,
-        dq=dq, dkv=dkv, topk_length=topk_length,
-        softmax_scale=softmax_scale, current_stream=stream,
+        q,
+        kv,
+        out,
+        dout,
+        lse,
+        attn_sink,
+        topk_idxs,
+        dq=dq,
+        dkv=dkv,
+        topk_length=topk_length,
+        softmax_scale=softmax_scale,
+        current_stream=stream,
     )
     return TupleDict(dq=dq_out, dkv=dkv_out, d_sink=d_sink_out)

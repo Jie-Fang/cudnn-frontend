@@ -25,7 +25,10 @@ def _allocate(cfg, sm_scale: float, ratio: int):
 
     with torch.no_grad():
         index_score, index_lse = ref_dense_indexer_score_recompute(
-            index_q, index_k.unsqueeze(2), weights, ratio=ratio,
+            index_q,
+            index_k.unsqueeze(2),
+            weights,
+            ratio=ratio,
         )
         if sm_scale != 1.0:
             index_score = index_score * sm_scale
@@ -41,9 +44,13 @@ def _allocate(cfg, sm_scale: float, ratio: int):
         attn_l1norm = attn_score.sum(dim=-1).contiguous()
 
     return (
-        index_q, weights, index_k,
-        attn_score.contiguous(), attn_l1norm,
-        index_score.contiguous(), index_lse.contiguous(),
+        index_q,
+        weights,
+        index_k,
+        attn_score.contiguous(),
+        attn_l1norm,
+        index_score.contiguous(),
+        index_lse.contiguous(),
     )
 
 
@@ -51,7 +58,13 @@ def _allocate(cfg, sm_scale: float, ratio: int):
 @torch_fork_set_rng(seed=0)
 @with_dsa_dense_indexer_backward_params
 def test_DSA_dense_indexer_backward_wrapper(
-    dtype, acc_dtype, head_dim, qhead_per_kv_head, block_I, ratio, request,
+    dtype,
+    acc_dtype,
+    head_dim,
+    qhead_per_kv_head,
+    block_I,
+    ratio,
+    request,
 ):
     try:
         from cudnn import DSA
@@ -60,11 +73,16 @@ def test_DSA_dense_indexer_backward_wrapper(
         pytest.skip("Environment not supported: cudnn[cutedsl] not installed")
 
     cfg = dsa_init(
-        request=request, dtype=dtype, acc_dtype=acc_dtype,
-        head_dim=head_dim, qhead_per_kv_head=qhead_per_kv_head,
-        block_I=block_I, ratio=ratio,
+        request=request,
+        dtype=dtype,
+        acc_dtype=acc_dtype,
+        head_dim=head_dim,
+        qhead_per_kv_head=qhead_per_kv_head,
+        block_I=block_I,
+        ratio=ratio,
         min_compute_capability=90,
-        s_q_default=128, s_kv_default=512,
+        s_q_default=128,
+        s_kv_default=512,
     )
     sm_scale = 1.0
     b_cfg = cfg["b"]
@@ -74,8 +92,13 @@ def test_DSA_dense_indexer_backward_wrapper(
     grad_scale_expected = (loss_coeff / (b_cfg * s_q_cfg)) * grad_loss
 
     (
-        index_q, weights, index_k,
-        attn_score, attn_l1norm, index_score, index_lse,
+        index_q,
+        weights,
+        index_k,
+        attn_score,
+        attn_l1norm,
+        index_score,
+        index_lse,
     ) = _allocate(cfg, sm_scale=sm_scale, ratio=ratio)
     torch_stream = torch.cuda.Stream()
     stream = cuda.CUstream(torch_stream.cuda_stream)
@@ -85,11 +108,18 @@ def test_DSA_dense_indexer_backward_wrapper(
     torch_stream.wait_stream(torch.cuda.current_stream())
     try:
         result = DSA.dense_indexer_backward_wrapper(
-            index_q, weights, index_k,
-            attn_score, attn_l1norm, index_score, index_lse,
+            index_q,
+            weights,
+            index_k,
+            attn_score,
+            attn_l1norm,
+            index_score,
+            index_lse,
             sm_scale=sm_scale,
-            loss_coeff=loss_coeff, grad_loss=grad_loss,
-            block_I=block_I, ratio=ratio,
+            loss_coeff=loss_coeff,
+            grad_loss=grad_loss,
+            block_I=block_I,
+            ratio=ratio,
             stream=stream,
         )
     except (ValueError, NotImplementedError, RuntimeError) as e:
@@ -109,8 +139,15 @@ def test_DSA_dense_indexer_backward_wrapper(
 
     if not cfg["skip_ref"]:
         check_ref_dense_indexer_backward(
-            index_q, weights, index_k,
-            attn_score_ref, attn_l1norm_ref,
-            d_index_q, d_weights, d_index_k,
-            sm_scale=sm_scale, ratio=ratio, grad_scale=grad_scale_expected,
+            index_q,
+            weights,
+            index_k,
+            attn_score_ref,
+            attn_l1norm_ref,
+            d_index_q,
+            d_weights,
+            d_index_k,
+            sm_scale=sm_scale,
+            ratio=ratio,
+            grad_scale=grad_scale_expected,
         )

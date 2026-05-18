@@ -10,7 +10,6 @@ from typing import Optional, Tuple
 import pytest
 import torch
 
-
 # Parameterization marks shared by every DSA test
 DSA_PARAM_MARKS = [
     pytest.mark.parametrize("dtype", [torch.bfloat16]),
@@ -118,10 +117,7 @@ def dsa_init(
     if compute_capability < min_compute_capability:
         required_major = min_compute_capability // 10
         required_minor = min_compute_capability % 10
-        pytest.skip(
-            f"DSA requires compute capability >= {required_major}.{required_minor}, "
-            f"found SM{major}{minor}"
-        )
+        pytest.skip(f"DSA requires compute capability >= {required_major}.{required_minor}, " f"found SM{major}{minor}")
 
     def opt(name: str, default):
         value = request.config.getoption(name, default=None)

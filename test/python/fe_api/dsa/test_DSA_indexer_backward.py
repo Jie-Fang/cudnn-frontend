@@ -24,12 +24,7 @@ def _allocate(cfg, sm_scale: float):
     index_k = torch.randn(b, s_k, d, dtype=torch.bfloat16, device=device)
 
     topk_k = min(topk, s_k)
-    topk_indices = torch.stack([
-        torch.stack([
-            torch.randperm(s_k, device=device)[:topk_k]
-            for _ in range(s_q)
-        ]) for _ in range(b)
-    ]).to(torch.int32)
+    topk_indices = torch.stack([torch.stack([torch.randperm(s_k, device=device)[:topk_k] for _ in range(s_q)]) for _ in range(b)]).to(torch.int32)
     if topk_k < topk:
         pad = torch.full((b, s_q, topk - topk_k), -1, dtype=torch.int32, device=device)
         topk_indices = torch.cat([topk_indices, pad], dim=-1)
@@ -41,14 +36,22 @@ def _allocate(cfg, sm_scale: float):
     # autograd-through-the-forward computation.
     with torch.no_grad():
         index_score = _indexer_predict_distribution(
-            index_q.float(), index_k.float(), weights.float(),
-            topk_indices, sm_scale,
+            index_q.float(),
+            index_k.float(),
+            weights.float(),
+            topk_indices,
+            sm_scale,
         ).contiguous()
 
     # Target distribution — keep random so the KL grad is non-trivial.
-    attn_score = torch.softmax(
-        torch.randn(b, s_q, topk, device=device), dim=-1,
-    ).float().contiguous()
+    attn_score = (
+        torch.softmax(
+            torch.randn(b, s_q, topk, device=device),
+            dim=-1,
+        )
+        .float()
+        .contiguous()
+    )
 
     return index_q, weights, index_k, attn_score, index_score, topk_indices
 
@@ -57,7 +60,12 @@ def _allocate(cfg, sm_scale: float):
 @torch_fork_set_rng(seed=0)
 @with_dsa_indexer_backward_params
 def test_DSA_indexer_backward_wrapper(
-    dtype, acc_dtype, head_dim, qhead_per_kv_head, block_I, request,
+    dtype,
+    acc_dtype,
+    head_dim,
+    qhead_per_kv_head,
+    block_I,
+    request,
 ):
     try:
         from cudnn import DSA
@@ -66,11 +74,15 @@ def test_DSA_indexer_backward_wrapper(
         pytest.skip("Environment not supported: cudnn[cutedsl] not installed")
 
     cfg = dsa_init(
-        request=request, dtype=dtype, acc_dtype=acc_dtype,
-        head_dim=head_dim, qhead_per_kv_head=qhead_per_kv_head,
+        request=request,
+        dtype=dtype,
+        acc_dtype=acc_dtype,
+        head_dim=head_dim,
+        qhead_per_kv_head=qhead_per_kv_head,
         block_I=block_I,
         min_compute_capability=90,
-        s_q_default=128, s_kv_default=512,
+        s_q_default=128,
+        s_kv_default=512,
     )
     sm_scale = 1.0
     # Configure loss_coeff and grad_loss so the kernel's internal
@@ -83,8 +95,12 @@ def test_DSA_indexer_backward_wrapper(
     grad_scale_expected = (loss_coeff / (b_cfg * s_q_cfg)) * grad_loss  # = 1.0
 
     (
-        index_q, weights, index_k,
-        attn_score, index_score, topk_indices,
+        index_q,
+        weights,
+        index_k,
+        attn_score,
+        index_score,
+        topk_indices,
     ) = _allocate(cfg, sm_scale=sm_scale)
     torch_stream = torch.cuda.Stream()
     stream = cuda.CUstream(torch_stream.cuda_stream)
@@ -97,10 +113,15 @@ def test_DSA_indexer_backward_wrapper(
     torch_stream.wait_stream(torch.cuda.current_stream())
     try:
         result = DSA.indexer_backward_wrapper(
-            index_q, weights, index_k,
-            attn_score, index_score, topk_indices,
+            index_q,
+            weights,
+            index_k,
+            attn_score,
+            index_score,
+            topk_indices,
             sm_scale=sm_scale,
-            loss_coeff=loss_coeff, grad_loss=grad_loss,
+            loss_coeff=loss_coeff,
+            grad_loss=grad_loss,
             block_I=block_I,
             stream=stream,
         )
@@ -121,8 +142,15 @@ def test_DSA_indexer_backward_wrapper(
 
     if not cfg["skip_ref"]:
         check_ref_indexer_backward(
-            index_q, weights, index_k,
-            attn_score_ref, index_score_ref, topk_indices,
-            d_index_q, d_weights, d_index_k,
-            sm_scale=sm_scale, grad_scale=grad_scale_expected,
+            index_q,
+            weights,
+            index_k,
+            attn_score_ref,
+            index_score_ref,
+            topk_indices,
+            d_index_q,
+            d_weights,
+            d_index_k,
+            sm_scale=sm_scale,
+            grad_scale=grad_scale_expected,
         )

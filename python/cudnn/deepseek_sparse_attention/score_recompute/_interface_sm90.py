@@ -38,7 +38,6 @@ from .sparse_score_recompute_sm90 import SparseScoreRecomputeSm90
 from .dense_score_recompute_sm90 import DenseScoreRecomputeSm90
 from cudnn.deepseek_sparse_attention.utils.compiler import compile_options
 
-
 # Dense SM90 score is now 3-WG-only.  The previous 1-WG/2-WG dense
 # implementation was removed after benchmarking showed 3-WG is uniformly faster
 # on dense attention (+11-20%) and non-regressing on dense indexer (+1-5%).
@@ -66,9 +65,7 @@ def _compute_tile_m(qhead_per_kvhead: int) -> tuple[int, int]:
     """Cap tile_m at MAX_TILE_M; iterate over head tiles when qhpkv > MAX_TILE_M."""
     assert qhead_per_kvhead > 1, "SM90 kernel requires MQA/GQA (qhead_per_kvhead > 1)"
     tile_m = min(qhead_per_kvhead, _MAX_TILE_M)
-    assert qhead_per_kvhead % tile_m == 0, (
-        f"qhead_per_kvhead ({qhead_per_kvhead}) must be divisible by tile_m ({tile_m})"
-    )
+    assert qhead_per_kvhead % tile_m == 0, f"qhead_per_kvhead ({qhead_per_kvhead}) must be divisible by tile_m ({tile_m})"
     num_head_tiles = qhead_per_kvhead // tile_m
     return tile_m, num_head_tiles
 
@@ -83,20 +80,12 @@ def _validate_and_prepare_common(
 
     Returns (q, kv, weights_or_lse) after maybe_contiguous.
     """
-    assert q.dtype in [torch.float16, torch.bfloat16], (
-        f"q dtype must be half precision, got {q.dtype}"
-    )
-    assert q.dtype == kv.dtype, (
-        f"q/kv dtype mismatch: q={q.dtype}, kv={kv.dtype}"
-    )
+    assert q.dtype in [torch.float16, torch.bfloat16], f"q dtype must be half precision, got {q.dtype}"
+    assert q.dtype == kv.dtype, f"q/kv dtype mismatch: q={q.dtype}, kv={kv.dtype}"
     if is_index_scores:
-        assert weights_or_lse.dtype == q.dtype, (
-            f"weights must match q dtype (half precision): got {weights_or_lse.dtype} vs {q.dtype}"
-        )
+        assert weights_or_lse.dtype == q.dtype, f"weights must match q dtype (half precision): got {weights_or_lse.dtype} vs {q.dtype}"
     else:
-        assert weights_or_lse.dtype == torch.float32, (
-            f"lse must be float32, got {weights_or_lse.dtype}"
-        )
+        assert weights_or_lse.dtype == torch.float32, f"lse must be float32, got {weights_or_lse.dtype}"
     assert all(t.is_cuda for t in (q, kv, weights_or_lse))
     return [maybe_contiguous(t) for t in (q, kv, weights_or_lse)]
 
@@ -105,11 +94,12 @@ def _validate_and_prepare_common(
 # Sparse path
 # =============================================================================
 
+
 def _sparse_score_recompute(
-    q: torch.Tensor,               # (bs, seqlen_q, n_heads_q, head_dim)
-    kv: torch.Tensor,              # (bs, seqlen_k, n_heads_kv, head_dim) — 4D, n_heads_kv=1
+    q: torch.Tensor,  # (bs, seqlen_q, n_heads_q, head_dim)
+    kv: torch.Tensor,  # (bs, seqlen_k, n_heads_kv, head_dim) — 4D, n_heads_kv=1
     weights_or_lse: torch.Tensor,  # (bs, n_heads_q, seqlen_q) — already transposed to (B,H,S)
-    topk_indices: torch.Tensor,    # (bs, seqlen_q, topk) int32
+    topk_indices: torch.Tensor,  # (bs, seqlen_q, topk) int32
     is_index_scores: bool,
     softmax_scale: float,
     topk_length: Optional[torch.Tensor],
@@ -129,9 +119,7 @@ def _sparse_score_recompute(
 
     batch_size, seqlen_q, num_head, head_dim = q.shape
     _, seqlen_k, num_head_kv, _ = kv.shape
-    assert num_head > num_head_kv and num_head % num_head_kv == 0, (
-        f"MQA required: num_head={num_head}, num_head_kv={num_head_kv}"
-    )
+    assert num_head > num_head_kv and num_head % num_head_kv == 0, f"MQA required: num_head={num_head}, num_head_kv={num_head_kv}"
     qhead_per_kvhead = num_head // num_head_kv
 
     tile_m, num_head_tiles = _compute_tile_m(qhead_per_kvhead)
@@ -157,9 +145,21 @@ def _sparse_score_recompute(
     num_threads = 256
 
     compile_key = (
-        dtype, head_dim, qhead_per_kvhead, tile_m, _TILE_N, _KV_STAGE,
-        num_threads, _SWAP_AB, topk_max, is_index_scores, softmax_scale,
-        has_topk_length, num_head_tiles, True, output_log_probs,
+        dtype,
+        head_dim,
+        qhead_per_kvhead,
+        tile_m,
+        _TILE_N,
+        _KV_STAGE,
+        num_threads,
+        _SWAP_AB,
+        topk_max,
+        is_index_scores,
+        softmax_scale,
+        has_topk_length,
+        num_head_tiles,
+        True,
+        output_log_probs,
         bool(topk_indices_global),
     )
 
@@ -192,8 +192,12 @@ def _sparse_score_recompute(
 
         cache[compile_key] = cute.compile(
             kernel_obj,
-            q_cute, kv_cute,
-            topk_idxs_cute, current_stream, out_cute, weights_cute,
+            q_cute,
+            kv_cute,
+            topk_idxs_cute,
+            current_stream,
+            out_cute,
+            weights_cute,
             topk_length_cute,
             None,  # mL1NormDenom (dense-only)
             options=compile_options(),
@@ -201,7 +205,8 @@ def _sparse_score_recompute(
 
     with torch.cuda.nvtx.range(nvtx_range_name):
         cache[compile_key](
-            q, kv,
+            q,
+            kv,
             topk_indices,
             current_stream,
             out,
@@ -216,10 +221,10 @@ _sparse_score_recompute.compile_cache = {}
 
 
 def sparse_indexer_score_recompute(
-    q_indexer: torch.Tensor,       # (bs, seqlen_q, n_heads_q, head_dim) half
-    k_indexer: torch.Tensor,       # (bs, seqlen_k, head_dim) half — MQA, 3D
-    weights: torch.Tensor,         # (bs, seqlen_q, n_heads_q) half
-    topk_indices: torch.Tensor,    # (bs, seqlen_q, topk) int32
+    q_indexer: torch.Tensor,  # (bs, seqlen_q, n_heads_q, head_dim) half
+    k_indexer: torch.Tensor,  # (bs, seqlen_k, head_dim) half — MQA, 3D
+    weights: torch.Tensor,  # (bs, seqlen_q, n_heads_q) half
+    topk_indices: torch.Tensor,  # (bs, seqlen_q, topk) int32
     out: Optional[torch.Tensor] = None,
     topk_length: Optional[torch.Tensor] = None,
     output_log_probs: bool = False,
@@ -238,7 +243,10 @@ def sparse_indexer_score_recompute(
     kv = k_indexer.unsqueeze(2)
     w_bhs = weights.transpose(1, 2).contiguous()
     return _sparse_score_recompute(
-        q_indexer, kv, w_bhs, topk_indices,
+        q_indexer,
+        kv,
+        w_bhs,
+        topk_indices,
         is_index_scores=True,
         softmax_scale=sm_scale,
         topk_length=topk_length,
@@ -251,10 +259,10 @@ def sparse_indexer_score_recompute(
 
 
 def sparse_attn_score_recompute(
-    q_attn: torch.Tensor,          # (bs, seqlen_q, n_heads_q, head_dim) half
-    k_attn: torch.Tensor,          # (bs, seqlen_k, head_dim) half — MQA, 3D
-    lse: torch.Tensor,             # (bs, seqlen_q, n_heads_q) float32
-    topk_indices: torch.Tensor,    # (bs, seqlen_q, topk) int32
+    q_attn: torch.Tensor,  # (bs, seqlen_q, n_heads_q, head_dim) half
+    k_attn: torch.Tensor,  # (bs, seqlen_k, head_dim) half — MQA, 3D
+    lse: torch.Tensor,  # (bs, seqlen_q, n_heads_q) float32
+    topk_indices: torch.Tensor,  # (bs, seqlen_q, topk) int32
     softmax_scale: float,
     out: Optional[torch.Tensor] = None,
     topk_length: Optional[torch.Tensor] = None,
@@ -262,14 +270,17 @@ def sparse_attn_score_recompute(
     current_stream: Optional[cuda.CUstream] = None,
 ) -> torch.Tensor:
     """Sparse attention backward target:
-        P[b,q,h,i] = exp(Q_h · K_{topk[b,q,i]}^T · scale − LSE[b,q,h])
-        S[b,q,i]   = sum_h P[b,q,h,i]
-        target     = S / sum(S)  (L1-norm over topk)
+    P[b,q,h,i] = exp(Q_h · K_{topk[b,q,i]}^T · scale − LSE[b,q,h])
+    S[b,q,i]   = sum_h P[b,q,h,i]
+    target     = S / sum(S)  (L1-norm over topk)
     """
     kv = k_attn.unsqueeze(2)
     lse_bhs = lse.transpose(1, 2).contiguous()
     return _sparse_score_recompute(
-        q_attn, kv, lse_bhs, topk_indices,
+        q_attn,
+        kv,
+        lse_bhs,
+        topk_indices,
         is_index_scores=False,
         softmax_scale=softmax_scale,
         topk_length=topk_length,
@@ -285,9 +296,10 @@ def sparse_attn_score_recompute(
 # Dense path
 # =============================================================================
 
+
 def _dense_score_recompute(
-    q: torch.Tensor,               # (bs, seqlen_q, n_heads_q, head_dim)
-    kv: torch.Tensor,              # (bs, seqlen_k, n_heads_kv, head_dim) 4D, n_heads_kv=1
+    q: torch.Tensor,  # (bs, seqlen_q, n_heads_q, head_dim)
+    kv: torch.Tensor,  # (bs, seqlen_k, n_heads_kv, head_dim) 4D, n_heads_kv=1
     weights_or_lse: torch.Tensor,  # (bs, n_heads_q, seqlen_q) — transposed to (B,H,S)
     is_index_scores: bool,
     softmax_scale: float,
@@ -302,17 +314,13 @@ def _dense_score_recompute(
     compute_capability = _get_device_capability()
     assert compute_capability == 9, f"SM90 kernel on compute capability {compute_capability}"
     assert ratio >= 1, f"ratio must be >= 1, got {ratio}"
-    assert num_threads == _DENSE_NUM_THREADS, (
-        f"SM90 dense score is 3-WG-only (num_threads={_DENSE_NUM_THREADS}); got {num_threads}."
-    )
+    assert num_threads == _DENSE_NUM_THREADS, f"SM90 dense score is 3-WG-only (num_threads={_DENSE_NUM_THREADS}); got {num_threads}."
 
     q, kv, weights_or_lse = _validate_and_prepare_common(q, kv, weights_or_lse, is_index_scores)
 
     batch_size, seqlen_q, num_head, head_dim = q.shape
     _, seqlen_k, num_head_kv, _ = kv.shape
-    assert num_head > num_head_kv and num_head % num_head_kv == 0, (
-        f"MQA required: num_head={num_head}, num_head_kv={num_head_kv}"
-    )
+    assert num_head > num_head_kv and num_head % num_head_kv == 0, f"MQA required: num_head={num_head}, num_head_kv={num_head_kv}"
     qhead_per_kvhead = num_head // num_head_kv
 
     tile_m, num_head_tiles = _compute_tile_m(qhead_per_kvhead)
@@ -334,9 +342,22 @@ def _dense_score_recompute(
     topk_max = seqlen_k
 
     compile_key = (
-        dtype, head_dim, qhead_per_kvhead, tile_m, _TILE_N, _KV_STAGE,
-        num_threads, _SWAP_AB, topk_max, is_index_scores, softmax_scale,
-        False, num_head_tiles, False, False, ratio,  # has_topk_length, is_sparse, output_log_probs
+        dtype,
+        head_dim,
+        qhead_per_kvhead,
+        tile_m,
+        _TILE_N,
+        _KV_STAGE,
+        num_threads,
+        _SWAP_AB,
+        topk_max,
+        is_index_scores,
+        softmax_scale,
+        False,
+        num_head_tiles,
+        False,
+        False,
+        ratio,  # has_topk_length, is_sparse, output_log_probs
     )
 
     cache = _dense_score_recompute.compile_cache
@@ -365,9 +386,12 @@ def _dense_score_recompute(
 
         cache[compile_key] = cute.compile(
             kernel_obj,
-            q_cute, kv_cute,
+            q_cute,
+            kv_cute,
             None,  # mTopkIdxs (sparse-only)
-            current_stream, out_cute, weights_cute,
+            current_stream,
+            out_cute,
+            weights_cute,
             None,  # mTopkLength (sparse-only)
             denom_cute,
             options=compile_options(),
@@ -375,7 +399,8 @@ def _dense_score_recompute(
 
     with torch.cuda.nvtx.range(nvtx_range_name):
         cache[compile_key](
-            q, kv,
+            q,
+            kv,
             None,
             current_stream,
             out,
@@ -387,8 +412,8 @@ def _dense_score_recompute(
 
 
 def _dense_score_recompute_varlen(
-    q: torch.Tensor,               # (total_q, n_heads_q, head_dim)
-    kv: torch.Tensor,              # (total_k, n_heads_kv, head_dim)
+    q: torch.Tensor,  # (total_q, n_heads_q, head_dim)
+    kv: torch.Tensor,  # (total_k, n_heads_kv, head_dim)
     weights_or_lse: torch.Tensor,  # (total_q, n_heads_q)
     is_index_scores: bool,
     softmax_scale: float,
@@ -446,7 +471,9 @@ def _dense_score_recompute_varlen(
             kv_b = kv[ks:ke].unsqueeze(0).contiguous()
             per_head_bhs = weights_or_lse[qs:qe].unsqueeze(0).transpose(1, 2).contiguous()
             out_b, denom_b = _dense_score_recompute(
-                q_b, kv_b, per_head_bhs,
+                q_b,
+                kv_b,
+                per_head_bhs,
                 is_index_scores=is_index_scores,
                 softmax_scale=softmax_scale,
                 out=None,
@@ -467,9 +494,9 @@ _dense_score_recompute.compile_cache = {}
 
 
 def dense_indexer_score_recompute(
-    q_indexer: torch.Tensor,       # BSHD (bs, seqlen_q, n_heads_q, head_dim) or THD (total_q, n_heads_q, head_dim)
-    k_indexer: torch.Tensor,       # BSHD (bs, seqlen_k, n_heads_kv, head_dim) or THD (total_k, n_heads_kv, head_dim)
-    weights: torch.Tensor,         # BSH (bs, seqlen_q, n_heads_q) or TH (total_q, n_heads_q)
+    q_indexer: torch.Tensor,  # BSHD (bs, seqlen_q, n_heads_q, head_dim) or THD (total_q, n_heads_q, head_dim)
+    k_indexer: torch.Tensor,  # BSHD (bs, seqlen_k, n_heads_kv, head_dim) or THD (total_k, n_heads_kv, head_dim)
+    weights: torch.Tensor,  # BSH (bs, seqlen_q, n_heads_q) or TH (total_q, n_heads_q)
     out: Optional[torch.Tensor] = None,
     denom_out: Optional[torch.Tensor] = None,
     num_threads: int = _DENSE_NUM_THREADS,
@@ -494,7 +521,9 @@ def dense_indexer_score_recompute(
         if cu_seqlens_q is None or cu_seqlens_k is None:
             raise ValueError("THD requires both cu_seqlens_q and cu_seqlens_k")
         return _dense_score_recompute_varlen(
-            q_indexer, k_indexer, weights,
+            q_indexer,
+            k_indexer,
+            weights,
             is_index_scores=True,
             softmax_scale=sm_scale,
             out=out,
@@ -510,7 +539,9 @@ def dense_indexer_score_recompute(
         )
     w_bhs = weights.transpose(1, 2).contiguous()
     return _dense_score_recompute(
-        q_indexer, k_indexer, w_bhs,
+        q_indexer,
+        k_indexer,
+        w_bhs,
         is_index_scores=True,
         softmax_scale=sm_scale,
         out=out,
@@ -523,9 +554,9 @@ def dense_indexer_score_recompute(
 
 
 def dense_attn_score_recompute(
-    q_attn: torch.Tensor,          # BSHD (bs, seqlen_q, n_heads_q, head_dim) or THD (total_q, n_heads_q, head_dim)
-    k_attn: torch.Tensor,          # BSHD (bs, seqlen_k, n_heads_kv, head_dim) or THD (total_k, n_heads_kv, head_dim)
-    lse: torch.Tensor,             # BSH (bs, seqlen_q, n_heads_q) or TH (total_q, n_heads_q) float32
+    q_attn: torch.Tensor,  # BSHD (bs, seqlen_q, n_heads_q, head_dim) or THD (total_q, n_heads_q, head_dim)
+    k_attn: torch.Tensor,  # BSHD (bs, seqlen_k, n_heads_kv, head_dim) or THD (total_k, n_heads_kv, head_dim)
+    lse: torch.Tensor,  # BSH (bs, seqlen_q, n_heads_q) or TH (total_q, n_heads_q) float32
     softmax_scale: float,
     out: Optional[torch.Tensor] = None,
     denom_out: Optional[torch.Tensor] = None,
@@ -547,7 +578,9 @@ def dense_attn_score_recompute(
         if cu_seqlens_q is None or cu_seqlens_k is None:
             raise ValueError("THD requires both cu_seqlens_q and cu_seqlens_k")
         return _dense_score_recompute_varlen(
-            q_attn, k_attn, lse,
+            q_attn,
+            k_attn,
+            lse,
             is_index_scores=False,
             softmax_scale=softmax_scale,
             out=out,
@@ -563,7 +596,9 @@ def dense_attn_score_recompute(
         )
     lse_bhs = lse.transpose(1, 2).contiguous()
     return _dense_score_recompute(
-        q_attn, k_attn, lse_bhs,
+        q_attn,
+        k_attn,
+        lse_bhs,
         is_index_scores=False,
         softmax_scale=softmax_scale,
         out=out,

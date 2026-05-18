@@ -63,16 +63,9 @@ class PackGQA:
         num_threads = gmem_tiled_copy.size
         tPrOPtr = self.compute_ptr(mO[None, 0], tOcO_row, tidx, block, threads_per_row, num_threads)
         for m in cutlass.range_constexpr(cute.size(tOrO.shape[1])):
-            o_ptr_i64 = sm90_ops.shuffle_sync(
-                tPrOPtr[m // threads_per_row], m % threads_per_row, width=threads_per_row
-            )
-            o_gmem_ptr = cute.make_ptr(
-                mO.element_type, o_ptr_i64, cute.AddressSpace.gmem, assumed_align=16
-            )
-            if (
-                t0OcO[0, m, 0][0]
-                < seqlen * self.qhead_per_kvhead - block * self.m_block_size - tOcO_row[0][0]
-            ):
+            o_ptr_i64 = sm90_ops.shuffle_sync(tPrOPtr[m // threads_per_row], m % threads_per_row, width=threads_per_row)
+            o_gmem_ptr = cute.make_ptr(mO.element_type, o_ptr_i64, cute.AddressSpace.gmem, assumed_align=16)
+            if t0OcO[0, m, 0][0] < seqlen * self.qhead_per_kvhead - block * self.m_block_size - tOcO_row[0][0]:
                 mO_cur = cute.make_tensor(o_gmem_ptr, (self.head_dim_padded,))
                 elems_per_load = cute.size(tOrO.shape[0][0])
                 mO_cur_copy = cute.tiled_divide(mO_cur, (elems_per_load,))
@@ -105,8 +98,12 @@ class PackGQA:
                 m_idx = idx // qhpkv
                 h_idx = idx - m_idx * qhpkv
                 ptr = sm90_ops.elem_pointer_packed_i64(
-                    base_ptr_i64, h_idx, m_idx, seqlen_q,
-                    cutlass.Float32, cute.AddressSpace.gmem,
+                    base_ptr_i64,
+                    h_idx,
+                    m_idx,
+                    seqlen_q,
+                    cutlass.Float32,
+                    cute.AddressSpace.gmem,
                 )
                 gmem_val = cute.make_tensor(ptr, (1,))
                 sLSE[row] = gmem_val[0]
@@ -131,8 +128,12 @@ class PackGQA:
                 m_idx = idx // qhpkv
                 h_idx = idx - m_idx * qhpkv
                 ptr = sm90_ops.elem_pointer_packed_i64(
-                    base_ptr_i64, h_idx, m_idx, seqlen_q,
-                    cutlass.Float32, cute.AddressSpace.gmem,
+                    base_ptr_i64,
+                    h_idx,
+                    m_idx,
+                    seqlen_q,
+                    cutlass.Float32,
+                    cute.AddressSpace.gmem,
                 )
                 gmem_val = cute.make_tensor(ptr, (1,))
                 sdPsum[row] = gmem_val[0]
@@ -157,8 +158,12 @@ class PackGQA:
                 m_idx = idx // qhpkv
                 h_idx = idx - m_idx * qhpkv
                 ptr = sm90_ops.elem_pointer_packed_i64(
-                    base_ptr_i64, h_idx, m_idx, seqlen_q,
-                    cutlass.BFloat16, cute.AddressSpace.gmem,  # Weights use bf16.
+                    base_ptr_i64,
+                    h_idx,
+                    m_idx,
+                    seqlen_q,
+                    cutlass.BFloat16,
+                    cute.AddressSpace.gmem,  # Weights use bf16.
                 )
                 gmem_val = cute.make_tensor(ptr, (1,))
                 sWeights[row] = gmem_val[0]

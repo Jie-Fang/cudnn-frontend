@@ -13,19 +13,19 @@ So we always pass an explicit ``--gpu-arch`` chosen at runtime from the
 device capability. ``compile_options(extra)`` is the single entry point;
 DSA ``cute.compile`` call sites should route through it.
 """
+
 from __future__ import annotations
 
 from functools import lru_cache
 
 import torch
 
-
 # (compute_capability) → cute DSL --gpu-arch flag value.
 # Both H100 and B200/B300 require the architecture-specific ``a`` variant
 # because the indexer kernels use TMA / tcgen05 instructions that are only
 # guaranteed to lower correctly under the ``a`` SASS gencode.
 _ARCH_MAP = {
-    (9, 0):  "sm_90a",   # Hopper H100
+    (9, 0): "sm_90a",  # Hopper H100
     (10, 0): "sm_100a",  # Blackwell B200
     (10, 3): "sm_103a",  # Blackwell Ultra B300
 }
@@ -44,8 +44,7 @@ def gpu_arch_flag() -> str:
     arch = _ARCH_MAP.get(cap)
     if arch is None:
         raise RuntimeError(
-            f"Unsupported GPU compute capability {cap} for DSA CuTe kernels. "
-            f"Add it to deepseek_sparse_attention/utils/compiler.py::_ARCH_MAP."
+            f"Unsupported GPU compute capability {cap} for DSA CuTe kernels. " f"Add it to deepseek_sparse_attention/utils/compiler.py::_ARCH_MAP."
         )
     return arch
 

@@ -133,25 +133,13 @@ class _FlashAttentionDSABackwardPreprocessSm90:
     def _setup_attributes(self):
         # kBlockKGmem must be power of 2 for warp-level summing
         gmem_k_block_size = (
-            128
-            if self.head_dim_padded % 128 == 0
-            else (
-                64
-                if self.head_dim_padded % 64 == 0
-                else (32 if self.head_dim_padded % 32 == 0 else 16)
-            )
+            128 if self.head_dim_padded % 128 == 0 else (64 if self.head_dim_padded % 64 == 0 else (32 if self.head_dim_padded % 32 == 0 else 16))
         )
-        self.gmem_tiled_copy_O = tiled_copy_2d(
-            self.dtype, gmem_k_block_size, self.num_threads
-        )
+        self.gmem_tiled_copy_O = tiled_copy_2d(self.dtype, gmem_k_block_size, self.num_threads)
         universal_copy_bits = 128
         num_copy_elems_dQaccum = universal_copy_bits // Float32.width
-        assert (
-            self.m_block_size * self.head_dim_padded // num_copy_elems_dQaccum
-        ) % self.num_threads == 0
-        self.gmem_tiled_copy_dQaccum = tiled_copy_1d(
-            Float32, self.num_threads, num_copy_elems_dQaccum
-        )
+        assert (self.m_block_size * self.head_dim_padded // num_copy_elems_dQaccum) % self.num_threads == 0
+        self.gmem_tiled_copy_dQaccum = tiled_copy_1d(Float32, self.num_threads, num_copy_elems_dQaccum)
 
     @cute.jit
     def __call__(
@@ -197,10 +185,7 @@ class _FlashAttentionDSABackwardPreprocessSm90:
             t.stride[-1],
         )
         mO, mdO, mdQaccum = [
-            cute.make_tensor(t.iterator, cute.make_layout(t.shape, stride=new_stride(t)))
-            if t is not None
-            else None
-            for t in (mO, mdO, mdQaccum)
+            cute.make_tensor(t.iterator, cute.make_layout(t.shape, stride=new_stride(t))) if t is not None else None for t in (mO, mdO, mdQaccum)
         ]
 
         self._setup_attributes()
@@ -349,22 +334,16 @@ class _FlashAttentionDSABackwardPreprocessSm90:
                         gmem_thr_copy_O,
                         tOgO[None, m, None],
                         tOrO[None, m, None],
-                        pred=tOpO[None, m, None]
-                        if cutlass.const_expr(self.check_hdim_oob)
-                        else None,
+                        pred=tOpO[None, m, None] if cutlass.const_expr(self.check_hdim_oob) else None,
                     )
                     cute.copy(
                         gmem_thr_copy_O,
                         tOgdO[None, m, None],
                         tOrdO[None, m, None],
-                        pred=tOpdO[None, m, None]
-                        if cutlass.const_expr(self.check_hdim_oob)
-                        else None,
+                        pred=tOpdO[None, m, None] if cutlass.const_expr(self.check_hdim_oob) else None,
                     )
             # Sum across the "k" dimension
-            dpsum = (tOrO.load().to(Float32) * tOrdO.load().to(Float32)).reduce(
-                cute.ReductionOp.ADD, init_val=0.0, reduction_profile=(0, None, 1)
-            )
+            dpsum = (tOrO.load().to(Float32) * tOrdO.load().to(Float32)).reduce(cute.ReductionOp.ADD, init_val=0.0, reduction_profile=(0, None, 1))
             threads_per_row = gmem_tiled_copy_O.layout_src_tv_tiled[0].shape[0]
             assert cute.arch.WARP_SIZE % threads_per_row == 0
             dpsum = warp_reduce(dpsum, operator.add, width=threads_per_row)
@@ -386,10 +365,7 @@ class _FlashAttentionDSABackwardPreprocessSm90:
                         lse_log2 = lse_row * LOG2_E
                         sink_log2 = mAttnSink[head_idx] * LOG2_E
                         lse_max_log2 = cute.arch.fmax(lse_log2, sink_log2)
-                        sum_exp2 = Float32(
-                            cute.math.exp2(lse_log2 - lse_max_log2)
-                            + cute.math.exp2(sink_log2 - lse_max_log2)
-                        )
+                        sum_exp2 = Float32(cute.math.exp2(lse_log2 - lse_max_log2) + cute.math.exp2(sink_log2 - lse_max_log2))
                         lse_with_sink_log2 = lse_max_log2 + cute.math.log2(sum_exp2)
                         p_sink = cute.math.exp2(sink_log2 - lse_with_sink_log2)
                         if lse_row == Float32.inf:
@@ -405,9 +381,7 @@ class _FlashAttentionDSABackwardPreprocessSm90:
                 if cutlass.const_expr(not seqlen.has_cu_seqlens_q):
                     mdQaccum_cur = mdQaccum[batch_idx, head_idx, None]
                 else:
-                    mdQaccum_cur = cute.domain_offset(
-                        (padded_offset_q * self.head_dim_padded,), mdQaccum[head_idx, None]
-                    )
+                    mdQaccum_cur = cute.domain_offset((padded_offset_q * self.head_dim_padded,), mdQaccum[head_idx, None])
 
                     # HACK: Compiler doesn't seem to recognize that padding
                     # by padded_offset_q * self.head_dim_padded keeps alignment
@@ -442,10 +416,7 @@ class _FlashAttentionDSABackwardPreprocessSm90:
                     if cutlass.const_expr(mAttnSink is not None):
                         sink_log2 = mAttnSink[head_idx] * LOG2_E
                         lse_max_log2 = cute.arch.fmax(lse_log2, sink_log2)
-                        sum_exp2 = Float32(
-                            cute.math.exp2(lse_log2 - lse_max_log2)
-                            + cute.math.exp2(sink_log2 - lse_max_log2)
-                        )
+                        sum_exp2 = Float32(cute.math.exp2(lse_log2 - lse_max_log2) + cute.math.exp2(sink_log2 - lse_max_log2))
                         lse_log2 = lse_max_log2 + cute.math.log2(sum_exp2)
                         if lse == Float32.inf:
                             lse_log2 = Float32.inf
@@ -498,9 +469,9 @@ class FlashAttentionDSABackwardSm90:
         # wg0 is consumer and producer, wg1 is consumer
         self.num_mma_warp_groups = self.num_threads // 128
 
-        self.hdim_chunk = min(64, self.tile_hdim) # hdim chunking for dKV GEMM3/5
+        self.hdim_chunk = min(64, self.tile_hdim)  # hdim chunking for dKV GEMM3/5
         self.N_hdim_chunks = self.tile_hdim // self.hdim_chunk
-        self.hdim_chunk_dq = min(128, self.tile_hdim) # hdim chunking for dQ GEMM4 (each WG does 2 quarter GEMMs)
+        self.hdim_chunk_dq = min(128, self.tile_hdim)  # hdim chunking for dQ GEMM4 (each WG does 2 quarter GEMMs)
         self.N_dQ_chunks = self.tile_hdim // self.hdim_chunk_dq
         # WG0 always does 128+128 (same as V3.1, no extra register pressure).
         # WG1 absorbs the remainder: 128+128 for d=512, 128+192 for d=576.
@@ -550,42 +521,58 @@ class FlashAttentionDSABackwardSm90:
         ]
         # Quarter-width layout for GEMM4 B operand (sKV columns split into quarters)
         self.sKV_quarter_layout = make_smem_layout(
-            self.dtype, LayoutEnum.ROW_MAJOR,
-            (self.tile_n, self.hdim_chunk_dq), None,            # (tile_n, 128)
+            self.dtype,
+            LayoutEnum.ROW_MAJOR,
+            (self.tile_n, self.hdim_chunk_dq),
+            None,  # (tile_n, 128)
         )
         # 192-col layout for WG1 G4_half_3 B operand (576 config: sKV[384:576])
         self.sKV_192_layout = make_smem_layout(
-            self.dtype, LayoutEnum.ROW_MAJOR,
-            (self.tile_n, self.hdim_chunk_dq_wg1_1), None,     # (tile_n, 192 or 128)
+            self.dtype,
+            LayoutEnum.ROW_MAJOR,
+            (self.tile_n, self.hdim_chunk_dq_wg1_1),
+            None,  # (tile_n, 192 or 128)
         )
         # V subview layout: (tile_n, tile_hdimv) for GEMM2 B operand (V = K[0:d_v])
         self.sV_layout = make_smem_layout(
-            self.dtype, LayoutEnum.ROW_MAJOR,
-            (self.tile_n, self.tile_hdimv), None,               # (tile_n, 512)
+            self.dtype,
+            LayoutEnum.ROW_MAJOR,
+            (self.tile_n, self.tile_hdimv),
+            None,  # (tile_n, 512)
         )
         # Half-width layout for epilogue TMA S2G (256 cols at a time)
         self.sQ_half_layout = make_smem_layout(
-            self.dtype, LayoutEnum.ROW_MAJOR,
-            (self.tile_m, 256), None,
+            self.dtype,
+            LayoutEnum.ROW_MAJOR,
+            (self.tile_m, 256),
+            None,
         )
         # 64-col layout for WG1 epilogue tail TMA write (d=576: cols 512:576)
         self.sQ_64_layout = make_smem_layout(
-            self.dtype, LayoutEnum.ROW_MAJOR,
-            (self.tile_m, 64), None,
+            self.dtype,
+            LayoutEnum.ROW_MAJOR,
+            (self.tile_m, 64),
+            None,
         )
         # Quarter-width layout for epilogue R2S target (each acc_dQ writes 128-col slice)
         self.sQ_quarter_layout = make_smem_layout(
-            self.dtype, LayoutEnum.ROW_MAJOR,
-            (self.tile_m, self.hdim_chunk_dq), None,            # (tile_m, 128)
+            self.dtype,
+            LayoutEnum.ROW_MAJOR,
+            (self.tile_m, self.hdim_chunk_dq),
+            None,  # (tile_m, 128)
         )
         # chunk layouts for GEMM3/5 B operands (64-col slices of sdO/sQ)
         self.sdO_chunk_layout = make_smem_layout(
-            self.dtype, LayoutEnum.ROW_MAJOR,
-            (self.tile_m, self.hdim_chunk), None,
+            self.dtype,
+            LayoutEnum.ROW_MAJOR,
+            (self.tile_m, self.hdim_chunk),
+            None,
         )
         self.sQ_chunk_layout = make_smem_layout(
-            self.dtype, LayoutEnum.ROW_MAJOR,
-            (self.tile_m, self.hdim_chunk), None,
+            self.dtype,
+            LayoutEnum.ROW_MAJOR,
+            (self.tile_m, self.hdim_chunk),
+            None,
         )
         # dKV uses AtomicAdd float4
         # r2s_tiled_copy for gmem partitioning
@@ -599,38 +586,53 @@ class FlashAttentionDSABackwardSm90:
         # All 4 tiled_mma use atom_layout_mnk=(1,1,1) — single WG each
         # SdP: S = Q @ KV^T, dP = dO @ KV^T (SS, WG0 only)
         tiled_mma_SdP = sm90_utils_basic.make_trivial_tiled_mma(
-            self.dtype, self.dtype,
-            warpgroup.OperandMajorMode.K, warpgroup.OperandMajorMode.K, Float32,
+            self.dtype,
+            self.dtype,
+            cute.nvgpu.OperandMajorMode.K,
+            cute.nvgpu.OperandMajorMode.K,
+            Float32,
             atom_layout_mnk=(1, 1, 1),
             tiler_mn=(self.tile_m, self.tile_n),
         )
         # dKV: P^T @ dO_chunk + dS^T @ Q_chunk (SS, WG1)
         # tiler N = hdim_chunk (64), loops over 8 chunks
         tiled_mma_dKV = sm90_utils_basic.make_trivial_tiled_mma(
-            self.dtype, self.dtype,
-            warpgroup.OperandMajorMode.MN, warpgroup.OperandMajorMode.MN, Float32,
+            self.dtype,
+            self.dtype,
+            cute.nvgpu.OperandMajorMode.MN,
+            cute.nvgpu.OperandMajorMode.MN,
+            Float32,
             atom_layout_mnk=(1, 1, 1),
             tiler_mn=(self.tile_n, self.hdim_chunk),
         )
         # dQ_wg0: dS_scaled(reg) @ KV^T_quarter (RS, WG0) — 2 quarter GEMMs per n_block
         tiled_mma_dQ_wg0 = sm90_utils_basic.make_trivial_tiled_mma(
-            self.dtype, self.dtype,
-            warpgroup.OperandMajorMode.K, warpgroup.OperandMajorMode.MN, Float32,
+            self.dtype,
+            self.dtype,
+            cute.nvgpu.OperandMajorMode.K,
+            cute.nvgpu.OperandMajorMode.MN,
+            Float32,
             atom_layout_mnk=(1, 1, 1),
             tiler_mn=(self.tile_m, self.hdim_chunk_dq),
             a_source=warpgroup.OperandSource.RMEM,  # RS GEMM
         )
         # dQ_wg1: sdS @ KV^T_quarter (SS, WG1) — G4_half_2 (128-col)
         tiled_mma_dQ_wg1 = sm90_utils_basic.make_trivial_tiled_mma(
-            self.dtype, self.dtype,
-            warpgroup.OperandMajorMode.K, warpgroup.OperandMajorMode.MN, Float32,
+            self.dtype,
+            self.dtype,
+            cute.nvgpu.OperandMajorMode.K,
+            cute.nvgpu.OperandMajorMode.MN,
+            Float32,
             atom_layout_mnk=(1, 1, 1),
             tiler_mn=(self.tile_m, self.hdim_chunk_dq),
         )
         # dQ_wg1_192: sdS @ KV^T_192 (SS, WG1) — G4_half_3 for 576 config (192-col)
         tiled_mma_dQ_wg1_192 = sm90_utils_basic.make_trivial_tiled_mma(
-            self.dtype, self.dtype,
-            warpgroup.OperandMajorMode.K, warpgroup.OperandMajorMode.MN, Float32,
+            self.dtype,
+            self.dtype,
+            cute.nvgpu.OperandMajorMode.K,
+            cute.nvgpu.OperandMajorMode.MN,
+            Float32,
             atom_layout_mnk=(1, 1, 1),
             tiler_mn=(self.tile_m, self.hdim_chunk_dq_wg1_1),  # (tile_m, 192 or 128)
         )
@@ -652,12 +654,8 @@ class FlashAttentionDSABackwardSm90:
         sP_struct = cute.struct.Align[cute.struct.MemRange[self.dtype, cosize_sPdS], 1024]
         sdS_struct = cute.struct.Align[cute.struct.MemRange[self.dtype, cosize_sPdS], 1024]
 
-        sLSE_struct = cute.struct.Align[
-            cute.struct.MemRange[Float32, cute.round_up(self.tile_m, 64)], 128
-        ]
-        sdPsum_struct = cute.struct.Align[
-            cute.struct.MemRange[Float32, cute.round_up(self.tile_m, 64)], 128
-        ]
+        sLSE_struct = cute.struct.Align[cute.struct.MemRange[Float32, cute.round_up(self.tile_m, 64)], 128]
+        sdPsum_struct = cute.struct.Align[cute.struct.MemRange[Float32, cute.round_up(self.tile_m, 64)], 128]
 
         @cute.struct
         class SharedStorage:
@@ -683,8 +681,8 @@ class FlashAttentionDSABackwardSm90:
         mdPsum: cute.Tensor,
         mdQ: cute.Tensor,
         mdKV: cute.Tensor,
-        mTopkIdxs: cute.Tensor,         # (batch, seqlen_q, topk_max) int32
-        mTopkLength: cute.Tensor,       # (batch, seqlen_q) int32, per-q valid KV count
+        mTopkIdxs: cute.Tensor,  # (batch, seqlen_q, topk_max) int32
+        mTopkLength: cute.Tensor,  # (batch, seqlen_q) int32, per-q valid KV count
         softmax_scale: Float32,
         stream: cuda.CUstream,
     ):
@@ -702,6 +700,7 @@ class FlashAttentionDSABackwardSm90:
                     new_strides.append(cute.assume(s, divby=divby))
             new_strides.append(t.stride[-1])
             return cute.make_tensor(t.iterator, cute.make_layout(t.shape, stride=tuple(new_strides)))
+
         mQ = _assume_strides(mQ)
         mKV = _assume_strides(mKV)
         mdO = _assume_strides(mdO)
@@ -719,17 +718,23 @@ class FlashAttentionDSABackwardSm90:
         qhpkv = self.qhead_per_kvhead
         num_head_kv = mKV.shape[2]
         mQ, mdO, mdQ = [
-            cute.make_tensor(mT.iterator, cute.make_layout(
-                ((qhpkv, mT.shape[0]), mT.shape[1], num_head_kv, *mT.shape[3:]),
-                stride=((mT.stride[2], mT.stride[0]), mT.stride[1], mT.stride[2] * qhpkv, *mT.stride[3:]),
-            ))
+            cute.make_tensor(
+                mT.iterator,
+                cute.make_layout(
+                    ((qhpkv, mT.shape[0]), mT.shape[1], num_head_kv, *mT.shape[3:]),
+                    stride=((mT.stride[2], mT.stride[0]), mT.stride[1], mT.stride[2] * qhpkv, *mT.stride[3:]),
+                ),
+            )
             for mT in (mQ, mdO, mdQ)
         ]
         mLSE, mdPsum = [
-            cute.make_tensor(mT.iterator, cute.make_layout(
-                ((qhpkv, mT.shape[1]), num_head_kv, mT.shape[0]),
-                stride=((mT.stride[2], mT.stride[1]), mT.stride[2] * qhpkv, mT.stride[0]),
-            ))
+            cute.make_tensor(
+                mT.iterator,
+                cute.make_layout(
+                    ((qhpkv, mT.shape[1]), num_head_kv, mT.shape[0]),
+                    stride=((mT.stride[2], mT.stride[1]), mT.stride[2] * qhpkv, mT.stride[0]),
+                ),
+            )
             for mT in (mLSE, mdPsum)
         ]
 
@@ -753,20 +758,28 @@ class FlashAttentionDSABackwardSm90:
         }
 
         tma_atom_Q, tma_tensor_Q = cpasync.make_tiled_tma_atom(
-            cpasync.CopyBulkTensorTileG2SOp(), mQ,
-            self.sQ_layout, (self.tile_m, self.tile_hdim),
+            cpasync.CopyBulkTensorTileG2SOp(),
+            mQ,
+            self.sQ_layout,
+            (self.tile_m, self.tile_hdim),
         )
         tma_atom_dO, tma_tensor_dO = cpasync.make_tiled_tma_atom(
-            cpasync.CopyBulkTensorTileG2SOp(), mdO,
-            self.sdO_layout, (self.tile_m, self.tile_hdimv),
+            cpasync.CopyBulkTensorTileG2SOp(),
+            mdO,
+            self.sdO_layout,
+            (self.tile_m, self.tile_hdimv),
         )
         tma_atom_dQ, tma_tensor_dQ = cpasync.make_tiled_tma_atom(
-            cpasync.CopyBulkTensorTileS2GOp(), mdQ,
-            self.sQ_half_layout, (self.tile_m, 256),
+            cpasync.CopyBulkTensorTileS2GOp(),
+            mdQ,
+            self.sQ_half_layout,
+            (self.tile_m, 256),
         )
         tma_atom_dQ_64, tma_tensor_dQ_64 = cpasync.make_tiled_tma_atom(
-            cpasync.CopyBulkTensorTileS2GOp(), mdQ,
-            self.sQ_64_layout, (self.tile_m, 64),
+            cpasync.CopyBulkTensorTileS2GOp(),
+            mdQ,
+            self.sQ_64_layout,
+            (self.tile_m, 64),
         )
 
         # TileScheduler by Q dimension (m_blocks)
@@ -795,20 +808,43 @@ class FlashAttentionDSABackwardSm90:
         qhead_per_kvhead_divmod = FastDivmodDivisor(self.qhead_per_kvhead)
 
         self.kernel(
-            tma_tensor_Q, mKV, tma_tensor_dO,     # mKV is regular tensor (not TMA)
-            tma_tensor_dQ, tma_tensor_dQ_64,
+            tma_tensor_Q,
+            mKV,
+            tma_tensor_dO,  # mKV is regular tensor (not TMA)
+            tma_tensor_dQ,
+            tma_tensor_dQ_64,
             mdKV,
-            mTopkIdxs, mTopkLength,                  # sparse KV indices + per-q length
-            tma_atom_Q, tma_atom_dO, tma_atom_dQ, tma_atom_dQ_64,
-            mLSE, mdPsum,
-            self.sQ_layout, self.sKV_layout, self.sPdS_layout, self.sdO_layout,
-            self.sKV_quarter_layout, self.sKV_192_layout, self.sV_layout,
-            self.sQ_half_layout, self.sQ_64_layout, self.sQ_quarter_layout,
-            self.sdO_chunk_layout, self.sQ_chunk_layout,
+            mTopkIdxs,
+            mTopkLength,  # sparse KV indices + per-q length
+            tma_atom_Q,
+            tma_atom_dO,
+            tma_atom_dQ,
+            tma_atom_dQ_64,
+            mLSE,
+            mdPsum,
+            self.sQ_layout,
+            self.sKV_layout,
+            self.sPdS_layout,
+            self.sdO_layout,
+            self.sKV_quarter_layout,
+            self.sKV_192_layout,
+            self.sV_layout,
+            self.sQ_half_layout,
+            self.sQ_64_layout,
+            self.sQ_quarter_layout,
+            self.sdO_chunk_layout,
+            self.sQ_chunk_layout,
             self.r2s_tiled_copy_dKVatomic,
-            tiled_mma_SdP, tiled_mma_dKV, tiled_mma_dQ_wg0, tiled_mma_dQ_wg1, tiled_mma_dQ_wg1_192,
-            softmax_scale_log2, softmax_scale,
-            tile_sched_params, TileScheduler, SharedStorage,
+            tiled_mma_SdP,
+            tiled_mma_dKV,
+            tiled_mma_dQ_wg0,
+            tiled_mma_dQ_wg1,
+            tiled_mma_dQ_wg1_192,
+            softmax_scale_log2,
+            softmax_scale,
+            tile_sched_params,
+            TileScheduler,
+            SharedStorage,
             qhead_per_kvhead_divmod,
         ).launch(
             grid=grid_dim,
@@ -827,8 +863,8 @@ class FlashAttentionDSABackwardSm90:
         mdQ: cute.Tensor,
         mdQ_64: cute.Tensor,
         mdKV: cute.Tensor,
-        mTopkIdxs: cute.Tensor,     # (batch, seqlen_q, topK_max) int32
-        mTopkLength: cute.Tensor,   # (batch, seqlen_q) int32, per-q valid KV count
+        mTopkIdxs: cute.Tensor,  # (batch, seqlen_q, topK_max) int32
+        mTopkLength: cute.Tensor,  # (batch, seqlen_q) int32, per-q valid KV count
         tma_atom_Q: cute.CopyAtom,
         tma_atom_dO: cute.CopyAtom,
         tma_atom_dQ: cute.CopyAtom,
@@ -881,12 +917,8 @@ class FlashAttentionDSABackwardSm90:
         sdO = storage.sdO.get_tensor(sdO_layout.outer, swizzle=sdO_layout.inner)
         sP = storage.sP.get_tensor(sPdS_layout.outer, swizzle=sPdS_layout.inner)
         sdS = storage.sdS.get_tensor(sPdS_layout.outer, swizzle=sPdS_layout.inner)
-        sLSE = storage.sLSE.get_tensor(
-            cute.make_layout((self.tile_m,), stride=(1,))
-        )
-        sdPsum = storage.sdPsum.get_tensor(
-            cute.make_layout((self.tile_m,), stride=(1,))
-        )
+        sLSE = storage.sLSE.get_tensor(cute.make_layout((self.tile_m,), stride=(1,)))
+        sdPsum = storage.sdPsum.get_tensor(cute.make_layout((self.tile_m,), stride=(1,)))
 
         # sKV subviews for GEMM4 B operand:
         #   d=512: 128 + 128 + 128 + 128 = 512  (WG0: q0+q1, WG1: q2+q3)
@@ -903,13 +935,9 @@ class FlashAttentionDSABackwardSm90:
         # WG0 always writes dQ[0:256], WG1 writes dQ[256:tile_hdim]
         # sQ half views for epilogue TMA S2G (both WGs use 256-col halves)
         sQ_half_first = storage.sQ.get_tensor(sQ_half_layout.outer, swizzle=sQ_half_layout.inner)
-        sQ_half_second = cute.make_tensor(
-            sQ_half_first.iterator + self.tile_m * 256, sQ_half_layout.outer
-        )
+        sQ_half_second = cute.make_tensor(sQ_half_first.iterator + self.tile_m * 256, sQ_half_layout.outer)
         # sQ_64_epi: cols [512:576] for WG1 epilogue tail TMA (only used when d=576)
-        sQ_64_epi = cute.make_tensor(
-            sQ_half_first.iterator + self.tile_m * 512, sQ_64_layout.outer
-        )
+        sQ_64_epi = cute.make_tensor(sQ_half_first.iterator + self.tile_m * 512, sQ_64_layout.outer)
 
         # sQ quarter views for epilogue R2S
         sQ_q0 = storage.sQ.get_tensor(sQ_quarter_layout.outer, swizzle=sQ_quarter_layout.inner)
@@ -927,31 +955,68 @@ class FlashAttentionDSABackwardSm90:
         if warp_group_idx == 0:
             cute.arch.setmaxregister_increase(self.num_mma_regs)
             self.mma_wg0(
-                tiled_mma_SdP, tiled_mma_dQ_wg0,
-                mQ, mKV, mdO, mLSE, mdPsum,
-                mTopkIdxs, mTopkLength,
-                mdQ, sQ, sKV, sV, sdO, sP, sdS, sLSE, sdPsum,
-                sKV_q0, sKV_q1,                          # GEMM4 B: 128 + 128 (same as V3.1)
-                sQ_half_first, sQ_q0, sQ_q1,             # epilogue: TMA half + R2S quarters
-                tma_atom_Q, tma_atom_dO, tma_atom_dQ,
-                mbar_QdO_ptr, tidx,
-                softmax_scale_log2, softmax_scale,
+                tiled_mma_SdP,
+                tiled_mma_dQ_wg0,
+                mQ,
+                mKV,
+                mdO,
+                mLSE,
+                mdPsum,
+                mTopkIdxs,
+                mTopkLength,
+                mdQ,
+                sQ,
+                sKV,
+                sV,
+                sdO,
+                sP,
+                sdS,
+                sLSE,
+                sdPsum,
+                sKV_q0,
+                sKV_q1,  # GEMM4 B: 128 + 128 (same as V3.1)
+                sQ_half_first,
+                sQ_q0,
+                sQ_q1,  # epilogue: TMA half + R2S quarters
+                tma_atom_Q,
+                tma_atom_dO,
+                tma_atom_dQ,
+                mbar_QdO_ptr,
+                tidx,
+                softmax_scale_log2,
+                softmax_scale,
                 TileSchedulerCls,
                 qhead_per_kvhead_divmod,
             )
         else:
             cute.arch.setmaxregister_increase(self.num_mma_regs)
             self.mma_wg1(
-                tiled_mma_dKV, tiled_mma_dQ_wg1, tiled_mma_dQ_wg1_192,
-                mdQ, mdQ_64, mdKV, sQ, sKV, sdO, sP, sdS,
-                sKV_q2, sKV_q3_192,                      # GEMM4 B: 128 + 192 (or 128+128 for d=512)
-                sQ_half_second, sQ_64_epi, sQ_192_epi,   # epilogue SMEM views
-                sQ_q2, sQ_q3,                            # epilogue R2S: 128-col quarters
+                tiled_mma_dKV,
+                tiled_mma_dQ_wg1,
+                tiled_mma_dQ_wg1_192,
+                mdQ,
+                mdQ_64,
+                mdKV,
+                sQ,
+                sKV,
+                sdO,
+                sP,
+                sdS,
+                sKV_q2,
+                sKV_q3_192,  # GEMM4 B: 128 + 192 (or 128+128 for d=512)
+                sQ_half_second,
+                sQ_64_epi,
+                sQ_192_epi,  # epilogue SMEM views
+                sQ_q2,
+                sQ_q3,  # epilogue R2S: 128-col quarters
                 sQ_64_layout,
-                sdO_chunk_layout, sQ_chunk_layout,
+                sdO_chunk_layout,
+                sQ_chunk_layout,
                 r2s_tiled_copy_dKVatomic,
-                tma_atom_dQ, tma_atom_dQ_64,
-                mTopkLength, mTopkIdxs,                  # per-q length + scatter indices
+                tma_atom_dQ,
+                tma_atom_dQ_64,
+                mTopkLength,
+                mTopkIdxs,  # per-q length + scatter indices
                 tidx,
                 TileSchedulerCls,
                 qhead_per_kvhead_divmod,
@@ -962,20 +1027,27 @@ class FlashAttentionDSABackwardSm90:
         self,
         tiled_mma_SdP: cute.TiledMma,
         tiled_mma_dQ_wg0: cute.TiledMma,
-        mQ: cute.Tensor, mKV: cute.Tensor, mdO: cute.Tensor,
-        mLSE: cute.Tensor, mdPsum: cute.Tensor,
-        mTopkIdxs: cute.Tensor,          # (batch, seqlen_q, topk_max) int32
-        mTopkLength: cute.Tensor,        # (batch, seqlen_q) int32, per-q valid KV count
+        mQ: cute.Tensor,
+        mKV: cute.Tensor,
+        mdO: cute.Tensor,
+        mLSE: cute.Tensor,
+        mdPsum: cute.Tensor,
+        mTopkIdxs: cute.Tensor,  # (batch, seqlen_q, topk_max) int32
+        mTopkLength: cute.Tensor,  # (batch, seqlen_q) int32, per-q valid KV count
         mdQ: cute.Tensor,
-        sQ: cute.Tensor, sKV: cute.Tensor, sV: cute.Tensor,
+        sQ: cute.Tensor,
+        sKV: cute.Tensor,
+        sV: cute.Tensor,
         sdO: cute.Tensor,
-        sP: cute.Tensor, sdS: cute.Tensor,
-        sLSE: cute.Tensor, sdPsum: cute.Tensor,
-        sKV_q0: cute.Tensor,            # GEMM4 B operand: sKV[:, 0:128]
-        sKV_q1: cute.Tensor,            # GEMM4 B operand: sKV[:, 128:256]
-        sQ_half: cute.Tensor,           # epilogue TMA S2G: (tile_m, 256)
-        sQ_q0: cute.Tensor,             # epilogue R2S: sQ[:, 0:128]
-        sQ_q1: cute.Tensor,             # epilogue R2S: sQ[:, 128:256]
+        sP: cute.Tensor,
+        sdS: cute.Tensor,
+        sLSE: cute.Tensor,
+        sdPsum: cute.Tensor,
+        sKV_q0: cute.Tensor,  # GEMM4 B operand: sKV[:, 0:128]
+        sKV_q1: cute.Tensor,  # GEMM4 B operand: sKV[:, 128:256]
+        sQ_half: cute.Tensor,  # epilogue TMA S2G: (tile_m, 256)
+        sQ_q0: cute.Tensor,  # epilogue R2S: sQ[:, 0:128]
+        sQ_q1: cute.Tensor,  # epilogue R2S: sQ[:, 128:256]
         tma_atom_Q: cute.CopyAtom,
         tma_atom_dO: cute.CopyAtom,
         tma_atom_dQ: cute.CopyAtom,
@@ -1006,9 +1078,7 @@ class FlashAttentionDSABackwardSm90:
         _, tdQrKVt_q1 = mma_partition_fragment_AB(wg_mma_dQ, None, sKVt_q1, self.dQ_swapAB)
 
         # P/dS R2S copy atom
-        smem_copy_atom_PdS = get_smem_store_atom(
-            self.arch, self.dtype, transpose=self.SdP_swapAB
-        )
+        smem_copy_atom_PdS = get_smem_store_atom(self.arch, self.dtype, transpose=self.SdP_swapAB)
         smem_thr_copy_PdS = cute.make_tiled_copy_C(smem_copy_atom_PdS, tiled_mma_SdP).get_slice(wg_tidx)
         tPsP = smem_thr_copy_PdS.partition_D(sP if const_expr(not self.SdP_swapAB) else transpose_view(sP))
         tdSsdS = smem_thr_copy_PdS.partition_D(sdS if const_expr(not self.SdP_swapAB) else transpose_view(sdS))
@@ -1041,18 +1111,32 @@ class FlashAttentionDSABackwardSm90:
         )
 
         mma_qkv_fn = partial(
-            gemm_zero_init, tiled_mma_SdP, (self.tile_m, self.tile_n),
-            tSrQ, tSrKV, swap_AB=self.SdP_swapAB,
+            gemm_zero_init,
+            tiled_mma_SdP,
+            (self.tile_m, self.tile_n),
+            tSrQ,
+            tSrKV,
+            swap_AB=self.SdP_swapAB,
         )
         mma_dov_fn = partial(
-            gemm_zero_init, tiled_mma_SdP, (self.tile_m, self.tile_n),
-            tdPrdO, tdPrV, swap_AB=self.SdP_swapAB,
+            gemm_zero_init,
+            tiled_mma_SdP,
+            (self.tile_m, self.tile_n),
+            tdPrdO,
+            tdPrV,
+            swap_AB=self.SdP_swapAB,
         )
         mma_dsk_fn_0 = partial(
-            gemm_w_idx, tiled_mma_dQ_wg0, acc_dQ_0, tCrB=tdQrKVt_q0,
+            gemm_w_idx,
+            tiled_mma_dQ_wg0,
+            acc_dQ_0,
+            tCrB=tdQrKVt_q0,
         )
         mma_dsk_fn_1 = partial(
-            gemm_w_idx, tiled_mma_dQ_wg0, acc_dQ_1, tCrB=tdQrKVt_q1,
+            gemm_w_idx,
+            tiled_mma_dQ_wg0,
+            acc_dQ_1,
+            tCrB=tdQrKVt_q1,
         )
 
         # cp.async for KV gather
@@ -1072,8 +1156,8 @@ class FlashAttentionDSABackwardSm90:
 
         # thread organization for cp.async gather
         GROUP_SIZE = const_expr(8)
-        idx_in_group = wg_tidx % GROUP_SIZE   # 0..7 dim dir
-        group_idx = wg_tidx // GROUP_SIZE      # 0..15 token dir
+        idx_in_group = wg_tidx % GROUP_SIZE  # 0..7 dim dir
+        group_idx = wg_tidx // GROUP_SIZE  # 0..15 token dir
 
         mbar_QdO_phase = Int32(0)
 
@@ -1104,18 +1188,12 @@ class FlashAttentionDSABackwardSm90:
             mdO_cur = mdO[None, None, head_idx, batch_idx]
             gdO = cute.local_tile(mdO_cur, (self.tile_m, self.tile_hdimv), (m_block, 0))
 
-            load_Q, _, _ = tma_get_copy_fn(
-                tma_atom_Q, 0, cute.make_layout(1), gQ, sQ, single_stage=True
-            )
-            load_dO, _, _ = tma_get_copy_fn(
-                tma_atom_dO, 0, cute.make_layout(1), gdO, sdO, single_stage=True
-            )
+            load_Q, _, _ = tma_get_copy_fn(tma_atom_Q, 0, cute.make_layout(1), gQ, sQ, single_stage=True)
+            load_dO, _, _ = tma_get_copy_fn(tma_atom_dO, 0, cute.make_layout(1), gdO, sdO, single_stage=True)
 
             if warp_idx_in_wg == 0:
                 with cute.arch.elect_one():
-                    cute.arch.mbarrier_arrive_and_expect_tx(
-                        mbar_QdO_ptr, self.tma_copy_bytes["Q"] + self.tma_copy_bytes["dO"]
-                    )
+                    cute.arch.mbarrier_arrive_and_expect_tx(mbar_QdO_ptr, self.tma_copy_bytes["Q"] + self.tma_copy_bytes["dO"])
                 load_Q(tma_bar_ptr=mbar_QdO_ptr)
                 load_dO(tma_bar_ptr=mbar_QdO_ptr)
 
@@ -1125,15 +1203,23 @@ class FlashAttentionDSABackwardSm90:
             num_head = self.qhead_per_kvhead * mLSE.shape[1]
             _load_f32_packed_mh_to_smem(
                 mLSE_cur.iterator.toint(),
-                sLSE, m_block, self.tile_m, wg_tidx,
+                sLSE,
+                m_block,
+                self.tile_m,
+                wg_tidx,
                 self.num_threads_per_warp_group,
-                self.qhead_per_kvhead, num_head,
+                self.qhead_per_kvhead,
+                num_head,
             )
             _load_f32_packed_mh_to_smem(
                 mdPsum_cur.iterator.toint(),
-                sdPsum, m_block, self.tile_m, wg_tidx,
+                sdPsum,
+                m_block,
+                self.tile_m,
+                wg_tidx,
                 self.num_threads_per_warp_group,
-                self.qhead_per_kvhead, num_head,
+                self.qhead_per_kvhead,
+                num_head,
             )
 
             # Fence SMEM writes (LSE/dPsum stores) + barrier to ensure visibility
@@ -1153,13 +1239,26 @@ class FlashAttentionDSABackwardSm90:
 
             # first n_block
             self._wg0_one_n_block(
-                n_block, wg_tidx, mKV_cur, mTopkIdxs_cur,
-                sKV, async_copy_atom, async_thr_copy,
-                idx_in_group, group_idx,
-                mma_qkv_fn, mma_dov_fn, mma_dsk_fn_0, mma_dsk_fn_1,
-                tLSErLSE, tLSErdPsum,
-                tPsP, tdSsdS, smem_thr_copy_PdS,
-                softmax_scale_log2, softmax_scale,
+                n_block,
+                wg_tidx,
+                mKV_cur,
+                mTopkIdxs_cur,
+                sKV,
+                async_copy_atom,
+                async_thr_copy,
+                idx_in_group,
+                group_idx,
+                mma_qkv_fn,
+                mma_dov_fn,
+                mma_dsk_fn_0,
+                mma_dsk_fn_1,
+                tLSErLSE,
+                tLSErdPsum,
+                tPsP,
+                tdSsdS,
+                smem_thr_copy_PdS,
+                softmax_scale_log2,
+                softmax_scale,
                 dQ_accumulate=False,
                 is_first=True,
                 num_valid_rows=topk_tail_rows,
@@ -1169,13 +1268,26 @@ class FlashAttentionDSABackwardSm90:
             # remaining n_blocks
             while n_block >= 0:
                 self._wg0_one_n_block(
-                    n_block, wg_tidx, mKV_cur, mTopkIdxs_cur,
-                    sKV, async_copy_atom, async_thr_copy,
-                    idx_in_group, group_idx,
-                    mma_qkv_fn, mma_dov_fn, mma_dsk_fn_0, mma_dsk_fn_1,
-                    tLSErLSE, tLSErdPsum,
-                    tPsP, tdSsdS, smem_thr_copy_PdS,
-                    softmax_scale_log2, softmax_scale,
+                    n_block,
+                    wg_tidx,
+                    mKV_cur,
+                    mTopkIdxs_cur,
+                    sKV,
+                    async_copy_atom,
+                    async_thr_copy,
+                    idx_in_group,
+                    group_idx,
+                    mma_qkv_fn,
+                    mma_dov_fn,
+                    mma_dsk_fn_0,
+                    mma_dsk_fn_1,
+                    tLSErLSE,
+                    tLSErdPsum,
+                    tPsP,
+                    tdSsdS,
+                    smem_thr_copy_PdS,
+                    softmax_scale_log2,
+                    softmax_scale,
                     dQ_accumulate=True,
                     is_first=False,
                     num_valid_rows=self.tile_n,
@@ -1191,9 +1303,19 @@ class FlashAttentionDSABackwardSm90:
 
             # WG0 always writes dQ[0:256] — same as V3.1 for both d=512 and d=576
             self.epilogue_dQ(
-                acc_dQ_0, acc_dQ_1, mdQ, sQ_half, sQ_q0, sQ_q1,
-                tma_atom_dQ, tiled_mma_dQ_wg0, wg_tidx, 0,
-                m_block, head_idx, batch_idx,
+                acc_dQ_0,
+                acc_dQ_1,
+                mdQ,
+                sQ_half,
+                sQ_q0,
+                sQ_q1,
+                tma_atom_dQ,
+                tiled_mma_dQ_wg0,
+                wg_tidx,
+                0,
+                m_block,
+                head_idx,
+                batch_idx,
             )
 
             tile_scheduler.advance_to_next_work()
@@ -1203,14 +1325,14 @@ class FlashAttentionDSABackwardSm90:
     @cute.jit
     def _copy_row(
         self,
-        mKV_cur: cute.Tensor,       # (s_kv, headdim) gmem
+        mKV_cur: cute.Tensor,  # (s_kv, headdim) gmem
         mTopkIdxs_cur: cute.Tensor,  # (topk,) gmem
-        sKV: cute.Tensor,            # (tile_n, headdim) swizzled smem
-        row: Int32,                   # smem row index
-        idx_in_group: Int32,          # 0..7 dim dir
+        sKV: cute.Tensor,  # (tile_n, headdim) swizzled smem
+        row: Int32,  # smem row index
+        idx_in_group: Int32,  # 0..7 dim dir
         copy_atom: cute.CopyAtom,
         thr_copy: cute.TiledCopy,
-        global_topk_row: Int32,       # index into topk_idxs
+        global_topk_row: Int32,  # index into topk_idxs
     ):
         token_idx = mTopkIdxs_cur[global_topk_row]
         gKV_row = mKV_cur[token_idx, None]
@@ -1225,7 +1347,6 @@ class FlashAttentionDSABackwardSm90:
             tSs = thr_copy.partition_D(s_chunk)
             cute.copy(copy_atom, tSg, tSs)
 
-
     # clear for OOB rows
     @cute.jit
     def _zero_row(self, sKV: cute.Tensor, row: Int32, idx_in_group: Int32):
@@ -1235,7 +1356,6 @@ class FlashAttentionDSABackwardSm90:
         for tile in cutlass.range_constexpr(self.tile_hdim // 64):
             chunk_idx = tile * 8 + idx_in_group
             sK_chunks[None, chunk_idx].fill(0)
-
 
     # Scatter AtomicAdd — write dKV accumulator fragment to
     # per-row interleaved fake-col layout in gmem indexed by topK_idx,
@@ -1251,13 +1371,13 @@ class FlashAttentionDSABackwardSm90:
     @cute.jit
     def scatter_dkv_atomic(
         self,
-        acc: cute.Tensor,            # MMA accumulator fragment (register, f32)
+        acc: cute.Tensor,  # MMA accumulator fragment (register, f32)
         chunk_idx: cutlass.Constexpr[int],  # which hdim chunk (0..N_hdim_chunks-1)
         mTopkIdxs_cur: cute.Tensor,  # (topk,) int32 gmem
         mdKVaccum_cur: cute.Tensor,  # (seqlen_k_rounded * hdim_rounded,) f32 gmem
-        n_block: Int32,              # current n_block (KV tile index in topk)
-        topK: Int32,                 # per-q valid KV count (runtime)
-        thr_mma: cute.TiledMma,      # thread's MMA slice
+        n_block: Int32,  # current n_block (KV tile index in topk)
+        topK: Int32,  # per-q valid KV count (runtime)
+        thr_mma: cute.TiledMma,  # thread's MMA slice
         tidx: Int32,
     ):
         """Scatter acc to dKVAccum rows via topK_idx with coalesced float4 atomics.
@@ -1268,12 +1388,8 @@ class FlashAttentionDSABackwardSm90:
         where c4 = c // 4 (N-tile index), rank = tidx % 4.
         """
         tile_shape = (self.tile_n, self.hdim_chunk)
-        cDKV = cute.make_identity_tensor(
-            tile_shape if const_expr(not self.dKV_swapAB) else tile_shape[::-1]
-        )
-        tScDKV_mn = make_acc_tensor_mn_view(
-            thr_mma.partition_C(cDKV), transpose=self.dKV_swapAB
-        )
+        cDKV = cute.make_identity_tensor(tile_shape if const_expr(not self.dKV_swapAB) else tile_shape[::-1])
+        tScDKV_mn = make_acc_tensor_mn_view(thr_mma.partition_C(cDKV), transpose=self.dKV_swapAB)
         ROW = 0 if const_expr(not self.dKV_swapAB) else 1
 
         acc_mn = make_acc_tensor_mn_view(acc, transpose=self.dKV_swapAB)
@@ -1288,8 +1404,7 @@ class FlashAttentionDSABackwardSm90:
             if global_topk_row < topK:
                 global_kv_row = mTopkIdxs_cur[global_topk_row]
                 if const_expr(self.have_topk_length) or global_kv_row >= 0:
-                    row_base = (global_kv_row * self.tile_hdim
-                                + chunk_idx * self.hdim_chunk)
+                    row_base = global_kv_row * self.tile_hdim + chunk_idx * self.hdim_chunk
 
                     # Each group of 4 MN-view cols maps to one N-tile.
                     # Interleaved: fake_pos = c4 * 16 + rank * 4
@@ -1298,8 +1413,10 @@ class FlashAttentionDSABackwardSm90:
                         c = const_expr(c4 * 4)
                         target_ptr = mdKVaccum_cur.iterator + row_base + fake_offset
                         atomic_add_fp32x4(
-                            acc_mn[r, c + 0], acc_mn[r, c + 1],
-                            acc_mn[r, c + 2], acc_mn[r, c + 3],
+                            acc_mn[r, c + 0],
+                            acc_mn[r, c + 1],
+                            acc_mn[r, c + 2],
+                            acc_mn[r, c + 3],
                             target_ptr,
                         )
 
@@ -1308,17 +1425,17 @@ class FlashAttentionDSABackwardSm90:
         self,
         n_block: Int32,
         wg_tidx: Int32,
-        mKV_cur: cute.Tensor,           # (s_kv, headdim) gmem
-        mTopkIdxs_cur: cute.Tensor,      # (topk,) gmem
-        sKV: cute.Tensor,                # (tile_n, headdim) swizzled smem
+        mKV_cur: cute.Tensor,  # (s_kv, headdim) gmem
+        mTopkIdxs_cur: cute.Tensor,  # (topk,) gmem
+        sKV: cute.Tensor,  # (tile_n, headdim) swizzled smem
         async_copy_atom: cute.CopyAtom,
         async_thr_copy: cute.TiledCopy,
         idx_in_group: Int32,
         group_idx: Int32,
         mma_qkv_fn: Callable,
         mma_dov_fn: Callable,
-        mma_dsk_fn_0: Callable,          # G4_half_0: dQ[0:128] RS GEMM
-        mma_dsk_fn_1: Callable,          # G4_half_1: dQ[128:256] RS GEMM
+        mma_dsk_fn_0: Callable,  # G4_half_0: dQ[0:128] RS GEMM
+        mma_dsk_fn_1: Callable,  # G4_half_1: dQ[128:256] RS GEMM
         tLSErLSE: cute.Tensor,
         tLSErdPsum: cute.Tensor,
         tPsP: cute.Tensor,
@@ -1339,23 +1456,33 @@ class FlashAttentionDSABackwardSm90:
 
         # cp.async scatter-gather KV → sKV (all 128 WG0 threads)
         NUM_GROUPS = const_expr(self.num_threads_per_warp_group // 8)  # 16
-        ROWS_PER_GROUP = const_expr(self.tile_n // NUM_GROUPS)          # 4
+        ROWS_PER_GROUP = const_expr(self.tile_n // NUM_GROUPS)  # 4
         for r in cutlass.range_constexpr(ROWS_PER_GROUP):
             row = r * NUM_GROUPS + group_idx
             global_topk_row = n_block * self.tile_n + row
             if row < num_valid_rows or not is_first:
                 if const_expr(self.have_topk_length):
                     self._copy_row(
-                        mKV_cur, mTopkIdxs_cur, sKV, row,
-                        idx_in_group, async_copy_atom, async_thr_copy,
+                        mKV_cur,
+                        mTopkIdxs_cur,
+                        sKV,
+                        row,
+                        idx_in_group,
+                        async_copy_atom,
+                        async_thr_copy,
                         global_topk_row,
                     )
                 else:
                     token_idx = mTopkIdxs_cur[global_topk_row]
                     if token_idx >= 0:
                         self._copy_row(
-                            mKV_cur, mTopkIdxs_cur, sKV, row,
-                            idx_in_group, async_copy_atom, async_thr_copy,
+                            mKV_cur,
+                            mTopkIdxs_cur,
+                            sKV,
+                            row,
+                            idx_in_group,
+                            async_copy_atom,
+                            async_thr_copy,
                             global_topk_row,
                         )
                     else:
@@ -1384,9 +1511,7 @@ class FlashAttentionDSABackwardSm90:
         acc_S_mn = make_acc_tensor_mn_view(acc_S, transpose=self.SdP_swapAB)
         for r in cutlass.range_constexpr(cute.size(acc_S_mn, mode=[0])):
             for c in cutlass.range(cute.size(acc_S_mn, mode=[1]), unroll_full=True):
-                acc_S_mn[r, c] = cute.math.exp2(
-                    acc_S_mn[r, c] * softmax_scale_log2 - tLSErLSE[r], fastmath=True
-                )
+                acc_S_mn[r, c] = cute.math.exp2(acc_S_mn[r, c] * softmax_scale_log2 - tLSErLSE[r], fastmath=True)
 
         # Convert P f32 -> bf16
         tdKVrP = cvt_f16(make_acc_tensor_frgA_view(acc_S), self.dtype)
@@ -1466,24 +1591,27 @@ class FlashAttentionDSABackwardSm90:
         mdQ: cute.Tensor,
         mdQ_64: cute.Tensor,
         mdKVaccum: cute.Tensor,
-        sQ: cute.Tensor, sKV: cute.Tensor, sdO: cute.Tensor,
-        sP: cute.Tensor, sdS: cute.Tensor,
-        sKV_q2: cute.Tensor,            # GEMM4 B: sKV[:, 256:384] (128-col)
-        sKV_q3_192: cute.Tensor,        # GEMM4 B: sKV[:, 384:576] (192-col for d=576, 128-col for d=512)
-        sQ_half: cute.Tensor,           # epilogue TMA: (tile_m, 256) — cols [256:512]
-        sQ_64_epi: cute.Tensor,         # epilogue TMA tail: (tile_m, 64) — cols [512:576]
-        sQ_192_epi: cute.Tensor,        # epilogue R2S: (tile_m, 192) — cols [384:576]
-        sQ_q0: cute.Tensor,             # epilogue R2S: sQ[:, 256:384] (128-col)
-        sQ_q1: cute.Tensor,             # epilogue R2S: sQ[:, 384:512] (128-col)
+        sQ: cute.Tensor,
+        sKV: cute.Tensor,
+        sdO: cute.Tensor,
+        sP: cute.Tensor,
+        sdS: cute.Tensor,
+        sKV_q2: cute.Tensor,  # GEMM4 B: sKV[:, 256:384] (128-col)
+        sKV_q3_192: cute.Tensor,  # GEMM4 B: sKV[:, 384:576] (192-col for d=576, 128-col for d=512)
+        sQ_half: cute.Tensor,  # epilogue TMA: (tile_m, 256) — cols [256:512]
+        sQ_64_epi: cute.Tensor,  # epilogue TMA tail: (tile_m, 64) — cols [512:576]
+        sQ_192_epi: cute.Tensor,  # epilogue R2S: (tile_m, 192) — cols [384:576]
+        sQ_q0: cute.Tensor,  # epilogue R2S: sQ[:, 256:384] (128-col)
+        sQ_q1: cute.Tensor,  # epilogue R2S: sQ[:, 384:512] (128-col)
         sQ_64_layout: cute.ComposedLayout,
         sdO_chunk_layout: cute.ComposedLayout,
         sQ_chunk_layout: cute.ComposedLayout,
         r2s_tiled_copy_dKVatomic: cute.TiledCopy,
         tma_atom_dQ: cute.CopyAtom,
         tma_atom_dQ_64: cute.CopyAtom,
-        mTopkLength: cute.Tensor,        # (batch, seqlen_q) int32, per-q valid KV count
-        mTopkIdxs: cute.Tensor,          # (batch, seqlen_q, topk_max) int32 for scatter
-        tidx: Int32,                    
+        mTopkLength: cute.Tensor,  # (batch, seqlen_q) int32, per-q valid KV count
+        mTopkIdxs: cute.Tensor,  # (batch, seqlen_q, topk_max) int32 for scatter
+        tidx: Int32,
         TileSchedulerCls: Callable,
         qhead_per_kvhead_divmod: FastDivmodDivisor,
     ):
@@ -1502,9 +1630,7 @@ class FlashAttentionDSABackwardSm90:
         # 2-stage acc_dKV — two fragments alternating s0(even)/s1(odd)
         # to overlap AtomicAdd latency with TC computation via wg_wait(2).
         dKV_chunk_shape = (self.tile_n, self.hdim_chunk)
-        acc_dKV_part_shape = tiled_mma_dKV.partition_shape_C(
-            dKV_chunk_shape if not self.dKV_swapAB else dKV_chunk_shape[::-1]
-        )
+        acc_dKV_part_shape = tiled_mma_dKV.partition_shape_C(dKV_chunk_shape if not self.dKV_swapAB else dKV_chunk_shape[::-1])
         acc_dKV_s0 = cute.make_rmem_tensor(acc_dKV_part_shape, Float32)
         acc_dKV_s1 = cute.make_rmem_tensor(acc_dKV_part_shape, Float32)
 
@@ -1529,12 +1655,20 @@ class FlashAttentionDSABackwardSm90:
         )
 
         mma_dQ_wg1_fn_2 = partial(
-            gemm_w_idx, tiled_mma_dQ_wg1, acc_dQ_2,
-            tdQrsdS, tdQrKVt_q2, swap_AB=self.dQ_swapAB,
+            gemm_w_idx,
+            tiled_mma_dQ_wg1,
+            acc_dQ_2,
+            tdQrsdS,
+            tdQrKVt_q2,
+            swap_AB=self.dQ_swapAB,
         )
         mma_dQ_wg1_fn_3 = partial(
-            gemm_w_idx, tiled_mma_dQ_wg1_192, acc_dQ_3,
-            tdQrsdS_192, tdQrKVt_q3_192, swap_AB=self.dQ_swapAB,
+            gemm_w_idx,
+            tiled_mma_dQ_wg1_192,
+            acc_dQ_3,
+            tdQrsdS_192,
+            tdQrKVt_q3_192,
+            swap_AB=self.dQ_swapAB,
         )
 
         # --- Scatter AtomicAdd setup ---
@@ -1591,20 +1725,14 @@ class FlashAttentionDSABackwardSm90:
                 _, tdKVrQt_c0 = mma_partition_fragment_AB(wg_mma_dKV, None, transpose_view(sQ_c0), self.dKV_swapAB)
 
                 # GEMM3_c0: sP already ready
-                gemm_w_idx(tiled_mma_dKV, acc_dKV_s0,
-                           tdKVrPt, tdKVrdOt_c0,
-                           A_idx=smem_idx_PdS, zero_init=True, wg_wait=-1,
-                           swap_AB=self.dKV_swapAB)
+                gemm_w_idx(tiled_mma_dKV, acc_dKV_s0, tdKVrPt, tdKVrdOt_c0, A_idx=smem_idx_PdS, zero_init=True, wg_wait=-1, swap_AB=self.dKV_swapAB)
 
                 # GEMM5_c0: wait sdS_ready
                 cute.arch.barrier(
                     barrier_id=int(NamedBarrierBwd.sdS_ready),
                     number_of_threads=self.num_mma_threads,
                 )
-                gemm_w_idx(tiled_mma_dKV, acc_dKV_s0,
-                           tdKVrdSt, tdKVrQt_c0,
-                           A_idx=smem_idx_PdS, zero_init=False, wg_wait=-1,
-                           swap_AB=self.dKV_swapAB)
+                gemm_w_idx(tiled_mma_dKV, acc_dKV_s0, tdKVrdSt, tdKVrQt_c0, A_idx=smem_idx_PdS, zero_init=False, wg_wait=-1, swap_AB=self.dKV_swapAB)
 
                 # --- c1 (stage 1): dKV_s1 = P^T @ dO[64:128] + dS^T @ Q[64:128] ---
                 sdO_c1 = cute.make_tensor(sdO.iterator + 1 * chunk_elems, sdO_chunk_layout.outer)
@@ -1612,14 +1740,8 @@ class FlashAttentionDSABackwardSm90:
                 _, tdKVrdOt_c1 = mma_partition_fragment_AB(wg_mma_dKV, None, transpose_view(sdO_c1), self.dKV_swapAB)
                 _, tdKVrQt_c1 = mma_partition_fragment_AB(wg_mma_dKV, None, transpose_view(sQ_c1), self.dKV_swapAB)
 
-                gemm_w_idx(tiled_mma_dKV, acc_dKV_s1,
-                           tdKVrPt, tdKVrdOt_c1,
-                           A_idx=smem_idx_PdS, zero_init=True, wg_wait=-1,
-                           swap_AB=self.dKV_swapAB)
-                gemm_w_idx(tiled_mma_dKV, acc_dKV_s1,
-                           tdKVrdSt, tdKVrQt_c1,
-                           A_idx=smem_idx_PdS, zero_init=False, wg_wait=-1,
-                           swap_AB=self.dKV_swapAB)
+                gemm_w_idx(tiled_mma_dKV, acc_dKV_s1, tdKVrPt, tdKVrdOt_c1, A_idx=smem_idx_PdS, zero_init=True, wg_wait=-1, swap_AB=self.dKV_swapAB)
+                gemm_w_idx(tiled_mma_dKV, acc_dKV_s1, tdKVrdSt, tdKVrQt_c1, A_idx=smem_idx_PdS, zero_init=False, wg_wait=-1, swap_AB=self.dKV_swapAB)
 
                 # --- wg_wait(2): c0 done (G3_C0 + G5_C0 consumed, C1 pending) ---
                 warpgroup.wait_group(2)
@@ -1632,8 +1754,14 @@ class FlashAttentionDSABackwardSm90:
 
                 # AtomicAdd C0 (s0)
                 self.scatter_dkv_atomic(
-                    acc_dKV_s0, 0, mTopkIdxs_cur, mdKVaccum_cur,
-                    n_block, topK, thr_mma_dKV, tidx,
+                    acc_dKV_s0,
+                    0,
+                    mTopkIdxs_cur,
+                    mdKVaccum_cur,
+                    n_block,
+                    topK,
+                    thr_mma_dKV,
+                    tidx,
                 )
 
                 # --- c2 (stage 0, reuse s0): P^T @ dO[128:192] + dS^T @ Q[128:192] ---
@@ -1642,28 +1770,30 @@ class FlashAttentionDSABackwardSm90:
                 _, tdKVrdOt_c2 = mma_partition_fragment_AB(wg_mma_dKV, None, transpose_view(sdO_c2), self.dKV_swapAB)
                 _, tdKVrQt_c2 = mma_partition_fragment_AB(wg_mma_dKV, None, transpose_view(sQ_c2), self.dKV_swapAB)
 
-                gemm_w_idx(tiled_mma_dKV, acc_dKV_s0,
-                           tdKVrPt, tdKVrdOt_c2,
-                           A_idx=smem_idx_PdS, zero_init=True, wg_wait=-1,
-                           swap_AB=self.dKV_swapAB)
-                gemm_w_idx(tiled_mma_dKV, acc_dKV_s0,
-                           tdKVrdSt, tdKVrQt_c2,
-                           A_idx=smem_idx_PdS, zero_init=False, wg_wait=-1,
-                           swap_AB=self.dKV_swapAB)
+                gemm_w_idx(tiled_mma_dKV, acc_dKV_s0, tdKVrPt, tdKVrdOt_c2, A_idx=smem_idx_PdS, zero_init=True, wg_wait=-1, swap_AB=self.dKV_swapAB)
+                gemm_w_idx(tiled_mma_dKV, acc_dKV_s0, tdKVrdSt, tdKVrQt_c2, A_idx=smem_idx_PdS, zero_init=False, wg_wait=-1, swap_AB=self.dKV_swapAB)
 
                 # --- wg_wait(2): c1 done ---
                 warpgroup.wait_group(2)
 
                 # G4_half_2: dQ[320:448] += sdS @ sKVt_q2 (SS, fills TC gap)
                 mma_dQ_wg1_fn_2(
-                    A_idx=smem_idx_PdS, B_idx=None,
-                    zero_init=first_iter, wg_wait=-1,
+                    A_idx=smem_idx_PdS,
+                    B_idx=None,
+                    zero_init=first_iter,
+                    wg_wait=-1,
                 )
 
                 # AtomicAdd C1 (s1)
                 self.scatter_dkv_atomic(
-                    acc_dKV_s1, 1, mTopkIdxs_cur, mdKVaccum_cur,
-                    n_block, topK, thr_mma_dKV, tidx,
+                    acc_dKV_s1,
+                    1,
+                    mTopkIdxs_cur,
+                    mdKVaccum_cur,
+                    n_block,
+                    topK,
+                    thr_mma_dKV,
+                    tidx,
                 )
 
                 # --- c3 (stage 1, reuse s1): P^T @ dO[192:256] + dS^T @ Q[192:256] ---
@@ -1672,28 +1802,30 @@ class FlashAttentionDSABackwardSm90:
                 _, tdKVrdOt_c3 = mma_partition_fragment_AB(wg_mma_dKV, None, transpose_view(sdO_c3), self.dKV_swapAB)
                 _, tdKVrQt_c3 = mma_partition_fragment_AB(wg_mma_dKV, None, transpose_view(sQ_c3), self.dKV_swapAB)
 
-                gemm_w_idx(tiled_mma_dKV, acc_dKV_s1,
-                           tdKVrPt, tdKVrdOt_c3,
-                           A_idx=smem_idx_PdS, zero_init=True, wg_wait=-1,
-                           swap_AB=self.dKV_swapAB)
-                gemm_w_idx(tiled_mma_dKV, acc_dKV_s1,
-                           tdKVrdSt, tdKVrQt_c3,
-                           A_idx=smem_idx_PdS, zero_init=False, wg_wait=-1,
-                           swap_AB=self.dKV_swapAB)
+                gemm_w_idx(tiled_mma_dKV, acc_dKV_s1, tdKVrPt, tdKVrdOt_c3, A_idx=smem_idx_PdS, zero_init=True, wg_wait=-1, swap_AB=self.dKV_swapAB)
+                gemm_w_idx(tiled_mma_dKV, acc_dKV_s1, tdKVrdSt, tdKVrQt_c3, A_idx=smem_idx_PdS, zero_init=False, wg_wait=-1, swap_AB=self.dKV_swapAB)
 
                 # --- wg_wait(2): c2 + G4_half_2 done ---
                 warpgroup.wait_group(2)
 
                 # G4_half_3: dQ[384:576] += sdS @ sKVt_q3_192 (SS, 192-col for d=576)
                 mma_dQ_wg1_fn_3(
-                    A_idx=smem_idx_PdS, B_idx=None,
-                    zero_init=first_iter, wg_wait=-1,
+                    A_idx=smem_idx_PdS,
+                    B_idx=None,
+                    zero_init=first_iter,
+                    wg_wait=-1,
                 )
 
                 # AtomicAdd C2 (s0)
                 self.scatter_dkv_atomic(
-                    acc_dKV_s0, 2, mTopkIdxs_cur, mdKVaccum_cur,
-                    n_block, topK, thr_mma_dKV, tidx,
+                    acc_dKV_s0,
+                    2,
+                    mTopkIdxs_cur,
+                    mdKVaccum_cur,
+                    n_block,
+                    topK,
+                    thr_mma_dKV,
+                    tidx,
                 )
 
                 # --- c4 (stage 0, reuse s0): P^T @ dO[256:320] + dS^T @ Q[256:320] ---
@@ -1702,14 +1834,8 @@ class FlashAttentionDSABackwardSm90:
                 _, tdKVrdOt_c4 = mma_partition_fragment_AB(wg_mma_dKV, None, transpose_view(sdO_c4), self.dKV_swapAB)
                 _, tdKVrQt_c4 = mma_partition_fragment_AB(wg_mma_dKV, None, transpose_view(sQ_c4), self.dKV_swapAB)
 
-                gemm_w_idx(tiled_mma_dKV, acc_dKV_s0,
-                           tdKVrPt, tdKVrdOt_c4,
-                           A_idx=smem_idx_PdS, zero_init=True, wg_wait=-1,
-                           swap_AB=self.dKV_swapAB)
-                gemm_w_idx(tiled_mma_dKV, acc_dKV_s0,
-                           tdKVrdSt, tdKVrQt_c4,
-                           A_idx=smem_idx_PdS, zero_init=False, wg_wait=-1,
-                           swap_AB=self.dKV_swapAB)
+                gemm_w_idx(tiled_mma_dKV, acc_dKV_s0, tdKVrPt, tdKVrdOt_c4, A_idx=smem_idx_PdS, zero_init=True, wg_wait=-1, swap_AB=self.dKV_swapAB)
+                gemm_w_idx(tiled_mma_dKV, acc_dKV_s0, tdKVrdSt, tdKVrQt_c4, A_idx=smem_idx_PdS, zero_init=False, wg_wait=-1, swap_AB=self.dKV_swapAB)
 
                 # --- wg_wait(2): c3 + G4_half_3 done ---
                 warpgroup.wait_group(2)
@@ -1722,8 +1848,14 @@ class FlashAttentionDSABackwardSm90:
 
                 # AtomicAdd C3 (s1)
                 self.scatter_dkv_atomic(
-                    acc_dKV_s1, 3, mTopkIdxs_cur, mdKVaccum_cur,
-                    n_block, topK, thr_mma_dKV, tidx,
+                    acc_dKV_s1,
+                    3,
+                    mTopkIdxs_cur,
+                    mdKVaccum_cur,
+                    n_block,
+                    topK,
+                    thr_mma_dKV,
+                    tidx,
                 )
 
                 # --- c5 (stage 1, reuse s1): P^T @ dO[320:384] + dS^T @ Q[320:384] ---
@@ -1732,22 +1864,22 @@ class FlashAttentionDSABackwardSm90:
                 _, tdKVrdOt_c5 = mma_partition_fragment_AB(wg_mma_dKV, None, transpose_view(sdO_c5), self.dKV_swapAB)
                 _, tdKVrQt_c5 = mma_partition_fragment_AB(wg_mma_dKV, None, transpose_view(sQ_c5), self.dKV_swapAB)
 
-                gemm_w_idx(tiled_mma_dKV, acc_dKV_s1,
-                           tdKVrPt, tdKVrdOt_c5,
-                           A_idx=smem_idx_PdS, zero_init=True, wg_wait=-1,
-                           swap_AB=self.dKV_swapAB)
-                gemm_w_idx(tiled_mma_dKV, acc_dKV_s1,
-                           tdKVrdSt, tdKVrQt_c5,
-                           A_idx=smem_idx_PdS, zero_init=False, wg_wait=-1,
-                           swap_AB=self.dKV_swapAB)
+                gemm_w_idx(tiled_mma_dKV, acc_dKV_s1, tdKVrPt, tdKVrdOt_c5, A_idx=smem_idx_PdS, zero_init=True, wg_wait=-1, swap_AB=self.dKV_swapAB)
+                gemm_w_idx(tiled_mma_dKV, acc_dKV_s1, tdKVrdSt, tdKVrQt_c5, A_idx=smem_idx_PdS, zero_init=False, wg_wait=-1, swap_AB=self.dKV_swapAB)
 
                 # --- wg_wait(2): c4 done ---
                 warpgroup.wait_group(2)
 
                 # AtomicAdd C4 (s0)
                 self.scatter_dkv_atomic(
-                    acc_dKV_s0, 4, mTopkIdxs_cur, mdKVaccum_cur,
-                    n_block, topK, thr_mma_dKV, tidx,
+                    acc_dKV_s0,
+                    4,
+                    mTopkIdxs_cur,
+                    mdKVaccum_cur,
+                    n_block,
+                    topK,
+                    thr_mma_dKV,
+                    tidx,
                 )
 
                 # --- c6 (stage 0, reuse s0): P^T @ dO[384:448] + dS^T @ Q[384:448] ---
@@ -1756,22 +1888,22 @@ class FlashAttentionDSABackwardSm90:
                 _, tdKVrdOt_c6 = mma_partition_fragment_AB(wg_mma_dKV, None, transpose_view(sdO_c6), self.dKV_swapAB)
                 _, tdKVrQt_c6 = mma_partition_fragment_AB(wg_mma_dKV, None, transpose_view(sQ_c6), self.dKV_swapAB)
 
-                gemm_w_idx(tiled_mma_dKV, acc_dKV_s0,
-                           tdKVrPt, tdKVrdOt_c6,
-                           A_idx=smem_idx_PdS, zero_init=True, wg_wait=-1,
-                           swap_AB=self.dKV_swapAB)
-                gemm_w_idx(tiled_mma_dKV, acc_dKV_s0,
-                           tdKVrdSt, tdKVrQt_c6,
-                           A_idx=smem_idx_PdS, zero_init=False, wg_wait=-1,
-                           swap_AB=self.dKV_swapAB)
+                gemm_w_idx(tiled_mma_dKV, acc_dKV_s0, tdKVrPt, tdKVrdOt_c6, A_idx=smem_idx_PdS, zero_init=True, wg_wait=-1, swap_AB=self.dKV_swapAB)
+                gemm_w_idx(tiled_mma_dKV, acc_dKV_s0, tdKVrdSt, tdKVrQt_c6, A_idx=smem_idx_PdS, zero_init=False, wg_wait=-1, swap_AB=self.dKV_swapAB)
 
                 # --- wg_wait(2): c5 done ---
                 warpgroup.wait_group(2)
 
                 # AtomicAdd C5 (s1)
                 self.scatter_dkv_atomic(
-                    acc_dKV_s1, 5, mTopkIdxs_cur, mdKVaccum_cur,
-                    n_block, topK, thr_mma_dKV, tidx,
+                    acc_dKV_s1,
+                    5,
+                    mTopkIdxs_cur,
+                    mdKVaccum_cur,
+                    n_block,
+                    topK,
+                    thr_mma_dKV,
+                    tidx,
                 )
 
                 # --- c7 (stage 1, reuse s1): P^T @ dO[448:512] + dS^T @ Q[448:512] ---
@@ -1780,22 +1912,22 @@ class FlashAttentionDSABackwardSm90:
                 _, tdKVrdOt_c7 = mma_partition_fragment_AB(wg_mma_dKV, None, transpose_view(sdO_c7), self.dKV_swapAB)
                 _, tdKVrQt_c7 = mma_partition_fragment_AB(wg_mma_dKV, None, transpose_view(sQ_c7), self.dKV_swapAB)
 
-                gemm_w_idx(tiled_mma_dKV, acc_dKV_s1,
-                           tdKVrPt, tdKVrdOt_c7,
-                           A_idx=smem_idx_PdS, zero_init=True, wg_wait=-1,
-                           swap_AB=self.dKV_swapAB)
-                gemm_w_idx(tiled_mma_dKV, acc_dKV_s1,
-                           tdKVrdSt, tdKVrQt_c7,
-                           A_idx=smem_idx_PdS, zero_init=False, wg_wait=-1,
-                           swap_AB=self.dKV_swapAB)
+                gemm_w_idx(tiled_mma_dKV, acc_dKV_s1, tdKVrPt, tdKVrdOt_c7, A_idx=smem_idx_PdS, zero_init=True, wg_wait=-1, swap_AB=self.dKV_swapAB)
+                gemm_w_idx(tiled_mma_dKV, acc_dKV_s1, tdKVrdSt, tdKVrQt_c7, A_idx=smem_idx_PdS, zero_init=False, wg_wait=-1, swap_AB=self.dKV_swapAB)
 
                 # --- wg_wait(2): c6 done ---
                 warpgroup.wait_group(2)
 
                 # AtomicAdd C6 (s0)
                 self.scatter_dkv_atomic(
-                    acc_dKV_s0, 6, mTopkIdxs_cur, mdKVaccum_cur,
-                    n_block, topK, thr_mma_dKV, tidx,
+                    acc_dKV_s0,
+                    6,
+                    mTopkIdxs_cur,
+                    mdKVaccum_cur,
+                    n_block,
+                    topK,
+                    thr_mma_dKV,
+                    tidx,
                 )
 
                 if const_expr(not self.same_hdim_kv):
@@ -1803,10 +1935,7 @@ class FlashAttentionDSABackwardSm90:
                     sQ_c8 = cute.make_tensor(sQ.iterator + 8 * chunk_elems, sQ_chunk_layout.outer)
                     _, tdKVrQt_c8 = mma_partition_fragment_AB(wg_mma_dKV, None, transpose_view(sQ_c8), self.dKV_swapAB)
 
-                    gemm_w_idx(tiled_mma_dKV, acc_dKV_s0,
-                               tdKVrdSt, tdKVrQt_c8,
-                               A_idx=smem_idx_PdS, zero_init=True, wg_wait=0,
-                               swap_AB=self.dKV_swapAB)
+                    gemm_w_idx(tiled_mma_dKV, acc_dKV_s0, tdKVrdSt, tdKVrQt_c8, A_idx=smem_idx_PdS, zero_init=True, wg_wait=0, swap_AB=self.dKV_swapAB)
 
                     # Release sP/sdS
                     cute.arch.barrier_arrive(
@@ -1820,12 +1949,24 @@ class FlashAttentionDSABackwardSm90:
 
                     # AtomicAdd C7 (s1) + C8 (s0)
                     self.scatter_dkv_atomic(
-                        acc_dKV_s1, 7, mTopkIdxs_cur, mdKVaccum_cur,
-                        n_block, topK, thr_mma_dKV, tidx,
+                        acc_dKV_s1,
+                        7,
+                        mTopkIdxs_cur,
+                        mdKVaccum_cur,
+                        n_block,
+                        topK,
+                        thr_mma_dKV,
+                        tidx,
                     )
                     self.scatter_dkv_atomic(
-                        acc_dKV_s0, 8, mTopkIdxs_cur, mdKVaccum_cur,
-                        n_block, topK, thr_mma_dKV, tidx,
+                        acc_dKV_s0,
+                        8,
+                        mTopkIdxs_cur,
+                        mdKVaccum_cur,
+                        n_block,
+                        topK,
+                        thr_mma_dKV,
+                        tidx,
                     )
                 else:
                     # --- d=512: original c7 drain (no c8) ---
@@ -1843,8 +1984,14 @@ class FlashAttentionDSABackwardSm90:
 
                     # AtomicAdd C7 (s1)
                     self.scatter_dkv_atomic(
-                        acc_dKV_s1, 7, mTopkIdxs_cur, mdKVaccum_cur,
-                        n_block, topK, thr_mma_dKV, tidx,
+                        acc_dKV_s1,
+                        7,
+                        mTopkIdxs_cur,
+                        mdKVaccum_cur,
+                        n_block,
+                        topK,
+                        thr_mma_dKV,
+                        tidx,
                     )
 
                 n_block -= 1
@@ -1853,12 +2000,22 @@ class FlashAttentionDSABackwardSm90:
             # epilogue: write dQ[256:tile_hdim] to gmem
             # WG1 writes dQ[256:tile_hdim]: 128+128 for d=512, 128+192 for d=576
             self.epilogue_dQ_wg1(
-                acc_dQ_2, acc_dQ_3, mdQ, mdQ_64,
-                sQ_half, sQ_64_epi, sQ_q0, sQ_192_epi,
-                tma_atom_dQ, tma_atom_dQ_64,
-                tiled_mma_dQ_wg1, tiled_mma_dQ_wg1_192,
+                acc_dQ_2,
+                acc_dQ_3,
+                mdQ,
+                mdQ_64,
+                sQ_half,
+                sQ_64_epi,
+                sQ_q0,
+                sQ_192_epi,
+                tma_atom_dQ,
+                tma_atom_dQ_64,
+                tiled_mma_dQ_wg1,
+                tiled_mma_dQ_wg1_192,
                 wg_tidx,
-                m_block, head_idx, batch_idx,
+                m_block,
+                head_idx,
+                batch_idx,
             )
 
             tile_scheduler.advance_to_next_work()
@@ -1867,14 +2024,14 @@ class FlashAttentionDSABackwardSm90:
     @cute.jit
     def epilogue_dQ_wg1(
         self,
-        acc_dQ_2: cute.Tensor,           # (tile_m, 128) accumulator
-        acc_dQ_3: cute.Tensor,           # (tile_m, hdim_chunk_dq_wg1_1) accumulator (128 or 192)
+        acc_dQ_2: cute.Tensor,  # (tile_m, 128) accumulator
+        acc_dQ_3: cute.Tensor,  # (tile_m, hdim_chunk_dq_wg1_1) accumulator (128 or 192)
         mdQ: cute.Tensor,
         mdQ_64: cute.Tensor,
-        sQ_half: cute.Tensor,            # (tile_m, 256) for TMA S2G — cols [256:512]
-        sQ_64_epi: cute.Tensor,          # (tile_m, 64) for tail TMA — cols [512:576]
-        sQ_q2: cute.Tensor,             # (tile_m, 128) R2S target — cols [256:384]
-        sQ_192_epi: cute.Tensor,        # (tile_m, wg1_1) R2S target — cols [384:512] or [384:576]
+        sQ_half: cute.Tensor,  # (tile_m, 256) for TMA S2G — cols [256:512]
+        sQ_64_epi: cute.Tensor,  # (tile_m, 64) for tail TMA — cols [512:576]
+        sQ_q2: cute.Tensor,  # (tile_m, 128) R2S target — cols [256:384]
+        sQ_192_epi: cute.Tensor,  # (tile_m, wg1_1) R2S target — cols [384:512] or [384:576]
         tma_atom_dQ: cute.CopyAtom,
         tma_atom_dQ_64: cute.CopyAtom,
         tiled_mma_dQ_128: cute.TiledMma,
@@ -1927,14 +2084,9 @@ class FlashAttentionDSABackwardSm90:
         warp_idx_in_wg = wg_tidx // 32
         if warp_idx_in_wg == 0:
             mdQ_cur = mdQ[None, None, head_idx, batch_idx]
-            gdQ_half = cute.local_tile(
-                mdQ_cur, (self.tile_m, 256), (m_block, 1)  # col_block=1 → offset 256
-            )
+            gdQ_half = cute.local_tile(mdQ_cur, (self.tile_m, 256), (m_block, 1))  # col_block=1 → offset 256
             with cute.arch.elect_one():
-                store_dQ, _, _ = tma_get_copy_fn(
-                    tma_atom_dQ, 0, cute.make_layout(1),
-                    sQ_half, gdQ_half, single_stage=True
-                )
+                store_dQ, _, _ = tma_get_copy_fn(tma_atom_dQ, 0, cute.make_layout(1), sQ_half, gdQ_half, single_stage=True)
                 store_dQ()
                 cute.arch.cp_async_bulk_commit_group()
                 cute.arch.cp_async_bulk_wait_group(0, read=True)
@@ -1943,14 +2095,9 @@ class FlashAttentionDSABackwardSm90:
         if const_expr(not self.same_hdim_kv):
             if warp_idx_in_wg == 0:
                 mdQ_64_cur = mdQ_64[None, None, head_idx, batch_idx]
-                gdQ_64 = cute.local_tile(
-                    mdQ_64_cur, (self.tile_m, 64), (m_block, 8)  # col_block=8 → offset 512
-                )
+                gdQ_64 = cute.local_tile(mdQ_64_cur, (self.tile_m, 64), (m_block, 8))  # col_block=8 → offset 512
                 with cute.arch.elect_one():
-                    store_dQ_64, _, _ = tma_get_copy_fn(
-                        tma_atom_dQ_64, 0, cute.make_layout(1),
-                        sQ_64_epi, gdQ_64, single_stage=True
-                    )
+                    store_dQ_64, _, _ = tma_get_copy_fn(tma_atom_dQ_64, 0, cute.make_layout(1), sQ_64_epi, gdQ_64, single_stage=True)
                     store_dQ_64()
                     cute.arch.cp_async_bulk_commit_group()
                     cute.arch.cp_async_bulk_wait_group(0, read=True)
@@ -2005,14 +2152,9 @@ class FlashAttentionDSABackwardSm90:
         warp_idx_in_wg = wg_tidx // 32
         if warp_idx_in_wg == 0:
             mdQ_cur = mdQ[None, None, head_idx, batch_idx]
-            gdQ_half = cute.local_tile(
-                mdQ_cur, (self.tile_m, 256), (m_block, wg_idx)
-            )
+            gdQ_half = cute.local_tile(mdQ_cur, (self.tile_m, 256), (m_block, wg_idx))
             with cute.arch.elect_one():
-                store_dQ, _, _ = tma_get_copy_fn(
-                    tma_atom_dQ, 0, cute.make_layout(1),
-                    sQ_half, gdQ_half, single_stage=True
-                )
+                store_dQ, _, _ = tma_get_copy_fn(tma_atom_dQ, 0, cute.make_layout(1), sQ_half, gdQ_half, single_stage=True)
                 store_dQ()
                 cute.arch.cp_async_bulk_commit_group()
                 cute.arch.cp_async_bulk_wait_group(0, read=True)
@@ -2054,13 +2196,9 @@ class _FlashAttentionDSABackwardPostprocessSm90:
         self.num_threads = num_threads
         self.N_hdim_chunks = N_hdim_chunks
         hdim_multiple_of = 32
-        self.head_dim_rounded = int(
-            math.ceil(head_dim / hdim_multiple_of) * hdim_multiple_of
-        )
+        self.head_dim_rounded = int(math.ceil(head_dim / hdim_multiple_of) * hdim_multiple_of)
         assert hdim_chunk % 16 == 0, "hdim_chunk must be a multiple of 16"
-        assert num_threads == hdim_chunk, (
-            "num_threads must equal hdim_chunk so each thread handles one fake-col"
-        )
+        assert num_threads == hdim_chunk, "num_threads must equal hdim_chunk so each thread handles one fake-col"
 
     @cute.jit
     def __call__(
@@ -2113,11 +2251,21 @@ class _FlashAttentionDSABackwardPostprocessSm90:
         )
 
         self._fake_to_smem(
-            mdKVaccum_cur, sdKV, tidx, n_block, chunk_k, seqlen_k,
+            mdKVaccum_cur,
+            sdKV,
+            tidx,
+            n_block,
+            chunk_k,
+            seqlen_k,
         )
         cute.arch.sync_threads()
         self._smem_to_gmem(
-            sdKV, mdKV_cur, tidx, n_block, chunk_k, seqlen_k,
+            sdKV,
+            mdKV_cur,
+            tidx,
+            n_block,
+            chunk_k,
+            seqlen_k,
         )
 
     @cute.jit
@@ -2148,11 +2296,7 @@ class _FlashAttentionDSABackwardPostprocessSm90:
         for row in cutlass.range(self.tile_n, unroll_full=True):
             kv_row = n_block * self.tile_n + row
             if kv_row < seqlen_k:
-                fake_addr = (
-                    kv_row * self.head_dim_rounded
-                    + chunk_k * self.hdim_chunk
-                    + fake_col
-                )
+                fake_addr = kv_row * self.head_dim_rounded + chunk_k * self.hdim_chunk + fake_col
                 val_f32 = mdKVaccum_cur[fake_addr]
                 sdKV[row, real_col] = self.dtype(val_f32)
             else:

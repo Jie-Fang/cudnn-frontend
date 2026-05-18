@@ -41,16 +41,16 @@ CONFIG = BenchmarkConfig(
     name="ltx2",
     models=[LTX2],
     seqlens=[
-        (6144, 6144),     # 121 frames, 512x768
-        (13376, 13376),   # 121 frames, 704x1216
-        (17556, 17556),   # 161 frames, 704x1216
-        (30240, 30240),   # 161 frames, 960x1536
-        (37632, 37632),   # 161 frames, 1024x1792
+        (6144, 6144),  # 121 frames, 512x768
+        (13376, 13376),  # 121 frames, 704x1216
+        (17556, 17556),  # 161 frames, 704x1216
+        (30240, 30240),  # 161 frames, 960x1536
+        (37632, 37632),  # 161 frames, 1024x1792
     ],
     backends=["cudnn", "flash_attention_4"],
     data_types=["bfloat16"],  # Video DiTs are typically bf16-trained
-    attn_masks=["no_mask"],   # Bidirectional diffusion DiT
-    profile_pass="both",      # Forward and backward for training
+    attn_masks=["no_mask"],  # Bidirectional diffusion DiT
+    profile_pass="both",  # Forward and backward for training
     deterministic_bwd=[False, True],
     batch_size=1,
     num_iterations=10,

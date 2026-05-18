@@ -98,15 +98,9 @@ def _dense_shapes(
         if weights.shape != (total_q, heads):
             raise ValueError(f"weights shape mismatch: expected {(total_q, heads)}, got {tuple(weights.shape)}")
         if attn_score.shape != expected_score_shape or index_score.shape != expected_score_shape:
-            raise ValueError(
-                "THD dense score tensors must have shape "
-                f"{expected_score_shape}, got {tuple(attn_score.shape)} and {tuple(index_score.shape)}"
-            )
+            raise ValueError("THD dense score tensors must have shape " f"{expected_score_shape}, got {tuple(attn_score.shape)} and {tuple(index_score.shape)}")
         if attn_l1norm.shape != expected_denom_shape or index_lse.shape != expected_denom_shape:
-            raise ValueError(
-                "THD dense denom tensors must have shape "
-                f"{expected_denom_shape}, got {tuple(attn_l1norm.shape)} and {tuple(index_lse.shape)}"
-            )
+            raise ValueError("THD dense denom tensors must have shape " f"{expected_denom_shape}, got {tuple(attn_l1norm.shape)} and {tuple(index_lse.shape)}")
         return True, batch, total_q, total_k, heads, head_dim, max_q, max_k
 
     if index_q.ndim != 4 or weights.ndim != 3 or index_k.ndim != 3:
@@ -120,15 +114,9 @@ def _dense_shapes(
     expected_score_shape = (batch, seqlen_q, seqlen_k)
     expected_denom_shape = (batch, seqlen_q)
     if attn_score.shape != expected_score_shape or index_score.shape != expected_score_shape:
-        raise ValueError(
-            "BSHD dense score tensors must have shape "
-            f"{expected_score_shape}, got {tuple(attn_score.shape)} and {tuple(index_score.shape)}"
-        )
+        raise ValueError("BSHD dense score tensors must have shape " f"{expected_score_shape}, got {tuple(attn_score.shape)} and {tuple(index_score.shape)}")
     if attn_l1norm.shape != expected_denom_shape or index_lse.shape != expected_denom_shape:
-        raise ValueError(
-            "BSHD dense denom tensors must have shape "
-            f"{expected_denom_shape}, got {tuple(attn_l1norm.shape)} and {tuple(index_lse.shape)}"
-        )
+        raise ValueError("BSHD dense denom tensors must have shape " f"{expected_denom_shape}, got {tuple(attn_l1norm.shape)} and {tuple(index_lse.shape)}")
     return False, batch, batch * seqlen_q, batch * seqlen_k, heads, head_dim, seqlen_q, seqlen_k
 
 
@@ -148,14 +136,14 @@ class IndexerBackward(APIBase):
 
     def __init__(
         self,
-        sample_index_q: torch.Tensor,       # (B, S_q, H, D) BF16
-        sample_weights: torch.Tensor,       # (B, S_q, H) BF16
-        sample_index_k: torch.Tensor,       # (B, S_k, D) BF16
-        sample_d_index_q: torch.Tensor,     # same shape/dtype as index_q
-        sample_d_weights: torch.Tensor,     # same shape/dtype as weights
-        sample_d_index_k: torch.Tensor,     # same shape/dtype as index_k
-        sample_attn_score: torch.Tensor,    # (B, S_q, topk) FP32 — target
-        sample_index_score: torch.Tensor,   # (B, S_q, topk) FP32 — predict
+        sample_index_q: torch.Tensor,  # (B, S_q, H, D) BF16
+        sample_weights: torch.Tensor,  # (B, S_q, H) BF16
+        sample_index_k: torch.Tensor,  # (B, S_k, D) BF16
+        sample_d_index_q: torch.Tensor,  # same shape/dtype as index_q
+        sample_d_weights: torch.Tensor,  # same shape/dtype as weights
+        sample_d_index_k: torch.Tensor,  # same shape/dtype as index_k
+        sample_attn_score: torch.Tensor,  # (B, S_q, topk) FP32 — target
+        sample_index_score: torch.Tensor,  # (B, S_q, topk) FP32 — predict
         sample_topk_indices: torch.Tensor,  # (B, S_q, topk) INT32
         sm_scale: float = 1.0,
         block_I: int = 128,
@@ -210,9 +198,14 @@ class IndexerBackward(APIBase):
         major, _ = torch.cuda.get_device_capability()
         kernel_factory = indexer_backward_sm90 if major == 9 else indexer_backward_sm100
         self._compiled_kernel = kernel_factory(
-            self.batch, self.seqlen, self.seqlen_k,
-            self.heads, self.head_dim, self.topk,
-            sm_scale=self.sm_scale, block_I=self.block_I,
+            self.batch,
+            self.seqlen,
+            self.seqlen_k,
+            self.heads,
+            self.head_dim,
+            self.topk,
+            sm_scale=self.sm_scale,
+            block_I=self.block_I,
         )
 
     def execute(
@@ -237,9 +230,15 @@ class IndexerBackward(APIBase):
         grad_scale = float(loss_coeff) / (int(self.batch) * int(self.seqlen))
         grad_loss_tensor = _as_grad_loss_tensor(grad_loss, index_q.device)
         self._compiled_kernel(
-            index_q, weights, index_k,
-            d_index_q, d_weights, d_index_k,
-            attn_score, index_score, topk_indices,
+            index_q,
+            weights,
+            index_k,
+            d_index_q,
+            d_weights,
+            d_index_k,
+            attn_score,
+            index_score,
+            topk_indices,
             grad_loss_tensor,
             grad_scale,
             current_stream,
@@ -346,8 +345,11 @@ class DenseIndexerBackward(APIBase):
         kernel_factory = dense_indexer_backward_sm90 if major == 9 else dense_indexer_backward_sm100
         self._uses_current_stream_pipeline = major == 9
         self._compiled_kernel = kernel_factory(
-            self.batch, self.max_seqlen_q, self.max_seqlen_k,
-            self.heads, self.head_dim,
+            self.batch,
+            self.max_seqlen_q,
+            self.max_seqlen_k,
+            self.heads,
+            self.head_dim,
             sm_scale=self.sm_scale,
             block_I=self.block_I,
             ratio=self.ratio,
@@ -386,11 +388,19 @@ class DenseIndexerBackward(APIBase):
                 d_index_k_f32 = torch.zeros_like(d_index_k, dtype=torch.float32)
 
         self._compiled_kernel(
-            index_q, weights, index_k,
-            d_index_q, d_weights, d_index_k_f32,
-            attn_score, attn_l1norm, index_score, index_lse,
+            index_q,
+            weights,
+            index_k,
+            d_index_q,
+            d_weights,
+            d_index_k_f32,
+            attn_score,
+            attn_l1norm,
+            index_score,
+            index_lse,
             grad_scale,
-            cu_seqlens_q, cu_seqlens_k,
+            cu_seqlens_q,
+            cu_seqlens_k,
             backend_stream,
         )
 
@@ -450,31 +460,49 @@ def indexer_backward_wrapper(
     # with different loss_coeff for the same tensor shape. Shape
     # changes still get their own cache entries.
     key = (
-        index_q.dtype, weights.dtype, index_k.dtype,
-        b, s_q, s_k, h, d, topk,
-        float(sm_scale), int(block_I),
+        index_q.dtype,
+        weights.dtype,
+        index_k.dtype,
+        b,
+        s_q,
+        s_k,
+        h,
+        d,
+        topk,
+        float(sm_scale),
+        int(block_I),
     )
     obj = _cache_of_IndexerBackwardObjects.get(key)
     if obj is None:
         obj = IndexerBackward(
-            sample_index_q=index_q, sample_weights=weights,
+            sample_index_q=index_q,
+            sample_weights=weights,
             sample_index_k=index_k,
-            sample_d_index_q=d_index_q, sample_d_weights=d_weights,
+            sample_d_index_q=d_index_q,
+            sample_d_weights=d_weights,
             sample_d_index_k=d_index_k,
             sample_attn_score=attn_score,
             sample_index_score=index_score,
             sample_topk_indices=topk_indices,
-            sm_scale=sm_scale, block_I=block_I,
+            sm_scale=sm_scale,
+            block_I=block_I,
         )
         assert obj.check_support()
         obj.compile()
         _cache_of_IndexerBackwardObjects[key] = obj
 
     obj.execute(
-        index_q, weights, index_k,
-        d_index_q, d_weights, d_index_k,
-        attn_score, index_score, topk_indices,
-        loss_coeff=loss_coeff, grad_loss=grad_loss,
+        index_q,
+        weights,
+        index_k,
+        d_index_q,
+        d_weights,
+        d_index_k,
+        attn_score,
+        index_score,
+        topk_indices,
+        loss_coeff=loss_coeff,
+        grad_loss=grad_loss,
         current_stream=stream,
     )
     return TupleDict(d_index_q=d_index_q, d_weights=d_weights, d_index_k=d_index_k)
@@ -528,12 +556,26 @@ def dense_indexer_backward_wrapper(
         index_score_exec, index_score_original = _contiguous_mutable(index_score)
 
         (
-            is_thd, batch, total_q, total_k, heads, head_dim, max_q, max_k,
+            is_thd,
+            batch,
+            total_q,
+            total_k,
+            heads,
+            head_dim,
+            max_q,
+            max_k,
         ) = _dense_shapes(
-            index_q_exec, weights_exec, index_k_exec,
-            attn_score_exec, attn_l1norm_exec, index_score_exec, index_lse_exec,
-            cu_seqlens_q, cu_seqlens_k,
-            max_seqlen_q, max_seqlen_k,
+            index_q_exec,
+            weights_exec,
+            index_k_exec,
+            attn_score_exec,
+            attn_l1norm_exec,
+            index_score_exec,
+            index_lse_exec,
+            cu_seqlens_q,
+            cu_seqlens_k,
+            max_seqlen_q,
+            max_seqlen_k,
         )
 
         if d_index_q is None:
@@ -551,11 +593,21 @@ def dense_indexer_backward_wrapper(
         d_index_k_exec, d_index_k_original = _contiguous_output(d_index_k)
 
     key = (
-        index_q.dtype, weights.dtype, index_k.dtype, d_index_k.dtype,
-        is_thd, batch, heads, head_dim, max_q, max_k,
+        index_q.dtype,
+        weights.dtype,
+        index_k.dtype,
+        d_index_k.dtype,
+        is_thd,
+        batch,
+        heads,
+        head_dim,
+        max_q,
+        max_k,
         total_q if is_thd else None,
         total_k if is_thd else None,
-        float(sm_scale), int(block_I), int(ratio),
+        float(sm_scale),
+        int(block_I),
+        int(ratio),
     )
     obj = _cache_of_DenseIndexerBackwardObjects.get(key)
     if obj is None:
@@ -583,9 +635,16 @@ def dense_indexer_backward_wrapper(
         _cache_of_DenseIndexerBackwardObjects[key] = obj
 
     obj.execute(
-        index_q_exec, weights_exec, index_k_exec,
-        d_index_q_exec, d_weights_exec, d_index_k_exec,
-        attn_score_exec, attn_l1norm_exec, index_score_exec, index_lse_exec,
+        index_q_exec,
+        weights_exec,
+        index_k_exec,
+        d_index_q_exec,
+        d_weights_exec,
+        d_index_k_exec,
+        attn_score_exec,
+        attn_l1norm_exec,
+        index_score_exec,
+        index_lse_exec,
         loss_coeff=loss_coeff,
         grad_loss=grad_loss,
         cu_seqlens_q=cu_seqlens_q,

@@ -1,3 +1,4 @@
+
 #pragma once
 
 #include <cstdlib>
@@ -2229,8 +2230,7 @@ class UnifiedSDPANode : public SDPANodeBase<UnifiedSDPANode> {
         managed_backend_descriptor_t& raw_operations,
         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) const override final {
         CUDNN_FRONTEND_UNUSED(operations);
-        CUDNN_FE_LOG_LABEL("INFO: "
-                           << "Building UnifiedSDPANode operations " << attributes.name << " ");
+        CUDNN_FE_LOG_LABEL("INFO: " << "Building UnifiedSDPANode operations " << attributes.name << " ");
         auto cudnn_ver_error = error_t{error_code_t::GRAPH_NOT_SUPPORTED, "Unified SDPA node requires cuDNN 9.13.1"};
 
 #if (CUDNN_VERSION >= 91301)

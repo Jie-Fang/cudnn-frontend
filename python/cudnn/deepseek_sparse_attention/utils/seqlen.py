@@ -58,32 +58,16 @@ class SeqlenInfoQK:
     ):
         offset_q = 0 if const_expr(mCuSeqlensQ is None) else mCuSeqlensQ[batch_idx]
         offset_k = 0 if const_expr(mCuSeqlensK is None) else mCuSeqlensK[batch_idx]
-        padded_offset_q = (
-            0
-            if const_expr(mCuSeqlensQ is None)
-            else (offset_q + batch_idx * tile_m) // tile_m * tile_m
-        )
-        padded_offset_k = (
-            0
-            if const_expr(mCuSeqlensK is None)
-            else (offset_k + batch_idx * tile_n) // tile_n * tile_n
-        )
+        padded_offset_q = 0 if const_expr(mCuSeqlensQ is None) else (offset_q + batch_idx * tile_m) // tile_m * tile_m
+        padded_offset_k = 0 if const_expr(mCuSeqlensK is None) else (offset_k + batch_idx * tile_n) // tile_n * tile_n
         if const_expr(mSeqUsedQ is not None):
             seqlen_q = mSeqUsedQ[batch_idx]
         else:
-            seqlen_q = (
-                seqlen_q_static
-                if const_expr(mCuSeqlensQ is None)
-                else mCuSeqlensQ[batch_idx + 1] - offset_q
-            )
+            seqlen_q = seqlen_q_static if const_expr(mCuSeqlensQ is None) else mCuSeqlensQ[batch_idx + 1] - offset_q
         if const_expr(mSeqUsedK is not None):
             seqlen_k = mSeqUsedK[batch_idx]
         else:
-            seqlen_k = (
-                seqlen_k_static
-                if const_expr(mCuSeqlensK is None)
-                else mCuSeqlensK[batch_idx + 1] - offset_k
-            )
+            seqlen_k = seqlen_k_static if const_expr(mCuSeqlensK is None) else mCuSeqlensK[batch_idx + 1] - offset_k
         has_cu_seqlens_q: int = mCuSeqlensQ is not None
         has_cu_seqlens_k: int = mCuSeqlensK is not None
         has_seqused_q: int = mSeqUsedQ is not None

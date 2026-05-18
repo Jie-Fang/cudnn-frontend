@@ -39,11 +39,7 @@ def _as_forward_payload(payload: dict, node: dict) -> dict:
     inputs = node.get("inputs", {})
     fwd_node = dict(node)
     fwd_node["tag"] = "SDPA_FWD"
-    fwd_node["inputs"] = {
-        name: inputs[name]
-        for name in ("Q", "K", "V", "SEQ_LEN_Q", "SEQ_LEN_KV", "SINK_TOKEN", "BIAS", "BLOCK_MASK")
-        if name in inputs
-    }
+    fwd_node["inputs"] = {name: inputs[name] for name in ("Q", "K", "V", "SEQ_LEN_Q", "SEQ_LEN_KV", "SINK_TOKEN", "BIAS", "BLOCK_MASK") if name in inputs}
     fwd_node["outputs"] = {"O": inputs.get("O")}
     fwd_node["generate_stats"] = True
 

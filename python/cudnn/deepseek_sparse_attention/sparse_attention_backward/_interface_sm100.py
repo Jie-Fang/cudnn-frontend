@@ -11,7 +11,6 @@ from cudnn.deepseek_sparse_attention.utils.runtime import resolve_stream
 from cudnn.deepseek_sparse_attention.utils.tensor_conversion import to_cute_tensor
 from .dsa_bwd_sm100 import FlashAttentionDSABackwardSm100
 
-
 torch2cute_dtype_map = {
     torch.float16: cutlass.Float16,
     torch.bfloat16: cutlass.BFloat16,
@@ -90,9 +89,7 @@ def flash_attn_bwd_sm100(
         dkv = torch.zeros(total_S_kv, head_dim, dtype=kv.dtype, device=device)
     else:
         expected_dkv_shape = (total_S_kv, head_dim)
-        assert dkv.shape == expected_dkv_shape, (
-            f"dkv shape mismatch: expected {expected_dkv_shape}, got {dkv.shape}"
-        )
+        assert dkv.shape == expected_dkv_shape, f"dkv shape mismatch: expected {expected_dkv_shape}, got {dkv.shape}"
         assert dkv.dtype == kv.dtype, f"dkv dtype mismatch: expected {kv.dtype}, got {dkv.dtype}"
         assert dkv.device == device, f"dkv device mismatch: expected {device}, got {dkv.device}"
         dkv.fill_(0)
@@ -101,17 +98,28 @@ def flash_attn_bwd_sm100(
     # Allocate workspace tensors
     acc_dtype = cutlass.Float32
     ws_lse_odo_shape = FlashAttentionDSABackwardSm100._get_workspace_size_LSE_OdO(
-        total_S_q, head_dim, num_head, batch_size, acc_dtype,
+        total_S_q,
+        head_dim,
+        num_head,
+        batch_size,
+        acc_dtype,
     )
     workspace_LSE_OdO = torch.zeros(
-        *ws_lse_odo_shape, dtype=torch.uint8, device=device,
+        *ws_lse_odo_shape,
+        dtype=torch.uint8,
+        device=device,
     )
 
     ws_dkv_shape = FlashAttentionDSABackwardSm100._get_workspace_size_dKV(
-        total_S_kv, head_dim, batch_size, acc_dtype,
+        total_S_kv,
+        head_dim,
+        batch_size,
+        acc_dtype,
     )
     workspace_dKV = torch.zeros(
-        *ws_dkv_shape, dtype=torch.uint8, device=device,
+        *ws_dkv_shape,
+        dtype=torch.uint8,
+        device=device,
     )
 
     problem_shape = (total_S_q, total_S_kv, head_dim, (num_head, batch_size))
@@ -147,24 +155,42 @@ def flash_attn_bwd_sm100(
             flash_attn_bwd_sm100.compile_cache[compile_key] = cute.compile(
                 kernel_obj,
                 problem_shape,
-                q_tensor, kv_tensor, out_tensor, dout_tensor,
-                lse_tensor, attn_sink_tensor,
-                topk_idxs_tensor, topk_length_tensor,
-                dq_tensor, dkv_tensor, d_sink_tensor,
-                workspace_LSE_OdO_tensor, workspace_dKV_tensor,
-                softmax_scale, current_stream,
+                q_tensor,
+                kv_tensor,
+                out_tensor,
+                dout_tensor,
+                lse_tensor,
+                attn_sink_tensor,
+                topk_idxs_tensor,
+                topk_length_tensor,
+                dq_tensor,
+                dkv_tensor,
+                d_sink_tensor,
+                workspace_LSE_OdO_tensor,
+                workspace_dKV_tensor,
+                softmax_scale,
+                current_stream,
                 options="--enable-tvm-ffi",
             )
 
     with torch.cuda.nvtx.range("flash_attn_bwd_sm100_kernel"):
         flash_attn_bwd_sm100.compile_cache[compile_key](
             problem_shape,
-            q, kv, out, dout,
-            lse, attn_sink,
-            topk_idxs, topk_length,
-            dq, dkv, d_sink,
-            workspace_LSE_OdO, workspace_dKV,
-            softmax_scale, current_stream,
+            q,
+            kv,
+            out,
+            dout,
+            lse,
+            attn_sink,
+            topk_idxs,
+            topk_length,
+            dq,
+            dkv,
+            d_sink,
+            workspace_LSE_OdO,
+            workspace_dKV,
+            softmax_scale,
+            current_stream,
         )
 
     return dq, dkv, d_sink

@@ -13,7 +13,6 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 import torch
 
-
 # ---------------------------------------------------------------------------
 # Timing
 # ---------------------------------------------------------------------------
@@ -24,9 +23,7 @@ _BENCH_MODE = "default"  # "default" (delay-kernel) or "e2e" (per-iter sync)
 _DELAY_CYCLES = 4_000_000
 
 
-def benchmark_fn(
-    fn: Callable, *args, warmup: int = 10, repeat: int = 100, **kw
-) -> Tuple[float, float]:
+def benchmark_fn(fn: Callable, *args, warmup: int = 10, repeat: int = 100, **kw) -> Tuple[float, float]:
     """Benchmark *fn*, returning (median_us, min_us).
 
     Modes (controlled by global ``_BENCH_MODE``):
@@ -68,6 +65,7 @@ def benchmark_fn(
 # ---------------------------------------------------------------------------
 # cuDNN graph autotune helper (reusable)
 # ---------------------------------------------------------------------------
+
 
 def cudnn_autotune(
     graph,
@@ -164,6 +162,7 @@ TOKEN_COUNTS = [1024, 4096, 16384]
 # Benchmark: MoE grouped matmul (original)
 # ---------------------------------------------------------------------------
 
+
 def bench_moe(warmup: int, repeat: int):
     print()
     print("=" * 100)
@@ -181,8 +180,7 @@ def bench_moe(warmup: int, repeat: int):
         "  ".join(
             c.ljust(w)
             for c, w in zip(
-                ["model/proj", "tokens", "experts", "topk",
-                 "cuDNN (us)", "Naive (us)", "speedup"],
+                ["model/proj", "tokens", "experts", "topk", "cuDNN (us)", "Naive (us)", "speedup"],
                 W,
             )
         )
@@ -207,36 +205,45 @@ def bench_moe(warmup: int, repeat: int):
                     token = torch.randn(1, total, K_dim, dtype=torch.float16, device="cuda")
                     w_raw = torch.randn(num_experts, N_dim, K_dim, dtype=torch.float16, device="cuda")
                     weight = w_raw.transpose(1, 2)
-                    fto = (
-                        torch.arange(num_experts, dtype=torch.int32, device="cuda") * tpe
-                    ).reshape(-1, 1, 1)
+                    fto = (torch.arange(num_experts, dtype=torch.int32, device="cuda") * tpe).reshape(-1, 1, 1)
 
                     cm, _ = benchmark_fn(
-                        moe_grouped_matmul, token, weight, fto,
-                        mode="none", top_k=top_k,
-                        warmup=warmup, repeat=repeat,
+                        moe_grouped_matmul,
+                        token,
+                        weight,
+                        fto,
+                        mode="none",
+                        top_k=top_k,
+                        warmup=warmup,
+                        repeat=repeat,
                     )
 
                     def naive(tok, wr, ne, t):
-                        out = torch.empty(1, tok.shape[1], wr.shape[1],
-                                          dtype=tok.dtype, device=tok.device)
+                        out = torch.empty(1, tok.shape[1], wr.shape[1], dtype=tok.dtype, device=tok.device)
                         for e in range(ne):
                             s = e * t
                             out[0, s : s + t] = tok[0, s : s + t] @ wr[e].T
                         return out
 
                     nm, _ = benchmark_fn(
-                        naive, token, w_raw, num_experts, tpe,
-                        warmup=warmup, repeat=repeat,
+                        naive,
+                        token,
+                        w_raw,
+                        num_experts,
+                        tpe,
+                        warmup=warmup,
+                        repeat=repeat,
                     )
                     sp = f"{nm/cm:.2f}x"
-                    print("  ".join(
-                        v.ljust(w) for v, w in zip(
-                            [f"{name}/{proj}", str(n_tokens), str(num_experts),
-                             str(top_k), f"{cm:.0f}", f"{nm:.0f}", sp],
-                            W,
+                    print(
+                        "  ".join(
+                            v.ljust(w)
+                            for v, w in zip(
+                                [f"{name}/{proj}", str(n_tokens), str(num_experts), str(top_k), f"{cm:.0f}", f"{nm:.0f}", sp],
+                                W,
+                            )
                         )
-                    ))
+                    )
                 except Exception as e:
                     print(f"  {name}/{proj} {n_tokens}: ERR {e}")
 
@@ -259,6 +266,7 @@ def bench_grouped_gemm_glu_vs_cudnn(warmup: int, repeat: int):
     cuDNN:   fused graph (2x moe_grouped_matmul + swish + mul, BF16)
     """
     import sys, os
+
     _REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     sys.path.insert(0, os.path.join(_REPO, "cudnn_frontend/test/python/fe_api"))
     sys.path.insert(0, os.path.join(_REPO, "cudnn_frontend/test/python"))
@@ -307,9 +315,13 @@ def bench_grouped_gemm_glu_vs_cudnn(warmup: int, repeat: int):
 
     W = [18, 8, 6, 16, 16, 14, 14, 10]
     headers = [
-        "model", "tokens", "tpe",
-        "cuDNN MoE (us)", "CuteDSL (us)",
-        "cuDNN TFLOPS", "CuteDSL TFLOPS",
+        "model",
+        "tokens",
+        "tpe",
+        "cuDNN MoE (us)",
+        "CuteDSL (us)",
+        "cuDNN TFLOPS",
+        "CuteDSL TFLOPS",
         "CuteDSL/cuDNN",
     ]
     print("  ".join(h.ljust(w) for h, w in zip(headers, W)))
@@ -343,7 +355,8 @@ def bench_grouped_gemm_glu_vs_cudnn(warmup: int, repeat: int):
             try:
                 padded_offsets = torch.tensor(
                     [aligned_m * (i + 1) for i in range(L)],
-                    dtype=torch.int32, device="cuda",
+                    dtype=torch.int32,
+                    device="cuda",
                 )
                 _, a = create_and_permute_tensor(1, valid_m, K, False, AB_DTYPE)
                 _, b = create_and_permute_tensor(L, N, K, False, AB_DTYPE)
@@ -351,13 +364,22 @@ def bench_grouped_gemm_glu_vs_cudnn(warmup: int, repeat: int):
                 _, sfb = create_scale_factor_tensor(L, N, K, SF_VEC, SF_DTYPE)
                 alpha = torch.ones(L, dtype=torch.float32, device="cuda")
                 c = torch.empty_strided(
-                    (valid_m, N, 1), (N, 1, valid_m * N), dtype=C_DTYPE, device="cuda",
+                    (valid_m, N, 1),
+                    (N, 1, valid_m * N),
+                    dtype=C_DTYPE,
+                    device="cuda",
                 )
                 d = torch.empty_strided(
-                    (valid_m, N_OUT, 1), (N_OUT, 1, valid_m * N_OUT), dtype=D_DTYPE, device="cuda",
+                    (valid_m, N_OUT, 1),
+                    (N_OUT, 1, valid_m * N_OUT),
+                    dtype=D_DTYPE,
+                    device="cuda",
                 )
                 d_col = torch.empty_strided(
-                    (valid_m, N_OUT, 1), (N_OUT, 1, valid_m * N_OUT), dtype=D_DTYPE, device="cuda",
+                    (valid_m, N_OUT, 1),
+                    (N_OUT, 1, valid_m * N_OUT),
+                    dtype=D_DTYPE,
+                    device="cuda",
                 )
                 amax = torch.full((L, 1), float("-inf"), dtype=torch.float32, device="cuda")
                 prob = torch.ones(valid_m, 1, 1, dtype=torch.float32, device="cuda")
@@ -365,11 +387,16 @@ def bench_grouped_gemm_glu_vs_cudnn(warmup: int, repeat: int):
                 cache_key = (valid_m, N, K, L)
                 if cache_key not in compiled_cache:
                     api = GroupedGemmGluSm100(
-                        sample_a=a, sample_b=b, sample_c=c, sample_d=d,
-                        sample_sfa=sfa, sample_sfb=sfb,
+                        sample_a=a,
+                        sample_b=b,
+                        sample_c=c,
+                        sample_d=d,
+                        sample_sfa=sfa,
+                        sample_sfb=sfb,
                         sample_padded_offsets=padded_offsets,
                         sample_alpha=alpha,
-                        sample_d_col=d_col, sample_amax=amax,
+                        sample_d_col=d_col,
+                        sample_amax=amax,
                         sample_prob=prob,
                         acc_dtype=torch.float32,
                         mma_tiler_mn=MMA_TILER,
@@ -381,6 +408,7 @@ def bench_grouped_gemm_glu_vs_cudnn(warmup: int, repeat: int):
                     )
                     assert api.check_support(), "CuteDSL config not supported"
                     import time as _time
+
                     t0 = _time.time()
                     api.compile()
                     print(f"  [{model_name} tpe={tpe}] CuteDSL compiled in {_time.time() - t0:.1f}s")
@@ -390,10 +418,16 @@ def bench_grouped_gemm_glu_vs_cudnn(warmup: int, repeat: int):
 
                 _api, _stream = api, stream
                 _exec_kw = dict(
-                    a_tensor=a, b_tensor=b, c_tensor=c, d_tensor=d,
-                    sfa_tensor=sfa, sfb_tensor=sfb,
-                    padded_offsets=padded_offsets, alpha_tensor=alpha,
-                    d_col_tensor=d_col, amax_tensor=amax,
+                    a_tensor=a,
+                    b_tensor=b,
+                    c_tensor=c,
+                    d_tensor=d,
+                    sfa_tensor=sfa,
+                    sfb_tensor=sfb,
+                    padded_offsets=padded_offsets,
+                    alpha_tensor=alpha,
+                    d_col_tensor=d_col,
+                    amax_tensor=amax,
                     prob_tensor=prob,
                     current_stream=_stream,
                 )
@@ -404,6 +438,7 @@ def bench_grouped_gemm_glu_vs_cudnn(warmup: int, repeat: int):
                 cutedsl_us, _ = benchmark_fn(_run_cutedsl, warmup=warmup, repeat=repeat)
             except Exception as e:
                 import traceback
+
                 print(f"  [{model_name} tpe={tpe}] CuteDSL ERR: {e}")
                 traceback.print_exc()
 
@@ -430,9 +465,7 @@ def bench_grouped_gemm_glu_vs_cudnn(warmup: int, repeat: int):
                 w_up_sf_stride = [sf_k * N_OUT, 1, sf_k]
                 w_up_sf = torch.ones(w_up_sf_dim, dtype=torch.float8_e8m0fnu, device="cuda")
 
-                fto = (
-                    torch.arange(L, dtype=torch.int32, device="cuda") * group_m
-                ).reshape(-1, 1, 1)
+                fto = (torch.arange(L, dtype=torch.int32, device="cuda") * group_m).reshape(-1, 1, 1)
 
                 M_out = total
                 compute_dtype = cudnn.data_type.FLOAT
@@ -448,70 +481,96 @@ def bench_grouped_gemm_glu_vs_cudnn(warmup: int, repeat: int):
                 )
 
                 token_fp8_t = graph.tensor(
-                    name="token_fp8", dim=list(token_fp8.shape),
+                    name="token_fp8",
+                    dim=list(token_fp8.shape),
                     stride=list(token_fp8.stride()),
-                    data_type=fp8_dtype, uid=1,
+                    data_type=fp8_dtype,
+                    uid=1,
                 )
                 token_sf_t = graph.tensor(
-                    name="token_sf", dim=token_sf_dim,
+                    name="token_sf",
+                    dim=token_sf_dim,
                     stride=token_sf_stride,
-                    data_type=sf_dtype_cudnn, uid=2,
+                    data_type=sf_dtype_cudnn,
+                    uid=2,
                     reordering_type=cudnn.tensor_reordering.F8_128x4,
                 )
                 token_deq = graph.block_scale_dequantize(
-                    token_fp8_t, token_sf_t,
-                    block_size=[1, sf_block], name="dequant_token",
+                    token_fp8_t,
+                    token_sf_t,
+                    block_size=[1, sf_block],
+                    name="dequant_token",
                 )
 
                 w_gate_fp8_t = graph.tensor(
-                    name="w_gate_fp8", dim=list(w_gate_fp8.shape),
+                    name="w_gate_fp8",
+                    dim=list(w_gate_fp8.shape),
                     stride=list(w_gate_fp8.stride()),
-                    data_type=fp8_dtype, uid=3,
+                    data_type=fp8_dtype,
+                    uid=3,
                 )
                 w_gate_sf_t = graph.tensor(
-                    name="w_gate_sf", dim=w_gate_sf_dim,
+                    name="w_gate_sf",
+                    dim=w_gate_sf_dim,
                     stride=w_gate_sf_stride,
-                    data_type=sf_dtype_cudnn, uid=4,
+                    data_type=sf_dtype_cudnn,
+                    uid=4,
                     reordering_type=cudnn.tensor_reordering.F8_128x4,
                 )
                 w_gate_deq = graph.block_scale_dequantize(
-                    w_gate_fp8_t, w_gate_sf_t,
-                    block_size=[sf_block, 1], name="dequant_w_gate",
+                    w_gate_fp8_t,
+                    w_gate_sf_t,
+                    block_size=[sf_block, 1],
+                    name="dequant_w_gate",
                 )
 
                 w_up_fp8_t = graph.tensor(
-                    name="w_up_fp8", dim=list(w_up_fp8.shape),
+                    name="w_up_fp8",
+                    dim=list(w_up_fp8.shape),
                     stride=list(w_up_fp8.stride()),
-                    data_type=fp8_dtype, uid=5,
+                    data_type=fp8_dtype,
+                    uid=5,
                 )
                 w_up_sf_t = graph.tensor(
-                    name="w_up_sf", dim=w_up_sf_dim,
+                    name="w_up_sf",
+                    dim=w_up_sf_dim,
                     stride=w_up_sf_stride,
-                    data_type=sf_dtype_cudnn, uid=6,
+                    data_type=sf_dtype_cudnn,
+                    uid=6,
                     reordering_type=cudnn.tensor_reordering.F8_128x4,
                 )
                 w_up_deq = graph.block_scale_dequantize(
-                    w_up_fp8_t, w_up_sf_t,
-                    block_size=[sf_block, 1], name="dequant_w_up",
+                    w_up_fp8_t,
+                    w_up_sf_t,
+                    block_size=[sf_block, 1],
+                    name="dequant_w_up",
                 )
 
                 fto_t = graph.tensor(
-                    name="fto", dim=list(fto.shape),
+                    name="fto",
+                    dim=list(fto.shape),
                     stride=list(fto.stride()),
-                    data_type=cudnn.data_type.INT32, uid=7,
+                    data_type=cudnn.data_type.INT32,
+                    uid=7,
                 )
 
                 gate_out = graph.moe_grouped_matmul(
-                    token=token_deq, weight=w_gate_deq,
+                    token=token_deq,
+                    weight=w_gate_deq,
                     first_token_offset=fto_t,
-                    mode=_moe_mode, compute_data_type=compute_dtype,
-                    top_k=top_k, name="moe_gate",
+                    mode=_moe_mode,
+                    compute_data_type=compute_dtype,
+                    top_k=top_k,
+                    name="moe_gate",
                 )
                 up_out = graph.moe_grouped_matmul(
-                    token=token_deq, weight=w_up_deq,
+                    token=token_deq,
+                    weight=w_up_deq,
                     first_token_offset=fto_t,
-                    mode=_moe_mode, compute_data_type=compute_dtype,
-                    top_k=top_k, name="moe_up",
+                    mode=_moe_mode,
+                    compute_data_type=compute_dtype,
+                    top_k=top_k,
+                    name="moe_up",
                 )
 
                 gate_silu = graph.swish(gate_out, name="silu_gate")
@@ -526,10 +585,14 @@ def bench_grouped_gemm_glu_vs_cudnn(warmup: int, repeat: int):
 
                 result_gpu = torch.empty(1, M_out, N_OUT, dtype=torch.bfloat16, device="cuda")
                 variant_pack = {
-                    1: token_fp8, 2: token_sf,
-                    3: w_gate_fp8, 4: w_gate_sf,
-                    5: w_up_fp8, 6: w_up_sf,
-                    7: fto, 100: result_gpu,
+                    1: token_fp8,
+                    2: token_sf,
+                    3: w_gate_fp8,
+                    4: w_gate_sf,
+                    5: w_up_fp8,
+                    6: w_up_sf,
+                    7: fto,
+                    100: result_gpu,
                 }
 
                 if _AUTOTUNE_PLANS is not None:
@@ -550,6 +613,7 @@ def bench_grouped_gemm_glu_vs_cudnn(warmup: int, repeat: int):
                 del fto, result_gpu, workspace
             except Exception as e:
                 import traceback
+
                 print(f"  [{model_name} tpe={tpe}] cuDNN MoE ERR: {e}")
                 traceback.print_exc()
 
@@ -561,11 +625,7 @@ def bench_grouped_gemm_glu_vs_cudnn(warmup: int, repeat: int):
 
             cutedsl_tf = gemm_flops / (cutedsl_us * 1e-6) / 1e12 if cutedsl_us else None
             cudnn_tf = gemm_flops / (cudnn_us * 1e-6) / 1e12 if cudnn_us else None
-            sp = (
-                f"{cudnn_us / cutedsl_us:.2f}x"
-                if cutedsl_us and cudnn_us
-                else "N/A"
-            )
+            sp = f"{cudnn_us / cutedsl_us:.2f}x" if cutedsl_us and cudnn_us else "N/A"
             vals = [
                 model_name,
                 str(n_tokens),
@@ -583,6 +643,7 @@ def bench_grouped_gemm_glu_vs_cudnn(warmup: int, repeat: int):
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def main():
     global _BENCH_MODE, _AUTOTUNE_PLANS
     parser = argparse.ArgumentParser(description="Benchmark MoE Grouped Matmul.")
@@ -598,13 +659,13 @@ def main():
         "--mode",
         choices=["default", "e2e"],
         default="default",
-        help="Timing mode: "
-             "default = delay-kernel technique, near pure kernel time; "
-             "e2e = per-iter CUDA events with sync, includes launch overhead",
+        help="Timing mode: " "default = delay-kernel technique, near pure kernel time; " "e2e = per-iter CUDA events with sync, includes launch overhead",
     )
     parser.add_argument(
         "--autotune",
-        type=int, default=None, metavar="N",
+        type=int,
+        default=None,
+        metavar="N",
         help="Enable cuDNN autotune over top N execution plans (default: off, use heuristic)",
     )
     args = parser.parse_args()

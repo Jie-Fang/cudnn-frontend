@@ -77,8 +77,8 @@ from cudnn.deepseek_sparse_attention.utils.runtime import (
     torch_stream_context as _torch_stream_context,
 )
 
-mul_packed_f32x2 = partial(cute.arch.mul_packed_f32x2, rnd='rn')
-fma_packed_f32x2 = partial(cute.arch.fma_packed_f32x2, rnd='rn')
+mul_packed_f32x2 = partial(cute.arch.mul_packed_f32x2, rnd="rn")
+fma_packed_f32x2 = partial(cute.arch.fma_packed_f32x2, rnd="rn")
 
 
 # Barrier indices for kernel_gemm — per-stage barriers for S_FULL, DS_READY, K_LOADED
@@ -123,8 +123,7 @@ class IndexerBackwardSm100:
     k_load_warp_id = (8, 9, 10, 11)
     reduce_warp_id = (12, 13, 14, 15)
 
-    def __init__(self, head_dim, heads=64, block_I=128, topk=512,
-                 topk_indices_global: bool = True):
+    def __init__(self, head_dim, heads=64, block_I=128, topk=512, topk_indices_global: bool = True):
         self.head_dim = head_dim
         self.heads = heads
         self.block_I = block_I
@@ -173,9 +172,10 @@ class IndexerBackwardSm100:
 
         # TMA config
         self.cluster_shape = (1, 1, 1, 1)
-        self.Q_mbar_size = 2   # PipelineTmaUmma with 1 stage
+        self.Q_mbar_size = 2  # PipelineTmaUmma with 1 stage
         self.compute_sync_barrier = pipeline.NamedBarrier(
-            barrier_id=3, num_threads=self.WARPGROUP_SIZE,
+            barrier_id=3,
+            num_threads=self.WARPGROUP_SIZE,
         )
         self.tmem_alloc_barrier = pipeline.NamedBarrier(
             barrier_id=4,
@@ -185,9 +185,14 @@ class IndexerBackwardSm100:
     @cute.jit
     def __call__(
         self,
-        mQ: cute.Tensor, mW: cute.Tensor, mK: cute.Tensor,
-        mdQ: cute.Tensor, mdW: cute.Tensor, mdK_f32: cute.Tensor,
-        mGradSignal: cute.Tensor, mTopkIdx: cute.Tensor,
+        mQ: cute.Tensor,
+        mW: cute.Tensor,
+        mK: cute.Tensor,
+        mdQ: cute.Tensor,
+        mdW: cute.Tensor,
+        mdK_f32: cute.Tensor,
+        mGradSignal: cute.Tensor,
+        mTopkIdx: cute.Tensor,
         sm_scale: Float32 | float,
         stream: cuda.CUstream,
     ):
@@ -226,18 +231,27 @@ class IndexerBackwardSm100:
         # All GEMMs: SS path (A & B from SMEM, accumulator in TMEM)
         tmma1 = _make_trivial_tiled_mma(
             self.q_dtype,
-            tcgen05.OperandMajorMode.K, tcgen05.OperandMajorMode.K,
-            self.acc_dtype, cta_group, self.gemm1_tiler[:2],
+            tcgen05.OperandMajorMode.K,
+            tcgen05.OperandMajorMode.K,
+            self.acc_dtype,
+            cta_group,
+            self.gemm1_tiler[:2],
         )
         tmma2 = _make_trivial_tiled_mma(
             self.q_dtype,
-            tcgen05.OperandMajorMode.MN, tcgen05.OperandMajorMode.MN,
-            self.acc_dtype, cta_group, self.gemm2_tiler[:2],
+            tcgen05.OperandMajorMode.MN,
+            tcgen05.OperandMajorMode.MN,
+            self.acc_dtype,
+            cta_group,
+            self.gemm2_tiler[:2],
         )
         tmma3 = _make_trivial_tiled_mma(
             self.q_dtype,
-            tcgen05.OperandMajorMode.K, tcgen05.OperandMajorMode.MN,
-            self.acc_dtype, cta_group, self.gemm3_tiler[:2],
+            tcgen05.OperandMajorMode.K,
+            tcgen05.OperandMajorMode.MN,
+            self.acc_dtype,
+            cta_group,
+            self.gemm3_tiler[:2],
         )
 
         # SMEM layouts — primary views
@@ -249,8 +263,10 @@ class IndexerBackwardSm100:
         # Epilogue-style store layout for stmatrix writes to sdS (same physical SMEM).
         # COL_MAJOR (M-major) + square tile → physically compatible with A-operand layout.
         sdS_store_layout = _make_smem_layout_epi(
-            self.q_dtype, LayoutEnum.COL_MAJOR,
-            (self.heads_padded, self.block_I), 2,
+            self.q_dtype,
+            LayoutEnum.COL_MAJOR,
+            (self.heads_padded, self.block_I),
+            2,
         )
         # SwapAB GEMM2: A=dS (2-stage, from sdS SMEM), B=Q (1-stage, from sQ SMEM)
         sdS_g2a_layout = _make_smem_layout_a(tmma2, self.gemm2_tiler, self.q_dtype, 2)
@@ -268,23 +284,30 @@ class IndexerBackwardSm100:
         mQ_tma = cute.make_tensor(mQ.iterator, cute.select(mQ.layout, mode=[1, 2, 0, 3]))
         Q_smem_layout_tma = cute.select(sQ_layout, mode=[0, 1, 2])
         tma_atom_Q, mQ_tma = cute.nvgpu.make_tiled_tma_atom_A(
-            tma_load_op, mQ_tma, Q_smem_layout_tma,
-            self.gemm1_tiler, tmma1,
+            tma_load_op,
+            mQ_tma,
+            Q_smem_layout_tma,
+            self.gemm1_tiler,
+            tmma1,
             cluster_layout_vmnk.shape,
         )
         self.tma_copy_Q_bytes = cute.size_in_bytes(self.q_dtype, Q_smem_layout_tma)
 
         # Epilogue SMEM layout for dQ store (bf16, row-major = D contiguous)
         sdQ_epi_layout = _make_smem_layout_epi(
-            self.q_dtype, LayoutEnum.ROW_MAJOR,
-            (self.heads_padded, self.head_dim_padded), 1,
+            self.q_dtype,
+            LayoutEnum.ROW_MAJOR,
+            (self.heads_padded, self.head_dim_padded),
+            1,
         )
 
         # TMA dQ store — reorder mdQ so tiled dims (heads, dim) come first
         mdQ_tma = cute.make_tensor(mdQ.iterator, cute.select(mdQ.layout, mode=[1, 2, 0, 3]))
         sdQ_epi_smem_layout = cute.select(sdQ_epi_layout, mode=[0, 1])
         tma_atom_dQ, mdQ_tma = cpasync.make_tiled_tma_atom(
-            tma_store_op, mdQ_tma, sdQ_epi_smem_layout,
+            tma_store_op,
+            mdQ_tma,
+            sdQ_epi_smem_layout,
             (self.heads_padded, self.head_dim_padded),
         )
 
@@ -292,15 +315,30 @@ class IndexerBackwardSm100:
         batch_size = cute.size(mQ.shape[3]) if cute.rank(mQ.shape) > 3 else 1
 
         self.kernel_gemm(
-            mQ_tma, mW, mK, mdQ_tma, mdW, mdK_f32, mGradSignal, mTopkIdx,
+            mQ_tma,
+            mW,
+            mK,
+            mdQ_tma,
+            mdW,
+            mdK_f32,
+            mGradSignal,
+            mTopkIdx,
             sm_scale,
-            tmma1, tmma2, tmma3,
-            sQ_layout, sdS_g2a_layout,
-            sK_layout, sKt_layout,
-            sdS_layout, sQ_g2b_layout, sdS_store_layout,
-            tma_atom_Q, tma_atom_dQ,
+            tmma1,
+            tmma2,
+            tmma3,
+            sQ_layout,
+            sdS_g2a_layout,
+            sK_layout,
+            sKt_layout,
+            sdS_layout,
+            sQ_g2b_layout,
+            sdS_store_layout,
+            tma_atom_Q,
+            tma_atom_dQ,
             sdQ_epi_layout,
-            seqlen, batch_size,
+            seqlen,
+            batch_size,
         ).launch(
             grid=(batch_size, seqlen, 1),
             block=[self.THREADS_PER_CTA, 1, 1],
@@ -312,15 +350,30 @@ class IndexerBackwardSm100:
     @cute.kernel
     def kernel_gemm(
         self,
-        mQ, mW, mK, mdQ, mdW, mdK_f32, mGradSignal, mTopkIdx,
+        mQ,
+        mW,
+        mK,
+        mdQ,
+        mdW,
+        mdK_f32,
+        mGradSignal,
+        mTopkIdx,
         sm_scale: Float32 | float,
-        tmma1, tmma2, tmma3,
-        sQ_layout, sdS_g2a_layout,
-        sK_layout, sKt_layout,
-        sdS_layout, sQ_g2b_layout, sdS_store_layout,
-        tma_atom_Q, tma_atom_dQ,
+        tmma1,
+        tmma2,
+        tmma3,
+        sQ_layout,
+        sdS_g2a_layout,
+        sK_layout,
+        sKt_layout,
+        sdS_layout,
+        sQ_g2b_layout,
+        sdS_store_layout,
+        tma_atom_Q,
+        tma_atom_dQ,
         sdQ_epi_layout,
-        seqlen: Int32, batch_size: Int32,
+        seqlen: Int32,
+        batch_size: Int32,
     ):
         tidx = cute.arch.thread_idx()[0]
         warp_idx = cute.arch.make_warp_uniform(cute.arch.warp_idx())
@@ -347,25 +400,25 @@ class IndexerBackwardSm100:
         _non_tma_align = 128
 
         _offset = 0
-        _offset += self.Q_mbar_size * 8          # Q_mbar: Int64 × Q_mbar_size
-        _offset += NUM_BARRIERS * 8              # mbar: Int64 × NUM_BARRIERS
-        _offset += 4                             # tmem_holding_buf: Int32
+        _offset += self.Q_mbar_size * 8  # Q_mbar: Int64 × Q_mbar_size
+        _offset += NUM_BARRIERS * 8  # mbar: Int64 × NUM_BARRIERS
+        _offset += 4  # tmem_holding_buf: Int32
         _offset = _align_up(_offset, _tma_align)
-        _offset += int(sQ_size) * _elem_bytes    # sQ
+        _offset += int(sQ_size) * _elem_bytes  # sQ
         _offset = _align_up(_offset, _tma_align)
-        _offset += int(sK_size) * _elem_bytes    # sK
+        _offset += int(sK_size) * _elem_bytes  # sK
         _offset = _align_up(_offset, _tma_align)
-        _offset += int(sdS_size) * _elem_bytes   # sdS
+        _offset += int(sdS_size) * _elem_bytes  # sdS
         _offset = _align_up(_offset, _non_tma_align)
-        _offset += self.topk * 4                 # sGradSignal: Float32 × topk
+        _offset += self.topk * 4  # sGradSignal: Float32 × topk
         _offset = _align_up(_offset, _non_tma_align)
         # sTopkIdxs goes here — compute remaining space
         _topk_idx_offset = _offset
         # Account for sW that comes after sTopkIdxs,
         # with worst-case alignment padding.
         _tail = 0
-        _tail += _non_tma_align                  # worst-case align padding before sW
-        _tail += self.heads * _elem_bytes        # sW
+        _tail += _non_tma_align  # worst-case align padding before sW
+        _tail += self.heads * _elem_bytes  # sW
         _max_smem_bytes = 227 * 1024
         smem_topk_capacity = (_max_smem_bytes - _topk_idx_offset - _tail) // 4
 
@@ -381,9 +434,9 @@ class IndexerBackwardSm100:
             sTopkIdxs: cute.struct.Align[cute.struct.MemRange[Int32, smem_topk_capacity], 128]
             sW: cute.struct.Align[cute.struct.MemRange[self.q_dtype, self.heads], 128]
 
-        assert SharedStorage.size_in_bytes() <= _max_smem_bytes, \
-            f"SharedStorage ({SharedStorage.size_in_bytes()} bytes) exceeds {_max_smem_bytes} bytes (227KB), " \
-            f"smem_topk_capacity={smem_topk_capacity}"
+        assert SharedStorage.size_in_bytes() <= _max_smem_bytes, (
+            f"SharedStorage ({SharedStorage.size_in_bytes()} bytes) exceeds {_max_smem_bytes} bytes (227KB), " f"smem_topk_capacity={smem_topk_capacity}"
+        )
 
         smem = cutlass.utils.SmemAllocator()
         storage = smem.allocate(SharedStorage)
@@ -430,14 +483,17 @@ class IndexerBackwardSm100:
 
         # local_tile: tile dims use None (keep all tiles), L dims use runtime index
         gQ = cute.local_tile(
-            mQ, cute.select(self.gemm1_tiler, mode=[0, 2]),
+            mQ,
+            cute.select(self.gemm1_tiler, mode=[0, 2]),
             (None, None, seq_idx, batch_idx),
         )
         # partition_A → tma_partition (dsa-next pattern)
         gemm1_thr_mma = tmma1.get_slice(0)
         tAgQ = gemm1_thr_mma.partition_A(gQ)
         tQsQ, tQgQ_mkl = cpasync.tma_partition(
-            tma_atom_Q, 0, cute.make_layout(1),
+            tma_atom_Q,
+            0,
+            cute.make_layout(1),
             cute.group_modes(sQ, 0, 3),
             cute.group_modes(tAgQ, 0, 3),
         )
@@ -446,18 +502,22 @@ class IndexerBackwardSm100:
         dQ_store_pipeline = pipeline.PipelineTmaStore.create(
             num_stages=1,
             producer_group=pipeline.CooperativeGroup(
-                pipeline.Agent.Thread, self.WARPGROUP_SIZE,
+                pipeline.Agent.Thread,
+                self.WARPGROUP_SIZE,
             ),
         )
 
         # local_tile: concrete tile indices (only 1 tile each), runtime L indices
         gdQ = cute.local_tile(
-            mdQ, (self.heads_padded, self.head_dim_padded),
+            mdQ,
+            (self.heads_padded, self.head_dim_padded),
             (0, 0, seq_idx, batch_idx),
         )
         sdQ_epi_slice = sdQ_epi[None, None, 0]
         tdQsdQ, tdQgdQ_mkl = cpasync.tma_partition(
-            tma_atom_dQ, 0, cute.make_layout(1),
+            tma_atom_dQ,
+            0,
+            cute.make_layout(1),
             cute.group_modes(sdQ_epi_slice, 0, 2),
             cute.group_modes(gdQ, 0, 2),
         )
@@ -491,10 +551,7 @@ class IndexerBackwardSm100:
         # ``batch_idx * S_k_per_batch`` to convert. Invalid (-1) entries stay
         # negative (skipped in the local→global add) and are rejected by the
         # ``>= 0`` bounds check at consumers.
-        batch_offset_l2g = (
-            Int32(0) if const_expr(self.topk_indices_global)
-            else batch_idx * (seqlen_k // batch_size)
-        )
+        batch_offset_l2g = Int32(0) if const_expr(self.topk_indices_global) else batch_idx * (seqlen_k // batch_size)
         _load_bound = const_expr(min(self.topk, smem_topk_capacity))
         TOPK_PER_THREAD = const_expr((_load_bound + self.THREADS_PER_CTA - 1) // self.THREADS_PER_CTA)
         for ii in cutlass.range_constexpr(TOPK_PER_THREAD):
@@ -523,10 +580,17 @@ class IndexerBackwardSm100:
         if warp_idx == self.load_warp_id:
             cute.arch.setmaxregister_decrease(self.num_regs_wg0)
             self._load_warp(
-                mW, mGradSignal, sW, sGradSignal,
-                tma_atom_Q, tQsQ, tQgQ_mkl,
+                mW,
+                mGradSignal,
+                sW,
+                sGradSignal,
+                tma_atom_Q,
+                tQsQ,
+                tQgQ_mkl,
                 Q_producer,
-                seq_idx, batch_idx, tidx,
+                seq_idx,
+                batch_idx,
+                tidx,
                 mbar,
             )
 
@@ -534,13 +598,27 @@ class IndexerBackwardSm100:
             cute.arch.setmaxregister_decrease(self.num_regs_wg0)
             tmem.wait_for_alloc()
             tmem_ptr_base = tmem.retrieve_ptr(self.acc_dtype)
-            (tStS_0, tStS_1, tDqDq, tDkDk_0, tDkDk_1) = self.get_tmem_tensor(
-                s_acc_layout, dq_acc_layout, dk_acc_layout, tmem_ptr_base,
+            tStS_0, tStS_1, tDqDq, tDkDk_0, tDkDk_1 = self.get_tmem_tensor(
+                s_acc_layout,
+                dq_acc_layout,
+                dk_acc_layout,
+                tmem_ptr_base,
             )
             self._mma_warp(
-                sQ, sdS_g2a, sK, sKt, sdS, sQ_g2b,
-                tmma1, tmma2, tmma3,
-                tStS_0, tStS_1, tDqDq, tDkDk_0, tDkDk_1,
+                sQ,
+                sdS_g2a,
+                sK,
+                sKt,
+                sdS,
+                sQ_g2b,
+                tmma1,
+                tmma2,
+                tmma3,
+                tStS_0,
+                tStS_1,
+                tDqDq,
+                tDkDk_0,
+                tDkDk_1,
                 Q_consumer,
                 mbar,
             )
@@ -551,19 +629,33 @@ class IndexerBackwardSm100:
                 tmem.allocate(self.tmem_alloc_cols)
             tmem.wait_for_alloc()
             tmem_ptr_base = tmem.retrieve_ptr(self.acc_dtype)
-            (tStS_0, tStS_1, tDqDq, tDkDk_0, tDkDk_1) = self.get_tmem_tensor(
-                s_acc_layout, dq_acc_layout, dk_acc_layout, tmem_ptr_base,
+            tStS_0, tStS_1, tDqDq, tDkDk_0, tDkDk_1 = self.get_tmem_tensor(
+                s_acc_layout,
+                dq_acc_layout,
+                dk_acc_layout,
+                tmem_ptr_base,
             )
             self._compute_warpgroup(
                 mdW,
-                sGradSignal, sW,
-                sdS_store, sdS, sdQ_epi_slice,
-                s_acc_shape, dq_acc_shape,
-                tStS_0, tStS_1, tDqDq,
-                tma_atom_dQ, tdQsdQ, tdQgdQ_mkl,
+                sGradSignal,
+                sW,
+                sdS_store,
+                sdS,
+                sdQ_epi_slice,
+                s_acc_shape,
+                dq_acc_shape,
+                tStS_0,
+                tStS_1,
+                tDqDq,
+                tma_atom_dQ,
+                tdQsdQ,
+                tdQgdQ_mkl,
                 dQ_store_pipeline,
                 sm_scale,
-                seq_idx, batch_idx, tidx, warp_idx,
+                seq_idx,
+                batch_idx,
+                tidx,
+                warp_idx,
                 mbar,
             )
             if warp_idx == self.compute_warp_id[0]:
@@ -572,8 +664,15 @@ class IndexerBackwardSm100:
         elif warp_idx in self.k_load_warp_id:
             cute.arch.setmaxregister_decrease(self.num_regs_kload)
             self._k_load_warpgroup(
-                mK, sK, sTopkIdxs, mTopkIdx,
-                seq_idx, batch_idx, seqlen_k, batch_size, tidx,
+                mK,
+                sK,
+                sTopkIdxs,
+                mTopkIdx,
+                seq_idx,
+                batch_idx,
+                seqlen_k,
+                batch_size,
+                tidx,
                 mbar,
             )
 
@@ -581,15 +680,25 @@ class IndexerBackwardSm100:
             cute.arch.setmaxregister_increase(self.num_regs_reduce)
             tmem.wait_for_alloc()
             tmem_ptr_base = tmem.retrieve_ptr(self.acc_dtype)
-            (tStS_0, tStS_1, tDqDq, tDkDk_0, tDkDk_1) = self.get_tmem_tensor(
-                s_acc_layout, dq_acc_layout, dk_acc_layout, tmem_ptr_base,
+            tStS_0, tStS_1, tDqDq, tDkDk_0, tDkDk_1 = self.get_tmem_tensor(
+                s_acc_layout,
+                dq_acc_layout,
+                dk_acc_layout,
+                tmem_ptr_base,
             )
             self._reduce_warpgroup(
-                mdK_f32, sTopkIdxs, mTopkIdx,
+                mdK_f32,
+                sTopkIdxs,
+                mTopkIdx,
                 dk_acc_shape,
-                tDkDk_0, tDkDk_1,
+                tDkDk_0,
+                tDkDk_1,
                 sm_scale,
-                seq_idx, batch_idx, seqlen_k, batch_size, tidx,
+                seq_idx,
+                batch_idx,
+                seqlen_k,
+                batch_size,
+                tidx,
                 mbar,
             )
 
@@ -602,10 +711,17 @@ class IndexerBackwardSm100:
     @cute.jit
     def _load_warp(
         self,
-        mW, mGradSignal, sW, sGradSignal,
-        tma_atom_Q, tQsQ, tQgQ_mkl,
+        mW,
+        mGradSignal,
+        sW,
+        sGradSignal,
+        tma_atom_Q,
+        tQsQ,
+        tQgQ_mkl,
         Q_producer,
-        seq_idx, batch_idx, tidx,
+        seq_idx,
+        batch_idx,
+        tidx,
         mbar,
     ):
         """Load warp: TMA Q load once, loads W and grad_signal once."""
@@ -635,8 +751,8 @@ class IndexerBackwardSm100:
         handle_Q = Q_producer.acquire_and_advance()
         cute.copy(
             tma_atom_Q,
-            tQgQ_mkl[None, 0, 0],   # global: all atom data, RestM=0, RestK=0
-            tQsQ[None, 0],           # SMEM: all atom data, stage=0
+            tQgQ_mkl[None, 0, 0],  # global: all atom data, RestM=0, RestK=0
+            tQsQ[None, 0],  # SMEM: all atom data, stage=0
             tma_bar_ptr=handle_Q.barrier,
         )
 
@@ -645,10 +761,23 @@ class IndexerBackwardSm100:
     # =========================================================================
     @cute.jit
     def _mma_warp(
-        self, sQ, sdS_g2a, sK, sKt, sdS, sQ_g2b,
-        tmma1, tmma2, tmma3,
-        tStS_0, tStS_1, tDqDq, tDkDk_0, tDkDk_1,
-        Q_consumer, mbar,
+        self,
+        sQ,
+        sdS_g2a,
+        sK,
+        sKt,
+        sdS,
+        sQ_g2b,
+        tmma1,
+        tmma2,
+        tmma3,
+        tStS_0,
+        tStS_1,
+        tDqDq,
+        tDkDk_0,
+        tDkDk_1,
+        Q_consumer,
+        mbar,
     ):
         """MMA warp: 3-stage sK pipeline (Opt-7), 2-stage TMEM S/dK.
 
@@ -665,11 +794,11 @@ class IndexerBackwardSm100:
         # --- A/B fragments from SMEM ---
         # sK/sKt: 3-stage (stage dim = last dim), sdS: 2-stage, sQ: 1-stage
         tSrQ = tmma1.make_fragment_A(sQ)
-        tSrK = tmma1.make_fragment_B(sK)       # 3-stage
-        tDKrA_g2 = tmma2.make_fragment_A(sdS_g2a)   # SwapAB: A=dS, 2-stage
-        tDKrB_g2 = tmma2.make_fragment_B(sQ_g2b)    # SwapAB: B=Q, 1-stage
-        tDQrDS = tmma3.make_fragment_A(sdS)     # 2-stage
-        tDQrKt = tmma3.make_fragment_B(sKt)     # 3-stage
+        tSrK = tmma1.make_fragment_B(sK)  # 3-stage
+        tDKrA_g2 = tmma2.make_fragment_A(sdS_g2a)  # SwapAB: A=dS, 2-stage
+        tDKrB_g2 = tmma2.make_fragment_B(sQ_g2b)  # SwapAB: B=Q, 1-stage
+        tDQrDS = tmma3.make_fragment_A(sdS)  # 2-stage
+        tDQrKt = tmma3.make_fragment_B(sKt)  # 3-stage
 
         dk_empty_0_phase = Int32(0)
         dk_empty_1_phase = Int32(0)
@@ -853,14 +982,25 @@ class IndexerBackwardSm100:
     def _compute_warpgroup(
         self,
         mdW,
-        sGradSignal, sW,
-        sdS_store, sdS, sdQ_epi_slice,
-        s_acc_shape, dq_acc_shape,
-        tStS_0, tStS_1, tDqDq,
-        tma_atom_dQ, tdQsdQ, tdQgdQ_mkl,
+        sGradSignal,
+        sW,
+        sdS_store,
+        sdS,
+        sdQ_epi_slice,
+        s_acc_shape,
+        dq_acc_shape,
+        tStS_0,
+        tStS_1,
+        tDqDq,
+        tma_atom_dQ,
+        tdQsdQ,
+        tdQgdQ_mkl,
         dQ_store_pipeline,
         sm_scale: Float32 | float,
-        seq_idx, batch_idx, tidx, warp_idx,
+        seq_idx,
+        batch_idx,
+        tidx,
+        warp_idx,
         mbar,
     ):
         """Compute/Epilogue warpgroup: TMEM readback S → register dS → stmatrix sdS, dQ/dW output.
@@ -879,7 +1019,8 @@ class IndexerBackwardSm100:
         compute_warp0 = Int32(self.compute_warp_id[0])
 
         tmem_load_atom = cute.make_copy_atom(
-            tcgen05.copy.Ld16x256bOp(tcgen05.copy.Repetition(8)), Float32,
+            tcgen05.copy.Ld16x256bOp(tcgen05.copy.Repetition(8)),
+            Float32,
         )
 
         # --- TMEM readback (keep original partitioning for coordinate fidelity) ---
@@ -965,7 +1106,8 @@ class IndexerBackwardSm100:
                 relu_s1 = s1 if s_pos_1 else Float32(0.0)
 
                 dw_accum[ei], dw_accum[ei + 1] = fma_packed_f32x2(
-                    (gs0, gs1), (relu_s0, relu_s1),
+                    (gs0, gs1),
+                    (relu_s0, relu_s1),
                     (dw_accum[ei], dw_accum[ei + 1]),
                 )
 
@@ -1048,18 +1190,26 @@ class IndexerBackwardSm100:
     @cute.jit
     def _reduce_warpgroup(
         self,
-        mdK_f32, sTopkIdxs, mTopkIdx,
+        mdK_f32,
+        sTopkIdxs,
+        mTopkIdx,
         dk_acc_shape,
-        tDkDk_0, tDkDk_1,
+        tDkDk_0,
+        tDkDk_1,
         sm_scale: Float32 | float,
-        seq_idx, batch_idx, seqlen_k, batch_size, tidx,
+        seq_idx,
+        batch_idx,
+        seqlen_k,
+        batch_size,
+        tidx,
         mbar,
     ):
         """Reduce warpgroup: TMEM readback dK → 2-wide atomic_add to global f32 memory."""
         wg_tidx = tidx % self.WARPGROUP_SIZE
 
         tmem_load_atom_dk = cute.make_copy_atom(
-            tcgen05.copy.Ld16x256bOp(tcgen05.copy.Repetition(8)), Float32,
+            tcgen05.copy.Ld16x256bOp(tcgen05.copy.Repetition(8)),
+            Float32,
         )
 
         tiled_tmem_load_dk_0 = tcgen05.make_tmem_copy(tmem_load_atom_dk, tDkDk_0)
@@ -1095,10 +1245,7 @@ class IndexerBackwardSm100:
             # directly. SMEM-cached ids are already global (preload converted
             # local→global when topk_indices_global=False); gmem fallback
             # mirrors that conversion via const_expr branch.
-            batch_offset_l2g = (
-                Int32(0) if const_expr(self.topk_indices_global)
-                else batch_idx * (seqlen_k // batch_size)
-            )
+            batch_offset_l2g = Int32(0) if const_expr(self.topk_indices_global) else batch_idx * (seqlen_k // batch_size)
             for pair in cutlass.range_constexpr(cute.size(tDKrDK) // 2):
                 ei = pair * 2
                 n = cute.get(tCcDK[ei], mode=[0, 0])
@@ -1130,8 +1277,15 @@ class IndexerBackwardSm100:
     @cute.jit
     def _k_load_warpgroup(
         self,
-        mK, sK, sTopkIdxs, mTopkIdx,
-        seq_idx, batch_idx, seqlen_k, batch_size, tidx,
+        mK,
+        sK,
+        sTopkIdxs,
+        mTopkIdx,
+        seq_idx,
+        batch_idx,
+        seqlen_k,
+        batch_size,
+        tidx,
         mbar,
     ):
         """K loading warpgroup: sparse cp.async gather into 3-stage sK.
@@ -1143,10 +1297,13 @@ class IndexerBackwardSm100:
 
         async_copy_atom = cute.make_copy_atom(
             cpasync.CopyG2SOp(cache_mode=cpasync.LoadCacheMode.GLOBAL),
-            self.k_dtype, num_bits_per_copy=128,
+            self.k_dtype,
+            num_bits_per_copy=128,
         )
         async_thr_copy = cute.make_tiled_copy_tv(
-            async_copy_atom, cute.make_layout((1,)), cute.make_layout((8,)),
+            async_copy_atom,
+            cute.make_layout((1,)),
+            cute.make_layout((8,)),
         ).get_slice(0)
 
         GROUP_SIZE = const_expr(8)
@@ -1171,10 +1328,7 @@ class IndexerBackwardSm100:
         # mK is the flat (B*S_k, D) view; topk_idx (global) indexes directly.
         # gmem fallback mirrors the SMEM preload's local→global conversion when
         # topk_indices_global=False; const_expr-folded to a no-op for default.
-        batch_offset_l2g = (
-            Int32(0) if const_expr(self.topk_indices_global)
-            else batch_idx * (seqlen_k // batch_size)
-        )
+        batch_offset_l2g = Int32(0) if const_expr(self.topk_indices_global) else batch_idx * (seqlen_k // batch_size)
 
         k_consumed_0_phase_kload = Int32(0)
         k_consumed_1_phase_kload = Int32(0)
@@ -1259,8 +1413,14 @@ _compile_cache: dict = {}
 
 
 def indexer_backward_sm100(
-    batch, seqlen, seqlen_k, heads, dim, topk,
-    sm_scale=1.0, block_I=128,
+    batch,
+    seqlen,
+    seqlen_k,
+    heads,
+    dim,
+    topk,
+    sm_scale=1.0,
+    block_I=128,
     topk_indices_global: bool = True,
 ):
     # ``grad_scale`` is intentionally **not** an argument: it's a host scalar
@@ -1280,13 +1440,11 @@ def indexer_backward_sm100(
     # packed tensors as a single B=1 BSHD batch (sparse path's topk indices
     # already encode per-batch validity, so no kernel-side cu_seqlens are
     # needed). See ``_indexer_backward_sparse_thd`` in csrc/bwd/__init__.py.
-    key = (batch, seqlen, seqlen_k, heads, dim, topk, sm_scale,
-           block_I, topk_indices_global)
+    key = (batch, seqlen, seqlen_k, heads, dim, topk, sm_scale, block_I, topk_indices_global)
     if key not in _compile_cache:
-        _compile_cache[key] = _build_cute_dsl_kernel(
-            batch, seqlen, seqlen_k, heads, dim, topk, sm_scale,
-            block_I, topk_indices_global=topk_indices_global)
+        _compile_cache[key] = _build_cute_dsl_kernel(batch, seqlen, seqlen_k, heads, dim, topk, sm_scale, block_I, topk_indices_global=topk_indices_global)
     return _compile_cache[key]
+
 
 class ScoreGradSm100:
     """CuTe DSL kernel for in-place score_grad precompute."""
@@ -1337,9 +1495,7 @@ class ScoreGradSm100:
 
         smem = cutlass.utils.SmemAllocator()
         storage = smem.allocate(SharedStorage)
-        thread_sums = storage.thread_sums.get_tensor(
-            cute.make_layout((self.THREADS_PER_CTA,), stride=(1,))
-        )
+        thread_sums = storage.thread_sums.get_tensor(cute.make_layout((self.THREADS_PER_CTA,), stride=(1,)))
 
         local_sum = Float32(0.0)
         for pos in cutlass.range(tidx, self.topk, self.THREADS_PER_CTA):
@@ -1431,55 +1587,57 @@ def _score_grad_inplace(AttnScore, IndexScore, GradLoss, grad_scale, block_I=128
         and AttnScore.shape == IndexScore.shape
     )
     if not can_use_cute:
-        raise NotImplementedError(
-            "score_grad_inplace requires contiguous fp32 CUDA tensors with matching "
-            "3D shapes; the torch fallback was removed"
-        )
+        raise NotImplementedError("score_grad_inplace requires contiguous fp32 CUDA tensors with matching " "3D shapes; the torch fallback was removed")
     _score_grad_inplace_cute(AttnScore, IndexScore, GradLoss, grad_scale, current_stream=current_stream)
 
 
-def _build_cute_dsl_kernel(batch, seqlen, seqlen_k, heads, dim, topk, sm_scale, block_I,
-                           topk_indices_global: bool = True):
+def _build_cute_dsl_kernel(batch, seqlen, seqlen_k, heads, dim, topk, sm_scale, block_I, topk_indices_global: bool = True):
     from cudnn.deepseek_sparse_attention.utils.tensor_conversion import to_cute_tensor
+
     if torch.cuda.get_device_capability()[0] < 10:
         raise RuntimeError("Requires SM100+")
     kernel_obj = IndexerBackwardSm100(
-        head_dim=dim, heads=heads, block_I=block_I, topk=topk,
+        head_dim=dim,
+        heads=heads,
+        block_I=block_I,
+        topk=topk,
         topk_indices_global=topk_indices_global,
     )
 
     compiled_holder = [None]
 
-    def _ensure_compiled(IndexQ, Weights, IndexK, dIndexQ, dWeights, dIndexK_f32,
-                         AttnScore, TopkIndices, current_stream=None):
+    def _ensure_compiled(IndexQ, Weights, IndexK, dIndexQ, dWeights, dIndexK_f32, AttnScore, TopkIndices, current_stream=None):
         """Lazy-compile the GEMM kernel (kernel 2)."""
         if compiled_holder[0] is None:
             s = _resolve_stream(current_stream)
-            cute_args = [to_cute_tensor(t) for t in
-                         [IndexQ, Weights, IndexK, dIndexQ, dWeights, dIndexK_f32,
-                          AttnScore, TopkIndices]]
+            cute_args = [to_cute_tensor(t) for t in [IndexQ, Weights, IndexK, dIndexQ, dWeights, dIndexK_f32, AttnScore, TopkIndices]]
             compiled_holder[0] = cute.compile(
-                kernel_obj, *cute_args,
-                cutlass.Float32(sm_scale), s,
+                kernel_obj,
+                *cute_args,
+                cutlass.Float32(sm_scale),
+                s,
                 options=compile_options("--opt-level 3"),
             )
 
-    def _run_gemm_only(IndexQ, Weights, IndexK, dIndexQ, dWeights, dIndexK_f32,
-                       GradSignal, TopkIndices, current_stream=None):
+    def _run_gemm_only(IndexQ, Weights, IndexK, dIndexQ, dWeights, dIndexK_f32, GradSignal, TopkIndices, current_stream=None):
         """Run only kernel 2 (GEMM). Caller must have run kernel 1 and zeroed dIndexK_f32."""
         s = _resolve_stream(current_stream)
-        _ensure_compiled(IndexQ, Weights, IndexK, dIndexQ, dWeights, dIndexK_f32,
-                         GradSignal, TopkIndices, current_stream=current_stream)
+        _ensure_compiled(IndexQ, Weights, IndexK, dIndexQ, dWeights, dIndexK_f32, GradSignal, TopkIndices, current_stream=current_stream)
         with torch.cuda.nvtx.range("indexer_backward_dsl_gemm"):
             compiled_holder[0](
-                IndexQ, Weights, IndexK, dIndexQ, dWeights, dIndexK_f32,
-                GradSignal, TopkIndices,
-                cutlass.Float32(sm_scale), s,
+                IndexQ,
+                Weights,
+                IndexK,
+                dIndexQ,
+                dWeights,
+                dIndexK_f32,
+                GradSignal,
+                TopkIndices,
+                cutlass.Float32(sm_scale),
+                s,
             )
 
-    def _run(IndexQ, Weights, IndexK, dIndexQ, dWeights, dIndexK,
-             AttnScore, IndexScore, TopkIndices, GradLoss, grad_scale,
-             current_stream=None):
+    def _run(IndexQ, Weights, IndexK, dIndexQ, dWeights, dIndexK, AttnScore, IndexScore, TopkIndices, GradLoss, grad_scale, current_stream=None):
         # ``grad_scale`` is a host scalar (Python float / 0-D fp32 tensor)
         # multiplied into ``score_grad`` as a runtime ``Float32`` arg —
         # changing it across calls does **not** trigger recompilation.
@@ -1491,14 +1649,12 @@ def _build_cute_dsl_kernel(batch, seqlen, seqlen_k, heads, dim, topk, sm_scale, 
         if dIndexK.dtype == torch.float32:
             # Caller provided a pre-zeroed f32 buffer; write directly (no extra
             # alloc + cast). This matches the SM90 _run fast path.
-            _run_gemm_only(IndexQ, Weights, IndexK, dIndexQ, dWeights, dIndexK,
-                           AttnScore, TopkIndices, current_stream=current_stream)
+            _run_gemm_only(IndexQ, Weights, IndexK, dIndexQ, dWeights, dIndexK, AttnScore, TopkIndices, current_stream=current_stream)
         else:
             # Need a separate f32 buffer for atomicAdd, then cast back to output dtype.
             with _torch_stream_context(current_stream):
                 dIndexK_f32 = torch.zeros_like(dIndexK, dtype=torch.float32)
-            _run_gemm_only(IndexQ, Weights, IndexK, dIndexQ, dWeights, dIndexK_f32,
-                           AttnScore, TopkIndices, current_stream=current_stream)
+            _run_gemm_only(IndexQ, Weights, IndexK, dIndexQ, dWeights, dIndexK_f32, AttnScore, TopkIndices, current_stream=current_stream)
             with _torch_stream_context(current_stream):
                 dIndexK.copy_(dIndexK_f32)
 

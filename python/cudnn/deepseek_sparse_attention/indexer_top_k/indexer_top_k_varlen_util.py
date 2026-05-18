@@ -206,9 +206,7 @@ class IndexerTopKKernelVarlen:
             previous = 0
             if tidx < cutlass.Int32(self.radix):
                 val = s_histogram[tidx]
-                val, total_sum = block_prefix_sum_kernel(
-                    val, s_warp_sums, tidx, self.radix, num_warps, barrier_id=1
-                )
+                val, total_sum = block_prefix_sum_kernel(val, s_warp_sums, tidx, self.radix, num_warps, barrier_id=1)
                 s_histogram[tidx] = val
                 # sync among self.radix threads
                 cute.arch.barrier(barrier_id=1, number_of_threads=self.radix)
@@ -297,9 +295,7 @@ class IndexerTopKKernelVarlen:
             previous = 0
             if tidx < cutlass.Int32(self.radix):
                 val = s_histogram[tidx]
-                val, total_sum = block_prefix_sum_kernel(
-                    val, s_warp_sums, tidx, self.radix, num_warps, barrier_id=1
-                )
+                val, total_sum = block_prefix_sum_kernel(val, s_warp_sums, tidx, self.radix, num_warps, barrier_id=1)
                 s_histogram[tidx] = val
                 # sync
                 cute.arch.barrier(barrier_id=1, number_of_threads=self.radix)
@@ -488,9 +484,7 @@ class IndexerTopKKernelVarlen:
                 else:
                     dst[i] = -1
                     if cutlass.const_expr(self.return_val):
-                        dst_values[i] = dst_values.element_type(
-                            dst_values.element_type.inf * dst_values.element_type(-1.0)
-                        )
+                        dst_values[i] = dst_values.element_type(dst_values.element_type.inf * dst_values.element_type(-1.0))
         else:
             topk_remaining = self.top_k
 
@@ -594,9 +588,7 @@ class IndexerTopKKernelVarlen:
                         bin_val = self.to_coarse_key(tXrX[i])
                         if bin_val < threshold_bin:
                             pos = atomicAdd(s_counter.iterator, val_one)
-                            idx = self.index_type(
-                                cur_tXcX[i // vec_size][1] + i % vec_size + vec_start
-                            )
+                            idx = self.index_type(cur_tXcX[i // vec_size][1] + i % vec_size + vec_start)
                             s_indices[pos] = idx
 
                 # for initial scalar load part.
@@ -921,9 +913,7 @@ class IndexerTopKKernelVarlen:
                                                 val_one_negative,
                                             )
                                             if cur_pos > 0:
-                                                s_indices[self.top_k - cur_pos] = self.index_type(
-                                                    idx
-                                                )
+                                                s_indices[self.top_k - cur_pos] = self.index_type(idx)
                                         else:
                                             # pos = atomicAdd(s_num_input[r_idx ^ 1], 1)
                                             cur_pos = atomicAdd(
@@ -932,9 +922,7 @@ class IndexerTopKKernelVarlen:
                                             )
                                             if cutlass.const_expr(self.enable_gmem_store):
                                                 if cur_pos < self.indexer_topk_smem_input_size:
-                                                    s_input_idx[r_idx ^ 1, cur_pos] = (
-                                                        self.index_type(idx)
-                                                    )
+                                                    s_input_idx[r_idx ^ 1, cur_pos] = self.index_type(idx)
                                                 else:
                                                     buffer_pos = atomicAdd(
                                                         g_num_input.iterator + (r_idx ^ 1),
@@ -955,8 +943,7 @@ class IndexerTopKKernelVarlen:
                                                     sub_bin = (bin32 >> (offset - 8)) & 0xFF
                                                     # atomicAdd(s_histogram[sub_bin], 1)
                                                     atomicAdd(
-                                                        s_histogram.iterator
-                                                        + cutlass.Int32(sub_bin),
+                                                        s_histogram.iterator + cutlass.Int32(sub_bin),
                                                         val_one,
                                                     )
                             fence_acq_rel_cta()
@@ -974,9 +961,7 @@ class IndexerTopKKernelVarlen:
             )
             assert self.top_k % vecsize_out == 0
 
-            nvec_per_thread = cutlass.const_expr(
-                cute.ceil_div(self.top_k, vecsize_out * self.num_threads_per_cta)
-            )
+            nvec_per_thread = cutlass.const_expr(cute.ceil_div(self.top_k, vecsize_out * self.num_threads_per_cta))
             topk_vals = cute.make_fragment((vecsize_out, nvec_per_thread), self.dtype)
             topk_indices = cute.make_fragment((vecsize_out, nvec_per_thread), cutlass.Int32)
 
@@ -1165,16 +1150,11 @@ def compare_top_k_results(
 
         # Check if the number of valid indices matches
         if cuda_valid.shape[0] != torch_valid.shape[0]:
-            print(
-                f"Row {row_idx}: Different number of valid indices - "
-                f"CUDA: {cuda_valid.shape[0]}, PyTorch: {torch_valid.shape[0]}"
-            )
+            print(f"Row {row_idx}: Different number of valid indices - " f"CUDA: {cuda_valid.shape[0]}, PyTorch: {torch_valid.shape[0]}")
             return False
 
         if cuda_valid.shape[0] != expected_valid:
-            print(
-                f"Row {row_idx}: Expected {expected_valid} valid indices, got {cuda_valid.shape[0]}"
-            )
+            print(f"Row {row_idx}: Expected {expected_valid} valid indices, got {cuda_valid.shape[0]}")
             return False
 
         # If no valid indices, continue
@@ -1198,9 +1178,7 @@ def compare_top_k_results(
         torch_values_sorted, _ = torch.sort(torch_values, descending=True)
 
         # Compare sorted values
-        if not torch.allclose(
-            cuda_values_sorted, torch_values_sorted, rtol=tolerance, atol=tolerance
-        ):
+        if not torch.allclose(cuda_values_sorted, torch_values_sorted, rtol=tolerance, atol=tolerance):
             # Additional debug: check if sets are identical
             cuda_set = set(cuda_valid.cpu().tolist())
             torch_set = set(torch_valid.cpu().tolist())

@@ -23,7 +23,6 @@ from cudnn.deepseek_sparse_attention.utils.runtime import (
 )
 from cudnn.deepseek_sparse_attention.utils.tensor_conversion import to_cute_tensor as _to_cute_tensor
 
-
 # Module-level compile cache
 _compile_cache: dict = {}
 
@@ -74,14 +73,10 @@ def indexer_fwd(
 
     is_varlen_q = cu_seqlens_q is not None
     is_varlen_k = cu_seqlens_k is not None
-    assert is_varlen_q == is_varlen_k, (
-        "THD input requires both cu_seqlens_q and cu_seqlens_k"
-    )
+    assert is_varlen_q == is_varlen_k, "THD input requires both cu_seqlens_q and cu_seqlens_k"
     is_varlen = is_varlen_q
     if is_varlen:
-        assert cu_seqlens_q is not None and cu_seqlens_k is not None, (
-            "THD input requires both cu_seqlens_q and cu_seqlens_k"
-        )
+        assert cu_seqlens_q is not None and cu_seqlens_k is not None, "THD input requires both cu_seqlens_q and cu_seqlens_k"
         for t, name in ((cu_seqlens_q, "cu_seqlens_q"), (cu_seqlens_k, "cu_seqlens_k")):
             assert t.dtype == torch.int32, f"{name} must be int32"
             assert t.ndim == 1, f"{name} must be 1D"
@@ -95,12 +90,8 @@ def indexer_fwd(
         bs = cu_seqlens_q.shape[0] - 1
         assert cu_seqlens_k.shape == (bs + 1,), "cu_seqlens_k must have shape (batch_size + 1,)"
         assert cu_seqlens_q.shape == (bs + 1,), "cu_seqlens_q must have shape (batch_size + 1,)"
-        assert head_dim == head_dim_k, (
-            f"q head_dim ({head_dim}) != k head_dim ({head_dim_k})"
-        )
-        assert w.shape == (total_q, n_heads_q), (
-            f"THD w shape must be ({total_q}, {n_heads_q}), got {tuple(w.shape)}"
-        )
+        assert head_dim == head_dim_k, f"q head_dim ({head_dim}) != k head_dim ({head_dim_k})"
+        assert w.shape == (total_q, n_heads_q), f"THD w shape must be ({total_q}, {n_heads_q}), got {tuple(w.shape)}"
         if qhead_per_kv_head is None:
             qhead_per_kv_head = n_heads_q // n_heads_kv
         if max_seqlen_q is None or max_seqlen_k is None:
@@ -118,10 +109,7 @@ def indexer_fwd(
         _, seqlen_k_dim, n_heads_kv, _ = k.shape
         device = q.device
         if seqlen_q_dim > seqlen_k_dim * ratio:
-            raise ValueError(
-                f"seqlen_q ({seqlen_q_dim}) must be <= seqlen_k * ratio "
-                f"({seqlen_k_dim * ratio})"
-            )
+            raise ValueError(f"seqlen_q ({seqlen_q_dim}) must be <= seqlen_k * ratio " f"({seqlen_k_dim * ratio})")
         out_shape = (bs, seqlen_q_dim, seqlen_k_dim)
         out_buf_shape = None
 
@@ -139,9 +127,7 @@ def indexer_fwd(
     elif out is None:
         out = torch.empty(out_shape, dtype=torch.float32, device=device)
     else:
-        assert out.shape == out_shape, (
-            f"out must have shape {out_shape}, got {tuple(out.shape)}"
-        )
+        assert out.shape == out_shape, f"out must have shape {out_shape}, got {tuple(out.shape)}"
         assert out.dtype == torch.float32 and out.is_cuda
 
     # sm_scale participates in compile_key because cutlass.Float32 is baked
@@ -189,7 +175,10 @@ def indexer_fwd(
 
         _compile_cache[compile_key] = cute.compile(
             kernel_obj,
-            q_cute, k_cute, w_cute, out_cute,
+            q_cute,
+            k_cute,
+            w_cute,
+            out_cute,
             n_heads_kv,
             max_q_arg,
             max_k_arg,
@@ -208,7 +197,10 @@ def indexer_fwd(
     max_k_arg = cutlass.Int32(seqlen_k_dim)
     with torch.cuda.nvtx.range("indexer_fwd_kernel"):
         _compile_cache[compile_key](
-            q, k, w, out,
+            q,
+            k,
+            w,
+            out,
             n_heads_kv,
             max_q_arg,
             max_k_arg,

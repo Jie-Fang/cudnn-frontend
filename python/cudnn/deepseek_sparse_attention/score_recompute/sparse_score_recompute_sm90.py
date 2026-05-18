@@ -46,27 +46,24 @@ class SparseScoreRecomputeSm90:
     def __init__(
         self,
         dtype: Type[cutlass.Numeric],
-        head_dim: int = 128,           # index_scores: 128, attention_scores: 512
-        qhead_per_kvhead: int = 64,    # index_scores: 32,  attention_scores: 64
-        tile_m: int = 64,              # index_scores: 32 (post-swapAB, tile_m == qhpkv), attention_scores: 64
+        head_dim: int = 128,  # index_scores: 128, attention_scores: 512
+        qhead_per_kvhead: int = 64,  # index_scores: 32,  attention_scores: 64
+        tile_m: int = 64,  # index_scores: 32 (post-swapAB, tile_m == qhpkv), attention_scores: 64
         tile_n: int = 64,
         KV_stage: int = 2,
-        num_threads: int = 256,        # 2-WG only on sparse path: 1 producer + 1 consumer
+        num_threads: int = 256,  # 2-WG only on sparse path: 1 producer + 1 consumer
         swap_AB: bool = True,
         topk_max: int = 512,
         is_index_scores: bool = True,  # index_scores or attention_scores
         softmax_scale: float = 1.0,
         has_topk_length: bool = True,
-        num_head_tiles: int = 1,       # >1 when qhead_per_kvhead > tile_m (head tiling)
-        is_sparse: bool = True,        # kept for API compat; sparse kernel always True
+        num_head_tiles: int = 1,  # >1 when qhead_per_kvhead > tile_m (head tiling)
+        is_sparse: bool = True,  # kept for API compat; sparse kernel always True
         output_log_probs: bool = False,
         topk_indices_global: bool = True,
     ):
         assert is_sparse, "SparseScoreRecomputeSm90 only supports sparse mode"
-        assert num_threads == 256, (
-            "SparseScoreRecomputeSm90 is 2-WG only (num_threads=256); "
-            "dense full-KV path lives in DenseScoreRecomputeSm90."
-        )
+        assert num_threads == 256, "SparseScoreRecomputeSm90 is 2-WG only (num_threads=256); " "dense full-KV path lives in DenseScoreRecomputeSm90."
         assert qhead_per_kvhead > 1, "This version only supports MQA/GQA (qhead_per_kvhead > 1)"
         arch = 90
         self.dtype = dtype
@@ -115,27 +112,28 @@ class SparseScoreRecomputeSm90:
 
     def _setup_attributes(self):
         # sQ/sKV single-stage layouts
-        #Note:
-        #1. for index_scores, after swapAB, 'A'=(64, 128) and 'B'=(32, 128); for attention_scores, 'A'=(64, 512) and 'B'=(64, 512)
+        # Note:
+        # 1. for index_scores, after swapAB, 'A'=(64, 128) and 'B'=(32, 128); for attention_scores, 'A'=(64, 512) and 'B'=(64, 512)
         self.sQ_layout, self.sKV_layout = [
             sm90_mma.make_smem_layout(self.dtype, LayoutEnum.ROW_MAJOR, shape, stage)
             for shape, stage in [
-                ((self.tile_m, self.tile_hdim), None), #32 * 128 for index_scores; 64 * 512 for attention_scores
+                ((self.tile_m, self.tile_hdim), None),  # 32 * 128 for index_scores; 64 * 512 for attention_scores
                 ((self.tile_n, self.tile_hdim), None),
             ]
         ]
         # 2-stage KV layout for WGMMA: (tile_n, tile_hdim, 2)
         # Used to create a single WGMMA fragment spanning both stages,
         # enabling stage selection via runtime index instead of if/else branch.
-        self.sKV_layout_staged = sm90_mma.make_smem_layout(
-            self.dtype, LayoutEnum.ROW_MAJOR, (self.tile_n, self.tile_hdim), stage=self.KV_stage
-        )
+        self.sKV_layout_staged = sm90_mma.make_smem_layout(self.dtype, LayoutEnum.ROW_MAJOR, (self.tile_n, self.tile_hdim), stage=self.KV_stage)
 
     def _get_tiled_mma(self):
         # Q @ K^T GEMM
         tiled_mma_QK = sm90_utils_basic.make_trivial_tiled_mma(
-            self.dtype, self.dtype,
-            warpgroup.OperandMajorMode.K, warpgroup.OperandMajorMode.K, Float32,
+            self.dtype,
+            self.dtype,
+            cute.nvgpu.OperandMajorMode.K,
+            cute.nvgpu.OperandMajorMode.K,
+            Float32,
             atom_layout_mnk=(1, 1, 1),
             tiler_mn=(self.tile_n, self.tile_m) if self.swap_AB else (self.tile_m, self.tile_n),
         )
@@ -144,22 +142,14 @@ class SparseScoreRecomputeSm90:
     def _get_shared_storage_cls(self):
         sQ_alignment = sKV_alignment = 1024
 
-        sQ_struct = cute.struct.Align[
-            cute.struct.MemRange[self.dtype, cute.cosize(self.sQ_layout)], sQ_alignment
-        ]
+        sQ_struct = cute.struct.Align[cute.struct.MemRange[self.dtype, cute.cosize(self.sQ_layout)], sQ_alignment]
         # Single allocation for 2-stage KV double-buffer (staged layout includes both stages)
-        sKV_struct = cute.struct.Align[
-            cute.struct.MemRange[self.dtype, cute.cosize(self.sKV_layout_staged)], sKV_alignment
-        ]
+        sKV_struct = cute.struct.Align[cute.struct.MemRange[self.dtype, cute.cosize(self.sKV_layout_staged)], sKV_alignment]
 
-        sWeights_struct = cute.struct.Align[
-            cute.struct.MemRange[self.weights_or_lse_dtype, cute.round_up(self.tile_m, 64)], 128
-        ]
+        sWeights_struct = cute.struct.Align[cute.struct.MemRange[self.weights_or_lse_dtype, cute.round_up(self.tile_m, 64)], 128]
 
         # Sparse path: one float per topk position, consumed by softmax_l1norm_parallel.
-        sTopk_struct = cute.struct.Align[
-            cute.struct.MemRange[Float32, self.topk_max], 128
-        ]
+        sTopk_struct = cute.struct.Align[cute.struct.MemRange[Float32, self.topk_max], 128]
 
         @cute.struct
         class SharedStorage:
@@ -181,10 +171,10 @@ class SparseScoreRecomputeSm90:
         mKV: cute.Tensor,  # k_indexer tensor or k_attention tensor
         mTopkIdxs: cute.Tensor = None,  # (batch, seqlen_q, topk_max) int32; None in dense mode
         stream: cuda.CUstream = None,
-        mOut: cute.Tensor = None,        # (batch, seqlen_q, topk_max)
-        weights_or_lse: cute.Tensor = None,    # (batch, nheads, seqlen_q) Note: weights is half precision
-        mTopkLength: cute.Tensor = None,       # (batch, seqlen_q) int32, per-q valid KV count
-        mL1NormDenom: cute.Tensor = None,      # (batch, seqlen_q) float32, dense attn L1 norm denominator
+        mOut: cute.Tensor = None,  # (batch, seqlen_q, topk_max)
+        weights_or_lse: cute.Tensor = None,  # (batch, nheads, seqlen_q) Note: weights is half precision
+        mTopkLength: cute.Tensor = None,  # (batch, seqlen_q) int32, per-q valid KV count
+        mL1NormDenom: cute.Tensor = None,  # (batch, seqlen_q) float32, dense attn L1 norm denominator
     ):
         self._check_type(mQ.element_type, mKV.element_type, weights_or_lse.element_type)
 
@@ -200,6 +190,7 @@ class SparseScoreRecomputeSm90:
                     new_strides.append(cute.assume(s, divby=divby))
             new_strides.append(t.stride[-1])
             return cute.make_tensor(t.iterator, cute.make_layout(t.shape, stride=tuple(new_strides)))
+
         mQ = _assume_strides(mQ)
         mKV = _assume_strides(mKV)
         mWeights = _assume_strides(weights_or_lse)
@@ -213,22 +204,23 @@ class SparseScoreRecomputeSm90:
         mWeights_transpose_layout = [2, 1, 0]
         mWeights = sm90_ops.select(mWeights, mWeights_transpose_layout)
 
-
         # PackGQA: reshape tensor layouts for packed M dimension
         qhpkv = self.qhead_per_kvhead
-        num_head_kv = mKV.shape[2] #num_head_kv is always 1 as PackGQA
+        num_head_kv = mKV.shape[2]  # num_head_kv is always 1 as PackGQA
         mQ = cute.make_tensor(
-            mQ.iterator, cute.make_layout(
+            mQ.iterator,
+            cute.make_layout(
                 ((qhpkv, mQ.shape[0]), mQ.shape[1], num_head_kv, *mQ.shape[3:]),
                 stride=((mQ.stride[2], mQ.stride[0]), mQ.stride[1], mQ.stride[2] * qhpkv, *mQ.stride[3:]),
-            )
+            ),
         )
 
         mWeights = cute.make_tensor(
-            mWeights.iterator, cute.make_layout(
-                ((qhpkv, mWeights.shape[0]), num_head_kv, *mWeights.shape[2:]), #32 * seqlen, 1, bs
+            mWeights.iterator,
+            cute.make_layout(
+                ((qhpkv, mWeights.shape[0]), num_head_kv, *mWeights.shape[2:]),  # 32 * seqlen, 1, bs
                 stride=((mWeights.stride[1], mWeights.stride[0]), mWeights.stride[1] * qhpkv, *mWeights.stride[2:]),
-            )
+            ),
         )
 
         tiled_mma_QK = self._get_tiled_mma()
@@ -236,22 +228,19 @@ class SparseScoreRecomputeSm90:
         self.num_mma_threads = 128 * self.num_mma_warp_groups  # 128 (only WG0)
         assert self.num_mma_threads <= self.num_threads
         self.num_threads_per_warp_group = 128
-        #reg allocation for wg0
+        # reg allocation for wg0
         self.num_mma_regs = 256
 
         self._setup_attributes()
         SharedStorage = self._get_shared_storage_cls()
 
-        self.tma_copy_bytes = {
-            name: cute.size_in_bytes(mX.element_type, cute.select(layout, mode=[0, 1]))
-            for name, mX, layout in [
-                ("Q", mQ, self.sQ_layout)
-            ]
-        }
+        self.tma_copy_bytes = {name: cute.size_in_bytes(mX.element_type, cute.select(layout, mode=[0, 1])) for name, mX, layout in [("Q", mQ, self.sQ_layout)]}
 
         tma_atom_Q, tma_tensor_Q = cpasync.make_tiled_tma_atom(
-            cpasync.CopyBulkTensorTileG2SOp(), mQ,
-            self.sQ_layout, (self.tile_m, self.tile_hdim),
+            cpasync.CopyBulkTensorTileG2SOp(),
+            mQ,
+            self.sQ_layout,
+            (self.tile_m, self.tile_hdim),
         )
 
         # Sparse path: KV is loaded via cp.async scatter-gather indexed by
@@ -293,11 +282,15 @@ class SparseScoreRecomputeSm90:
             mKV_for_kernel,
             mOut,
             mWeights,
-            mTopkIdxs, mTopkLength,                  # sparse KV indices + per-q length
-            self.sQ_layout, self.sKV_layout_staged,
+            mTopkIdxs,
+            mTopkLength,  # sparse KV indices + per-q length
+            self.sQ_layout,
+            self.sKV_layout_staged,
             tiled_mma_QK,
             softmax_scale_log2,
-            tile_sched_params, TileScheduler, SharedStorage,
+            tile_sched_params,
+            TileScheduler,
+            SharedStorage,
             qhead_per_kvhead_divmod,
         ).launch(
             grid=grid_dim,
@@ -310,12 +303,12 @@ class SparseScoreRecomputeSm90:
     @cute.kernel
     def kernel(
         self,
-        mQ: cute.Tensor,                                 # tma_tensor_Q (TMA view of q)
+        mQ: cute.Tensor,  # tma_tensor_Q (TMA view of q)
         tma_atom_Q: cute.CopyAtom,
         mKV: cute.Tensor,
         mOut: cute.Tensor,
         mWeights: cute.Tensor,
-        mTopkIdxs: cute.Tensor = None,                   # (batch, seqlen_q, topk_max) int32
+        mTopkIdxs: cute.Tensor = None,  # (batch, seqlen_q, topk_max) int32
         mTopkLength: cute.Tensor = None,
         sQ_layout: cute.ComposedLayout = None,
         sKV_layout_staged: cute.ComposedLayout = None,
@@ -347,22 +340,21 @@ class SparseScoreRecomputeSm90:
         sKV_0 = sKV_staged[None, None, 0]
         sKV_1 = sKV_staged[None, None, 1]
 
-        sWeights = storage.sWeights.get_tensor(
-            cute.make_layout((self.tile_m,), stride=(1,))
-        )
+        sWeights = storage.sWeights.get_tensor(cute.make_layout((self.tile_m,), stride=(1,)))
         if tidx == 0:
             sWeights.fill(0.0)
 
         # Sparse path: one float per topk position, consumed by softmax_l1norm_parallel.
-        sTopk_reduced = storage.sTopk_reduced.get_tensor(
-            cute.make_layout((self.topk_max,), stride=(1,))
-        )
+        sTopk_reduced = storage.sTopk_reduced.get_tensor(cute.make_layout((self.topk_max,), stride=(1,)))
 
         SeqlenInfoCls = partial(
             SeqlenInfoQK.create,
             seqlen_q_static=mQ.shape[0][1],
             seqlen_k_static=mKV.shape[0],
-            mCuSeqlensQ=None, mCuSeqlensK=None, mSeqUsedQ=None, mSeqUsedK=None,
+            mCuSeqlensQ=None,
+            mCuSeqlensK=None,
+            mSeqUsedQ=None,
+            mSeqUsedK=None,
         )
         TileSchedulerCls = partial(TileScheduler.create, tile_sched_params)
 
@@ -371,19 +363,35 @@ class SparseScoreRecomputeSm90:
         warp_group_idx = cute.arch.make_warp_uniform(tidx // self.num_threads_per_warp_group)
         if warp_group_idx == 0:
             self.producer_wg0(
-                mQ, tma_atom_Q, mKV, mWeights,
-                mTopkIdxs, mTopkLength,
-                sQ, sKV_0, sKV_1, sWeights,
-                mbar_Q_ptr, tidx,
-                SeqlenInfoCls, TileSchedulerCls,
+                mQ,
+                tma_atom_Q,
+                mKV,
+                mWeights,
+                mTopkIdxs,
+                mTopkLength,
+                sQ,
+                sKV_0,
+                sKV_1,
+                sWeights,
+                mbar_Q_ptr,
+                tidx,
+                SeqlenInfoCls,
+                TileSchedulerCls,
             )
         else:
             self.consumer_wg1(
                 tiled_mma_QK,
-                mOut, mTopkIdxs, mTopkLength,
-                sQ, sKV_staged, sWeights, sTopk_reduced,
-                mbar_Q_ptr, tidx,
-                SeqlenInfoCls, TileSchedulerCls,
+                mOut,
+                mTopkIdxs,
+                mTopkLength,
+                sQ,
+                sKV_staged,
+                sWeights,
+                sTopk_reduced,
+                mbar_Q_ptr,
+                tidx,
+                SeqlenInfoCls,
+                TileSchedulerCls,
                 softmax_scale_log2,
             )
 
@@ -446,26 +454,30 @@ class SparseScoreRecomputeSm90:
 
                 # ---- TMA Q load (warp 0 leader) ----
                 gQ = cute.local_tile(mQ_cur, (self.tile_m, self.tile_hdim), (eff_m_block, 0))
-                load_Q, _, _ = copy_ops.tma_get_copy_fn(
-                    tma_atom_Q, 0, cute.make_layout(1), gQ, sQ, single_stage=True
-                )
+                load_Q, _, _ = copy_ops.tma_get_copy_fn(tma_atom_Q, 0, cute.make_layout(1), gQ, sQ, single_stage=True)
                 if warp_idx_in_wg == 0:
                     with cute.arch.elect_one():
-                        cute.arch.mbarrier_arrive_and_expect_tx(
-                            mbar_Q_ptr, self.tma_copy_bytes["Q"]
-                        )
+                        cute.arch.mbarrier_arrive_and_expect_tx(mbar_Q_ptr, self.tma_copy_bytes["Q"])
                     load_Q(tma_bar_ptr=mbar_Q_ptr)
 
                 # ---- Load Weights/LSE for this head tile ----
                 if const_expr(self.is_index_scores):
                     _pack_gqa.load_Weights_packed(
-                        mWeights_cur.iterator.toint(), seqlen_q_packed,
-                        sWeights, eff_m_block, self.tile_m, wg_tidx,
+                        mWeights_cur.iterator.toint(),
+                        seqlen_q_packed,
+                        sWeights,
+                        eff_m_block,
+                        self.tile_m,
+                        wg_tidx,
                     )
                 else:
                     _pack_gqa.load_LSE_packed(
-                        mWeights_cur.iterator.toint(), seqlen_q_packed,
-                        sWeights, eff_m_block, self.tile_m, wg_tidx,
+                        mWeights_cur.iterator.toint(),
+                        seqlen_q_packed,
+                        sWeights,
+                        eff_m_block,
+                        self.tile_m,
+                        wg_tidx,
                     )
 
                 cute.arch.fence_view_async_shared()
@@ -480,10 +492,7 @@ class SparseScoreRecomputeSm90:
                 # ---- KV prologue: cp.async scatter-gather first block → buf 0 ----
                 n_block = n_block_max - 1
                 if n_block >= 0:
-                    self.load_sparse_kv(
-                        mKV_cur, mTopkIdxs_cur, sKV_0, n_block, True,
-                        topk_tail_rows, m_block, batch_idx
-                    )
+                    self.load_sparse_kv(mKV_cur, mTopkIdxs_cur, sKV_0, n_block, True, topk_tail_rows, m_block, batch_idx)
                     cute.arch.cp_async_commit_group()
                     cute.arch.cp_async_wait_group(0)
                     cute.arch.fence_view_async_shared()
@@ -498,11 +507,7 @@ class SparseScoreRecomputeSm90:
 
                 while n_block >= 0:
                     if next_n_block >= 0:
-                        self.load_sparse_kv_select(
-                            mKV_cur, mTopkIdxs_cur, sKV_0, sKV_1,
-                            1 - cur_buf, next_n_block, False,
-                            self.tile_n, m_block, batch_idx
-                        )
+                        self.load_sparse_kv_select(mKV_cur, mTopkIdxs_cur, sKV_0, sKV_1, 1 - cur_buf, next_n_block, False, self.tile_n, m_block, batch_idx)
                         cute.arch.cp_async_commit_group()
                         cute.arch.cp_async_wait_group(0)
                     cute.arch.fence_view_async_shared()
@@ -557,8 +562,12 @@ class SparseScoreRecomputeSm90:
         thr_mma_QK = tiled_mma_QK.get_slice(wg_tidx)
         tSrQ, tSrK = mma_partition_fragment_AB(wg_mma_QK, sQ, sKV_staged, self.swap_AB)
         mma_qk_fn = partial(
-            gemm_zero_init, tiled_mma_QK, (self.tile_m, self.tile_n),
-            tSrQ, tSrK, swap_AB=self.swap_AB,
+            gemm_zero_init,
+            tiled_mma_QK,
+            (self.tile_m, self.tile_n),
+            tSrQ,
+            tSrK,
+            swap_AB=self.swap_AB,
         )
         warp_idx_in_wg = cute.arch.make_warp_uniform(cute.arch.warp_idx()) % 4
         mbar_Q_phase = Int32(0)
@@ -621,9 +630,18 @@ class SparseScoreRecomputeSm90:
                     acc_S = mma_qk_fn(B_idx=cur_buf, wg_wait=-1)
                     warpgroup.wait_group(0)
                     self._postprocess_and_reduce(
-                        acc_S, tWeightsrWeights, softmax_scale_log2, LOG2_E,
-                        n_block_base_row, lane, topK, sTopk_reduced,
-                        m_block, batch_idx, n_block, tidx,
+                        acc_S,
+                        tWeightsrWeights,
+                        softmax_scale_log2,
+                        LOG2_E,
+                        n_block_base_row,
+                        lane,
+                        topK,
+                        sTopk_reduced,
+                        m_block,
+                        batch_idx,
+                        n_block,
+                        tidx,
                         accumulate=accumulate,
                     )
 
@@ -692,9 +710,7 @@ class SparseScoreRecomputeSm90:
                 if const_expr(self.is_index_scores):
                     row_sum_cur_thread += cute.arch.fmax(acc_S_mn[r, c], Float32(0.0)) * tWeightsrWeights[c]
                 else:
-                    row_sum_cur_thread += cute.math.exp2(
-                        acc_S_mn[r, c] * softmax_scale_log2 - tWeightsrWeights[c] * LOG2_E, fastmath=True
-                    )
+                    row_sum_cur_thread += cute.math.exp2(acc_S_mn[r, c] * softmax_scale_log2 - tWeightsrWeights[c] * LOG2_E, fastmath=True)
             row_sum_cur_thread = sm90_ops.warp_reduce(row_sum_cur_thread, operator.add, width=4)
             # Indexer: apply sm_scale on the fp32 head-reduced row sum (post
             # warp_reduce, pre head-tile accumulation). Preserves precision
@@ -716,13 +732,13 @@ class SparseScoreRecomputeSm90:
     @cute.jit
     def _copy_row(
         self,
-        mKV_cur: cute.Tensor,       # (s_kv, headdim) gmem
-        sKV: cute.Tensor,            # (tile_n, headdim) swizzled smem
-        row: Int32,                   # smem row index
-        idx_in_group: Int32,          # 0..7 dim dir
+        mKV_cur: cute.Tensor,  # (s_kv, headdim) gmem
+        sKV: cute.Tensor,  # (tile_n, headdim) swizzled smem
+        row: Int32,  # smem row index
+        idx_in_group: Int32,  # 0..7 dim dir
         copy_atom: cute.CopyAtom,
         thr_copy: cute.TiledCopy,
-        token_idx: Int32,             # pre-loaded from mTopkIdxs_cur[global_topk_row]
+        token_idx: Int32,  # pre-loaded from mTopkIdxs_cur[global_topk_row]
     ):
         gKV_row = mKV_cur[token_idx, None]
         gKV_chunks = cute.flat_divide(gKV_row, (8,))
@@ -753,7 +769,6 @@ class SparseScoreRecomputeSm90:
         for tile in cutlass.range_constexpr(self.tile_hdim // 64):
             chunk_idx = tile * 8 + idx_in_group
             sK_chunks[None, chunk_idx].fill(0)
-
 
     @cute.jit
     def load_sparse_kv_select(
@@ -806,14 +821,11 @@ class SparseScoreRecomputeSm90:
         GROUP_SIZE = const_expr(8)
         NUM_GROUPS = const_expr(self.num_threads_per_warp_group // 8)  # 16
         ROWS_PER_GROUP = const_expr(self.tile_n // NUM_GROUPS)
-        idx_in_group = wg_tidx % GROUP_SIZE   # 0..7 dim dir
-        group_idx = wg_tidx // GROUP_SIZE      # 0..15 token dir
+        idx_in_group = wg_tidx % GROUP_SIZE  # 0..7 dim dir
+        group_idx = wg_tidx // GROUP_SIZE  # 0..15 token dir
         # cp.async scatter-gather KV → sKV (all 128 WG0 threads)
         seqlen_k = cute.size(mKV_cur.shape[0])
-        batch_offset = (
-            batch_idx * seqlen_k if const_expr(self.topk_indices_global)
-            else Int32(0)
-        )
+        batch_offset = batch_idx * seqlen_k if const_expr(self.topk_indices_global) else Int32(0)
         for r in cutlass.range_constexpr(ROWS_PER_GROUP):
             row = r * NUM_GROUPS + group_idx
             global_topk_row = n_block * self.tile_n + row
@@ -823,8 +835,12 @@ class SparseScoreRecomputeSm90:
                 if const_expr(self.has_topk_length):
                     if token_idx >= 0 and token_idx < seqlen_k:
                         self._copy_row(
-                            mKV_cur, sKV, row,
-                            idx_in_group, async_copy_atom, async_thr_copy,
+                            mKV_cur,
+                            sKV,
+                            row,
+                            idx_in_group,
+                            async_copy_atom,
+                            async_thr_copy,
                             token_idx,
                         )
                     else:
@@ -832,8 +848,12 @@ class SparseScoreRecomputeSm90:
                 else:
                     if token_idx >= 0 and token_idx < seqlen_k:
                         self._copy_row(
-                            mKV_cur, sKV, row,
-                            idx_in_group, async_copy_atom, async_thr_copy,
+                            mKV_cur,
+                            sKV,
+                            row,
+                            idx_in_group,
+                            async_copy_atom,
+                            async_thr_copy,
                             token_idx,
                         )
                     else:
@@ -858,8 +878,8 @@ class SparseScoreRecomputeSm90:
         """
         ELEMS_PER_THREAD = self.topk_max // self.num_threads_per_warp_group  # e.g. 512/128 = 4
         wg_tidx = tidx % self.num_threads_per_warp_group  # 0..127 for any WG
-        warp_id = wg_tidx >> 5    # 0..3
-        lane_id = wg_tidx & 31    # 0..31
+        warp_id = wg_tidx >> 5  # 0..3
+        lane_id = wg_tidx & 31  # 0..31
         softmax_barrier_id = int(NamedBarrierBwd.WG1_consumer_sync)
         epsilon = Float32(1e-10)
 
@@ -869,7 +889,7 @@ class SparseScoreRecomputeSm90:
         if const_expr(self.is_index_scores):
             # === Softmax path ===
             # Phase 1+2 fused: load to regs + clean + find local max
-            local_max = -Float32(float('inf'))
+            local_max = -Float32(float("inf"))
             for j in cutlass.range_constexpr(ELEMS_PER_THREAD):
                 idx = j * self.num_threads_per_warp_group + wg_tidx
                 val = sTopk_reduced[idx]
@@ -877,11 +897,11 @@ class SparseScoreRecomputeSm90:
                     if const_expr(not self.has_topk_length):
                         token_idx = mTopkIdxs_cur[idx]
                         if token_idx < 0:
-                            val = -Float32(float('inf'))
+                            val = -Float32(float("inf"))
                     local_max = cute.arch.fmax(local_max, val)
                 else:
                     if const_expr(self.output_log_probs):
-                        val = -Float32(float('inf'))
+                        val = -Float32(float("inf"))
                     else:
                         val = Float32(0.0)
                 rVals[j] = val
@@ -903,11 +923,11 @@ class SparseScoreRecomputeSm90:
             cur_max = cute.arch.fmax(cur_max, sTopk_reduced[3])
 
             # All entries -inf
-            if cur_max == -Float32(float('inf')):
+            if cur_max == -Float32(float("inf")):
                 for j in cutlass.range_constexpr(ELEMS_PER_THREAD):
                     idx = j * self.num_threads_per_warp_group + wg_tidx
                     if const_expr(self.output_log_probs):
-                        mOut_cur[idx] = -Float32(float('inf'))
+                        mOut_cur[idx] = -Float32(float("inf"))
                     else:
                         mOut_cur[idx] = Float32(0.0)
             else:
@@ -945,7 +965,7 @@ class SparseScoreRecomputeSm90:
                         if idx < cur_topk:
                             mOut_cur[idx] = rVals[j] - lse
                         else:
-                            mOut_cur[idx] = -Float32(float('inf'))
+                            mOut_cur[idx] = -Float32(float("inf"))
                 else:
                     inv_sum = Float32(1.0) / (cur_sum + epsilon)
                     for j in cutlass.range_constexpr(ELEMS_PER_THREAD):

@@ -97,9 +97,7 @@ class DenseScoreRecomputeSm90:
         # (1.065x -> 1.139x) and ~+1pt / neutral on indexer hd=128, with
         # out maxdiff = 0 preserved.  Set DENSE3WG_USE_WARP_SPLIT_PROD=0
         # to force the unified producer for benchmarking / debugging.
-        self.use_warp_split_producer = bool(int(
-            os.environ.get("DENSE3WG_USE_WARP_SPLIT_PROD", "1")
-        ))
+        self.use_warp_split_producer = bool(int(os.environ.get("DENSE3WG_USE_WARP_SPLIT_PROD", "1")))
         self.weights_or_lse_dtype = self.dtype if self.is_index_scores else cutlass.Float32
         self.has_topk_length = has_topk_length
         self.num_acc_n_rows_per_thread = self.tile_n // 32
@@ -126,27 +124,28 @@ class DenseScoreRecomputeSm90:
 
     def _setup_attributes(self):
         # sQ/sKV single-stage layouts
-        #Note:
-        #1. for index_scores, after swapAB, 'A'=(64, 128) and 'B'=(32, 128); for attention_scores, 'A'=(64, 512) and 'B'=(64, 512)
+        # Note:
+        # 1. for index_scores, after swapAB, 'A'=(64, 128) and 'B'=(32, 128); for attention_scores, 'A'=(64, 512) and 'B'=(64, 512)
         self.sQ_layout, self.sKV_layout = [
             sm90_mma.make_smem_layout(self.dtype, LayoutEnum.ROW_MAJOR, shape, stage)
             for shape, stage in [
-                ((self.tile_m, self.tile_hdim), None), #32 * 128 for index_scores; 64 * 512 for attention_scores
+                ((self.tile_m, self.tile_hdim), None),  # 32 * 128 for index_scores; 64 * 512 for attention_scores
                 ((self.tile_n, self.tile_hdim), None),
             ]
         ]
         # 2-stage KV layout for WGMMA: (tile_n, tile_hdim, 2)
         # Used to create a single WGMMA fragment spanning both stages,
         # enabling stage selection via runtime index instead of if/else branch.
-        self.sKV_layout_staged = sm90_mma.make_smem_layout(
-            self.dtype, LayoutEnum.ROW_MAJOR, (self.tile_n, self.tile_hdim), stage=self.KV_stage
-        )
+        self.sKV_layout_staged = sm90_mma.make_smem_layout(self.dtype, LayoutEnum.ROW_MAJOR, (self.tile_n, self.tile_hdim), stage=self.KV_stage)
 
     def _get_tiled_mma(self):
         # Q @ K^T GEMM
         tiled_mma_QK = sm90_utils_basic.make_trivial_tiled_mma(
-            self.dtype, self.dtype,
-            warpgroup.OperandMajorMode.K, warpgroup.OperandMajorMode.K, Float32,
+            self.dtype,
+            self.dtype,
+            cute.nvgpu.OperandMajorMode.K,
+            cute.nvgpu.OperandMajorMode.K,
+            Float32,
             atom_layout_mnk=(1, 1, 1),
             tiler_mn=(self.tile_n, self.tile_m) if self.swap_AB else (self.tile_m, self.tile_n),
         )
@@ -164,22 +163,14 @@ class DenseScoreRecomputeSm90:
         sQ_alignment = 1024
         sKV_alignment = 1024
 
-        sQ_struct = cute.struct.Align[
-            cute.struct.MemRange[self.dtype, cute.cosize(self.sQ_layout)], sQ_alignment
-        ]
-        sKV_struct = cute.struct.Align[
-            cute.struct.MemRange[self.dtype, cute.cosize(self.sKV_layout_staged)], sKV_alignment
-        ]
-        sWeights_struct = cute.struct.Align[
-            cute.struct.MemRange[self.weights_or_lse_dtype, cute.round_up(self.tile_m, 64)], 128
-        ]
+        sQ_struct = cute.struct.Align[cute.struct.MemRange[self.dtype, cute.cosize(self.sQ_layout)], sQ_alignment]
+        sKV_struct = cute.struct.Align[cute.struct.MemRange[self.dtype, cute.cosize(self.sKV_layout_staged)], sKV_alignment]
+        sWeights_struct = cute.struct.Align[cute.struct.MemRange[self.weights_or_lse_dtype, cute.round_up(self.tile_m, 64)], 128]
         if const_expr(self.is_dense_indexer):
             sReduce_size = 16
         else:
             sReduce_size = 8
-        sReduce_struct = cute.struct.Align[
-            cute.struct.MemRange[Float32, sReduce_size], 128
-        ]
+        sReduce_struct = cute.struct.Align[cute.struct.MemRange[Float32, sReduce_size], 128]
 
         @cute.struct
         class SharedStorage:
@@ -212,10 +203,10 @@ class DenseScoreRecomputeSm90:
         mKV: cute.Tensor,  # k_indexer tensor or k_attention tensor
         mTopkIdxs: cute.Tensor = None,  # (batch, seqlen_q, topk_max) int32; None in dense mode
         stream: cuda.CUstream = None,
-        mOut: cute.Tensor = None,        # (batch, seqlen_q, topk_max)
-        weights_or_lse: cute.Tensor = None,    # (batch, nheads, seqlen_q) Note: weights is half precision
-        mTopkLength: cute.Tensor = None,       # (batch, seqlen_q) int32, per-q valid KV count
-        mL1NormDenom: cute.Tensor = None,      # (batch, seqlen_q) float32, dense attn L1 norm denominator
+        mOut: cute.Tensor = None,  # (batch, seqlen_q, topk_max)
+        weights_or_lse: cute.Tensor = None,  # (batch, nheads, seqlen_q) Note: weights is half precision
+        mTopkLength: cute.Tensor = None,  # (batch, seqlen_q) int32, per-q valid KV count
+        mL1NormDenom: cute.Tensor = None,  # (batch, seqlen_q) float32, dense attn L1 norm denominator
     ):
         self._check_type(mQ.element_type, mKV.element_type, weights_or_lse.element_type)
 
@@ -231,6 +222,7 @@ class DenseScoreRecomputeSm90:
                     new_strides.append(cute.assume(s, divby=divby))
             new_strides.append(t.stride[-1])
             return cute.make_tensor(t.iterator, cute.make_layout(t.shape, stride=tuple(new_strides)))
+
         mQ = _assume_strides(mQ)
         mKV = _assume_strides(mKV)
         mWeights = _assume_strides(weights_or_lse)
@@ -244,22 +236,23 @@ class DenseScoreRecomputeSm90:
         mWeights_transpose_layout = [2, 1, 0]
         mWeights = sm90_ops.select(mWeights, mWeights_transpose_layout)
 
-
         # PackGQA: reshape tensor layouts for packed M dimension
         qhpkv = self.qhead_per_kvhead
-        num_head_kv = mKV.shape[2] #num_head_kv is always 1 as PackGQA
+        num_head_kv = mKV.shape[2]  # num_head_kv is always 1 as PackGQA
         mQ = cute.make_tensor(
-            mQ.iterator, cute.make_layout(
+            mQ.iterator,
+            cute.make_layout(
                 ((qhpkv, mQ.shape[0]), mQ.shape[1], num_head_kv, *mQ.shape[3:]),
                 stride=((mQ.stride[2], mQ.stride[0]), mQ.stride[1], mQ.stride[2] * qhpkv, *mQ.stride[3:]),
-            )
+            ),
         )
 
         mWeights = cute.make_tensor(
-            mWeights.iterator, cute.make_layout(
-                ((qhpkv, mWeights.shape[0]), num_head_kv, *mWeights.shape[2:]), #32 * seqlen, 1, bs
+            mWeights.iterator,
+            cute.make_layout(
+                ((qhpkv, mWeights.shape[0]), num_head_kv, *mWeights.shape[2:]),  # 32 * seqlen, 1, bs
                 stride=((mWeights.stride[1], mWeights.stride[0]), mWeights.stride[1] * qhpkv, *mWeights.stride[2:]),
-            )
+            ),
         )
 
         tiled_mma_QK = self._get_tiled_mma()
@@ -267,31 +260,28 @@ class DenseScoreRecomputeSm90:
         self.num_mma_threads = 128 * self.num_mma_warp_groups  # 128 (only WG0)
         assert self.num_mma_threads <= self.num_threads
         self.num_threads_per_warp_group = 128
-        #reg allocation for wg0
+        # reg allocation for wg0
         self.num_mma_regs = 256
 
         self._setup_attributes()
         SharedStorage = self._get_shared_storage_cls()
 
-        self.tma_copy_bytes = {
-            name: cute.size_in_bytes(mX.element_type, cute.select(layout, mode=[0, 1]))
-            for name, mX, layout in [
-                ("Q", mQ, self.sQ_layout)
-            ]
-        }
+        self.tma_copy_bytes = {name: cute.size_in_bytes(mX.element_type, cute.select(layout, mode=[0, 1])) for name, mX, layout in [("Q", mQ, self.sQ_layout)]}
 
         tma_atom_Q, tma_tensor_Q = cpasync.make_tiled_tma_atom(
-            cpasync.CopyBulkTensorTileG2SOp(), mQ,
-            self.sQ_layout, (self.tile_m, self.tile_hdim),
+            cpasync.CopyBulkTensorTileG2SOp(),
+            mQ,
+            self.sQ_layout,
+            (self.tile_m, self.tile_hdim),
         )
 
         # Dense path: KV is loaded via TMA (sequential full-KV iteration).
-        self.tma_copy_bytes["KV"] = cute.size_in_bytes(
-            mKV.element_type, cute.select(self.sKV_layout, mode=[0, 1])
-        )
+        self.tma_copy_bytes["KV"] = cute.size_in_bytes(mKV.element_type, cute.select(self.sKV_layout, mode=[0, 1]))
         tma_atom_KV, tma_tensor_KV = cpasync.make_tiled_tma_atom(
-            cpasync.CopyBulkTensorTileG2SOp(), mKV,
-            self.sKV_layout, (self.tile_n, self.tile_hdim),
+            cpasync.CopyBulkTensorTileG2SOp(),
+            mKV,
+            self.sKV_layout,
+            (self.tile_n, self.tile_hdim),
         )
         mKV_for_kernel = tma_tensor_KV
 
@@ -330,10 +320,13 @@ class DenseScoreRecomputeSm90:
             mKV_for_kernel,
             mOut,
             mWeights,
-            self.sQ_layout, self.sKV_layout_staged,
+            self.sQ_layout,
+            self.sKV_layout_staged,
             tiled_mma_QK,
             softmax_scale_log2,
-            tile_sched_params, TileScheduler, SharedStorage,
+            tile_sched_params,
+            TileScheduler,
+            SharedStorage,
             qhead_per_kvhead_divmod,
             mL1NormDenom,
             tma_atom_KV,
@@ -400,24 +393,23 @@ class DenseScoreRecomputeSm90:
         sKV_0 = sKV_staged[None, None, 0]
         sKV_1 = sKV_staged[None, None, 1]
 
-        sWeights = storage.sWeights.get_tensor(
-            cute.make_layout((self.tile_m,), stride=(1,))
-        )
+        sWeights = storage.sWeights.get_tensor(cute.make_layout((self.tile_m,), stride=(1,)))
         if tidx == 0:
             sWeights.fill(0.0)
         if const_expr(self.is_dense_indexer):
             sReduce_size = 16
         else:
             sReduce_size = 8
-        sReduce = storage.sReduce.get_tensor(
-            cute.make_layout((sReduce_size,), stride=(1,))
-        )
+        sReduce = storage.sReduce.get_tensor(cute.make_layout((sReduce_size,), stride=(1,)))
 
         SeqlenInfoCls = partial(
             SeqlenInfoQK.create,
             seqlen_q_static=mQ.shape[0][1],
             seqlen_k_static=mKV.shape[0],
-            mCuSeqlensQ=None, mCuSeqlensK=None, mSeqUsedQ=None, mSeqUsedK=None,
+            mCuSeqlensQ=None,
+            mCuSeqlensK=None,
+            mSeqUsedQ=None,
+            mSeqUsedK=None,
         )
         TileSchedulerCls = partial(TileScheduler.create, tile_sched_params)
 
@@ -427,11 +419,18 @@ class DenseScoreRecomputeSm90:
             self.consumer(
                 0,
                 tiled_mma_QK,
-                mOut, mTopkLength,
-                sQ, sKV_staged, sWeights, sReduce,
-                mbar_Q_ptr, mbar_KV0_ptr, mbar_KVEmpty0_ptr,
+                mOut,
+                mTopkLength,
+                sQ,
+                sKV_staged,
+                sWeights,
+                sReduce,
+                mbar_Q_ptr,
+                mbar_KV0_ptr,
+                mbar_KVEmpty0_ptr,
                 tidx,
-                SeqlenInfoCls, TileSchedulerCls,
+                SeqlenInfoCls,
+                TileSchedulerCls,
                 softmax_scale_log2,
                 mL1NormDenom,
             )
@@ -439,29 +438,42 @@ class DenseScoreRecomputeSm90:
             self.consumer(
                 1,
                 tiled_mma_QK,
-                mOut, mTopkLength,
-                sQ, sKV_staged, sWeights, sReduce,
-                mbar_Q_ptr, mbar_KV1_ptr, mbar_KVEmpty1_ptr,
+                mOut,
+                mTopkLength,
+                sQ,
+                sKV_staged,
+                sWeights,
+                sReduce,
+                mbar_Q_ptr,
+                mbar_KV1_ptr,
+                mbar_KVEmpty1_ptr,
                 tidx,
-                SeqlenInfoCls, TileSchedulerCls,
+                SeqlenInfoCls,
+                TileSchedulerCls,
                 softmax_scale_log2,
                 mL1NormDenom,
             )
         else:
-            producer_fn = (
-                self.producer_warp_split
-                if const_expr(self.use_warp_split_producer)
-                else self.producer
-            )
+            producer_fn = self.producer_warp_split if const_expr(self.use_warp_split_producer) else self.producer
             producer_fn(
-                mQ, tma_atom_Q, mKV, tma_atom_KV, mWeights,
+                mQ,
+                tma_atom_Q,
+                mKV,
+                tma_atom_KV,
+                mWeights,
                 mTopkLength,
-                sQ, sKV_0, sKV_1, sWeights,
+                sQ,
+                sKV_0,
+                sKV_1,
+                sWeights,
                 mbar_Q_ptr,
-                mbar_KV0_ptr, mbar_KV1_ptr,
-                mbar_KVEmpty0_ptr, mbar_KVEmpty1_ptr,
+                mbar_KV0_ptr,
+                mbar_KV1_ptr,
+                mbar_KVEmpty0_ptr,
+                mbar_KVEmpty1_ptr,
                 tidx,
-                SeqlenInfoCls, TileSchedulerCls,
+                SeqlenInfoCls,
+                TileSchedulerCls,
             )
 
     # --------------------------------------------------------------------- #
@@ -526,25 +538,29 @@ class DenseScoreRecomputeSm90:
 
                 # ---- Q TMA + Weights/LSE LDG ----
                 gQ = cute.local_tile(mQ_cur, (self.tile_m, self.tile_hdim), (eff_m_block, 0))
-                load_Q, _, _ = copy_ops.tma_get_copy_fn(
-                    tma_atom_Q, 0, cute.make_layout(1), gQ, sQ, single_stage=True
-                )
+                load_Q, _, _ = copy_ops.tma_get_copy_fn(tma_atom_Q, 0, cute.make_layout(1), gQ, sQ, single_stage=True)
                 if warp_idx_in_wg == 0:
                     with cute.arch.elect_one():
-                        cute.arch.mbarrier_arrive_and_expect_tx(
-                            mbar_Q_ptr, self.tma_copy_bytes["Q"]
-                        )
+                        cute.arch.mbarrier_arrive_and_expect_tx(mbar_Q_ptr, self.tma_copy_bytes["Q"])
                     load_Q(tma_bar_ptr=mbar_Q_ptr)
 
                 if const_expr(self.is_index_scores):
                     _pack_gqa.load_Weights_packed(
-                        mWeights_cur.iterator.toint(), seqlen_q_packed,
-                        sWeights, eff_m_block, self.tile_m, wg_tidx,
+                        mWeights_cur.iterator.toint(),
+                        seqlen_q_packed,
+                        sWeights,
+                        eff_m_block,
+                        self.tile_m,
+                        wg_tidx,
                     )
                 else:
                     _pack_gqa.load_LSE_packed(
-                        mWeights_cur.iterator.toint(), seqlen_q_packed,
-                        sWeights, eff_m_block, self.tile_m, wg_tidx,
+                        mWeights_cur.iterator.toint(),
+                        seqlen_q_packed,
+                        sWeights,
+                        eff_m_block,
+                        self.tile_m,
+                        wg_tidx,
                     )
 
                 cute.arch.fence_view_async_shared()
@@ -570,11 +586,19 @@ class DenseScoreRecomputeSm90:
                 # Prologue — 2 upfront TMAs.
                 if n_block_max >= 1:
                     self._issue_kv_tma(
-                        mKV_cur, sKV_0, n_block_max - 1, tma_atom_KV, mbar_KV0_ptr,
+                        mKV_cur,
+                        sKV_0,
+                        n_block_max - 1,
+                        tma_atom_KV,
+                        mbar_KV0_ptr,
                     )
                 if n_block_max >= 2:
                     self._issue_kv_tma(
-                        mKV_cur, sKV_1, n_block_max - 2, tma_atom_KV, mbar_KV1_ptr,
+                        mKV_cur,
+                        sKV_1,
+                        n_block_max - 2,
+                        tma_atom_KV,
+                        mbar_KV1_ptr,
                     )
 
                 # Steady state: refill stage 0 then stage 1, starting at
@@ -586,7 +610,11 @@ class DenseScoreRecomputeSm90:
                     cute.arch.mbarrier_wait(mbar_KVEmpty0_ptr, kve0_phase)
                     kve0_phase = kve0_phase ^ 1
                     self._issue_kv_tma(
-                        mKV_cur, sKV_0, n_block, tma_atom_KV, mbar_KV0_ptr,
+                        mKV_cur,
+                        sKV_0,
+                        n_block,
+                        tma_atom_KV,
+                        mbar_KV0_ptr,
                     )
                     n_block = n_block - 1
                     if n_block >= 0:
@@ -594,7 +622,11 @@ class DenseScoreRecomputeSm90:
                         cute.arch.mbarrier_wait(mbar_KVEmpty1_ptr, kve1_phase)
                         kve1_phase = kve1_phase ^ 1
                         self._issue_kv_tma(
-                            mKV_cur, sKV_1, n_block, tma_atom_KV, mbar_KV1_ptr,
+                            mKV_cur,
+                            sKV_1,
+                            n_block,
+                            tma_atom_KV,
+                            mbar_KV1_ptr,
                         )
                         n_block = n_block - 1
 
@@ -694,25 +726,29 @@ class DenseScoreRecomputeSm90:
 
                 # ---- Q TMA (warp-0) + Weights/LSE LDG (all 128 threads) ----
                 gQ = cute.local_tile(mQ_cur, (self.tile_m, self.tile_hdim), (eff_m_block, 0))
-                load_Q, _, _ = copy_ops.tma_get_copy_fn(
-                    tma_atom_Q, 0, cute.make_layout(1), gQ, sQ, single_stage=True
-                )
+                load_Q, _, _ = copy_ops.tma_get_copy_fn(tma_atom_Q, 0, cute.make_layout(1), gQ, sQ, single_stage=True)
                 if warp_idx_in_wg == 0:
                     with cute.arch.elect_one():
-                        cute.arch.mbarrier_arrive_and_expect_tx(
-                            mbar_Q_ptr, self.tma_copy_bytes["Q"]
-                        )
+                        cute.arch.mbarrier_arrive_and_expect_tx(mbar_Q_ptr, self.tma_copy_bytes["Q"])
                     load_Q(tma_bar_ptr=mbar_Q_ptr)
 
                 if const_expr(self.is_index_scores):
                     _pack_gqa.load_Weights_packed(
-                        mWeights_cur.iterator.toint(), seqlen_q_packed,
-                        sWeights, eff_m_block, self.tile_m, wg_tidx,
+                        mWeights_cur.iterator.toint(),
+                        seqlen_q_packed,
+                        sWeights,
+                        eff_m_block,
+                        self.tile_m,
+                        wg_tidx,
                     )
                 else:
                     _pack_gqa.load_LSE_packed(
-                        mWeights_cur.iterator.toint(), seqlen_q_packed,
-                        sWeights, eff_m_block, self.tile_m, wg_tidx,
+                        mWeights_cur.iterator.toint(),
+                        seqlen_q_packed,
+                        sWeights,
+                        eff_m_block,
+                        self.tile_m,
+                        wg_tidx,
                     )
 
                 cute.arch.fence_view_async_shared()
@@ -733,7 +769,11 @@ class DenseScoreRecomputeSm90:
                     # Prologue
                     if n_block_max >= 1:
                         self._issue_kv_tma(
-                            mKV_cur, sKV_0, n_block_max - 1, tma_atom_KV, mbar_KV0_ptr,
+                            mKV_cur,
+                            sKV_0,
+                            n_block_max - 1,
+                            tma_atom_KV,
+                            mbar_KV0_ptr,
                         )
                     # Steady state: refill stage 0 for n = n_block_max-3, -5, ...
                     n_0 = n_block_max - 3
@@ -741,7 +781,11 @@ class DenseScoreRecomputeSm90:
                         cute.arch.mbarrier_wait(mbar_KVEmpty0_ptr, kve0_phase)
                         kve0_phase = kve0_phase ^ 1
                         self._issue_kv_tma(
-                            mKV_cur, sKV_0, n_0, tma_atom_KV, mbar_KV0_ptr,
+                            mKV_cur,
+                            sKV_0,
+                            n_0,
+                            tma_atom_KV,
+                            mbar_KV0_ptr,
                         )
                         n_0 = n_0 - 2
                     # Drain: match consumer's final KVEmpty arrive.
@@ -756,14 +800,22 @@ class DenseScoreRecomputeSm90:
                     # Prologue
                     if n_block_max >= 2:
                         self._issue_kv_tma_warp1(
-                            mKV_cur, sKV_1, n_block_max - 2, tma_atom_KV, mbar_KV1_ptr,
+                            mKV_cur,
+                            sKV_1,
+                            n_block_max - 2,
+                            tma_atom_KV,
+                            mbar_KV1_ptr,
                         )
                     n_1 = n_block_max - 4
                     while n_1 >= 0:
                         cute.arch.mbarrier_wait(mbar_KVEmpty1_ptr, kve1_phase)
                         kve1_phase = kve1_phase ^ 1
                         self._issue_kv_tma_warp1(
-                            mKV_cur, sKV_1, n_1, tma_atom_KV, mbar_KV1_ptr,
+                            mKV_cur,
+                            sKV_1,
+                            n_1,
+                            tma_atom_KV,
+                            mbar_KV1_ptr,
                         )
                         n_1 = n_1 - 2
                     if n_block_max >= 2:
@@ -815,13 +867,16 @@ class DenseScoreRecomputeSm90:
         warp_idx_in_wg = cute.arch.make_warp_uniform(cute.arch.warp_idx()) % 4
         gKV = cute.local_tile(mKV_cur, (self.tile_n, self.tile_hdim), (n_block, 0))
         load_fn, _, _ = copy_ops.tma_get_copy_fn(
-            tma_atom_KV, 0, cute.make_layout(1), gKV, sKV, single_stage=True,
+            tma_atom_KV,
+            0,
+            cute.make_layout(1),
+            gKV,
+            sKV,
+            single_stage=True,
         )
         if warp_idx_in_wg == 1:
             with cute.arch.elect_one():
-                cute.arch.mbarrier_arrive_and_expect_tx(
-                    mbar_KV_ptr, self.tma_copy_bytes["KV"]
-                )
+                cute.arch.mbarrier_arrive_and_expect_tx(mbar_KV_ptr, self.tma_copy_bytes["KV"])
             load_fn(tma_bar_ptr=mbar_KV_ptr)
 
     # --------------------------------------------------------------------- #
@@ -861,8 +916,8 @@ class DenseScoreRecomputeSm90:
         sWeights: cute.Tensor,
         sReduce: cute.Tensor,
         mbar_Q_ptr,
-        mbar_KV_ptr,            # this consumer's stage mbarrier (stage 0 for WG0, stage 1 for WG1)
-        mbar_KVEmpty_ptr,       # this consumer's KVEmpty mbarrier (consumer -> producer)
+        mbar_KV_ptr,  # this consumer's stage mbarrier (stage 0 for WG0, stage 1 for WG1)
+        mbar_KVEmpty_ptr,  # this consumer's KVEmpty mbarrier (consumer -> producer)
         tidx: Int32,
         SeqlenInfoCls: Callable,
         TileSchedulerCls: Callable,
@@ -991,9 +1046,13 @@ class DenseScoreRecomputeSm90:
                     # B_idx selects our stage in the 2-stage sKV_staged
                     # at compile time (Constexpr int).
                     gemm_w_idx(
-                        tiled_mma_QK, acc_S, tSrQ, tSrK,
+                        tiled_mma_QK,
+                        acc_S,
+                        tSrQ,
+                        tSrK,
                         zero_init=Boolean(True),
-                        B_idx=my_stage, wg_wait=-1,
+                        B_idx=my_stage,
+                        wg_wait=-1,
                         swap_AB=self.swap_AB,
                     )
                     # Wake peer: contribute 128 to peer's scheduler barrier
@@ -1014,14 +1073,22 @@ class DenseScoreRecomputeSm90:
                     # single elected thread in warp-0.
                     if warp_idx_in_wg == 0:
                         with cute.arch.elect_one():
-                            cute.arch.mbarrier_arrive(
-                                mbar_KVEmpty_ptr, arrive_count=128
-                            )
+                            cute.arch.mbarrier_arrive(mbar_KVEmpty_ptr, arrive_count=128)
 
                     warp_col_sum = self._postprocess_and_reduce(
-                        acc_S, tWeightsrWeights, softmax_scale_log2, LOG2_E,
-                        n_block_base_row, lane, topK, cute.size(mOut.shape[1]), sReduce,
-                        m_block, batch_idx, n_block, tidx,
+                        acc_S,
+                        tWeightsrWeights,
+                        softmax_scale_log2,
+                        LOG2_E,
+                        n_block_base_row,
+                        lane,
+                        topK,
+                        cute.size(mOut.shape[1]),
+                        sReduce,
+                        m_block,
+                        batch_idx,
+                        n_block,
+                        tidx,
                         accumulate=accumulate,
                         mOut_cur=mOut_cur,
                         acc_out_regs=acc_out_regs,
@@ -1069,14 +1136,9 @@ class DenseScoreRecomputeSm90:
                                     fastmath=True,
                                 )
                             new_max = cute.arch.fmax(lse_accum_max, global_max)
-                            lse_accum_sum_exp = (
-                                lse_accum_sum_exp * cute.math.exp2(
-                                    (lse_accum_max - new_max) * LOG2_E, fastmath=True
-                                )
-                                + global_sum_exp * cute.math.exp2(
-                                    (global_max - new_max) * LOG2_E, fastmath=True
-                                )
-                            )
+                            lse_accum_sum_exp = lse_accum_sum_exp * cute.math.exp2(
+                                (lse_accum_max - new_max) * LOG2_E, fastmath=True
+                            ) + global_sum_exp * cute.math.exp2((global_max - new_max) * LOG2_E, fastmath=True)
                             lse_accum_max = new_max
 
                     n_block = n_block - 2
@@ -1099,12 +1161,7 @@ class DenseScoreRecomputeSm90:
                             barrier_id=int(NamedBarrierBwd.DenseConsumer1Sync_3WG),
                             number_of_threads=self.num_threads_per_warp_group,
                         )
-                    block_col_sum = (
-                        sReduce[my_sreduce_off + 0]
-                        + sReduce[my_sreduce_off + 1]
-                        + sReduce[my_sreduce_off + 2]
-                        + sReduce[my_sreduce_off + 3]
-                    )
+                    block_col_sum = sReduce[my_sreduce_off + 0] + sReduce[my_sreduce_off + 1] + sReduce[my_sreduce_off + 2] + sReduce[my_sreduce_off + 3]
                     l1norm_accum += block_col_sum
                     l1norm_warp_accum = Float32(0.0)
             # End of h_tile loop.
@@ -1128,9 +1185,7 @@ class DenseScoreRecomputeSm90:
                 )
                 if const_expr(consumer_id == 0):
                     final_l1norm = sReduce[0] + sReduce[4]
-                    self.write_l1norm_denom(
-                        final_l1norm, mL1NormDenom, batch_idx, m_block, tidx
-                    )
+                    self.write_l1norm_denom(final_l1norm, mL1NormDenom, batch_idx, m_block, tidx)
             elif const_expr(self.is_dense_indexer):
                 # WG0 writes (max, sum_exp) to sReduce[0..1]; WG1 → [8..9].
                 if wg_tidx == 0:
@@ -1151,17 +1206,10 @@ class DenseScoreRecomputeSm90:
                     wg1_max = sReduce[8]
                     wg1_sum = sReduce[9]
                     new_max = cute.arch.fmax(wg0_max, wg1_max)
-                    final_sum = (
-                        wg0_sum * cute.math.exp2(
-                            (wg0_max - new_max) * LOG2_E, fastmath=True
-                        )
-                        + wg1_sum * cute.math.exp2(
-                            (wg1_max - new_max) * LOG2_E, fastmath=True
-                        )
+                    final_sum = wg0_sum * cute.math.exp2((wg0_max - new_max) * LOG2_E, fastmath=True) + wg1_sum * cute.math.exp2(
+                        (wg1_max - new_max) * LOG2_E, fastmath=True
                     )
-                    self.write_lse_denom(
-                        new_max, final_sum, mL1NormDenom, batch_idx, m_block, tidx
-                    )
+                    self.write_lse_denom(new_max, final_sum, mL1NormDenom, batch_idx, m_block, tidx)
 
             cute.arch.barrier(
                 barrier_id=int(NamedBarrierBwd.TileComplete3WG),
@@ -1187,9 +1235,9 @@ class DenseScoreRecomputeSm90:
         n_block: Int32,
         tidx: Int32,
         accumulate: Boolean = Boolean(False),  # True when accumulating across head tiles
-        mOut_cur: cute.Tensor = None,          # dense: direct write target
-        acc_out_regs: cute.Tensor = None,      # dense: caller-owned rmem tensor [num_acc_n_rows_per_thread]
-        lse_state: cute.Tensor = None,         # dense indexer: rmem tensor [2] = (tile_max, tile_sum_exp)
+        mOut_cur: cute.Tensor = None,  # dense: direct write target
+        acc_out_regs: cute.Tensor = None,  # dense: caller-owned rmem tensor [num_acc_n_rows_per_thread]
+        lse_state: cute.Tensor = None,  # dense indexer: rmem tensor [2] = (tile_max, tile_sum_exp)
         compute_lse: Boolean = Boolean(False),  # dense indexer: True only on last head tile
     ) -> Float32:
         """Post-process GEMM result (relu*weights or exp2) and head-reduce.
@@ -1236,9 +1284,7 @@ class DenseScoreRecomputeSm90:
             for r in cutlass.range_constexpr(cute.size(acc_S_mn, mode=[0])):
                 row_sum_cur_thread = Float32(0.0)
                 for c in cutlass.range(cute.size(acc_S_mn, mode=[1]), unroll_full=True):
-                    row_sum_cur_thread += cute.math.exp2(
-                        acc_S_mn[r, c] * softmax_scale_log2 - tWeightsrWeights[c] * LOG2_E, fastmath=True
-                    )
+                    row_sum_cur_thread += cute.math.exp2(acc_S_mn[r, c] * softmax_scale_log2 - tWeightsrWeights[c] * LOG2_E, fastmath=True)
                 # Intra-warp row reduce: sum across 4 threads sharing the same row
                 row_sum_cur_thread = sm90_ops.warp_reduce(row_sum_cur_thread, operator.add, width=4)
 
@@ -1349,9 +1395,7 @@ class DenseScoreRecomputeSm90:
                 for r in cutlass.range_constexpr(self.num_acc_n_rows_per_thread):
                     pos = n_block_base_row + r * 8 + (lane >> 2)
                     if (lane & 3) == 0 and pos < topK and pos < col_limit:
-                        local_sum_exp += cute.math.exp2(
-                            (acc_out_regs[r] - tile_max) * LOG2_E, fastmath=True
-                        )
+                        local_sum_exp += cute.math.exp2((acc_out_regs[r] - tile_max) * LOG2_E, fastmath=True)
 
                 # Step 4: Butterfly sum reduction across 8 leader threads
                 tile_sum_exp = local_sum_exp
@@ -1408,8 +1452,8 @@ class DenseScoreRecomputeSm90:
     @cute.jit
     def _issue_kv_tma(
         self,
-        mKV_cur: cute.Tensor,     # 2D GMEM (seqlen_k, headdim) — TMA tensor view
-        sKV: cute.Tensor,         # 2D SMEM target (tile_n, tile_hdim)
+        mKV_cur: cute.Tensor,  # 2D GMEM (seqlen_k, headdim) — TMA tensor view
+        sKV: cute.Tensor,  # 2D SMEM target (tile_n, tile_hdim)
         n_block: Int32,
         tma_atom_KV: cute.CopyAtom,
         mbar_KV_ptr,
@@ -1422,11 +1466,14 @@ class DenseScoreRecomputeSm90:
         warp_idx_in_wg = cute.arch.make_warp_uniform(cute.arch.warp_idx()) % 4
         gKV = cute.local_tile(mKV_cur, (self.tile_n, self.tile_hdim), (n_block, 0))
         load_fn, _, _ = copy_ops.tma_get_copy_fn(
-            tma_atom_KV, 0, cute.make_layout(1), gKV, sKV, single_stage=True,
+            tma_atom_KV,
+            0,
+            cute.make_layout(1),
+            gKV,
+            sKV,
+            single_stage=True,
         )
         if warp_idx_in_wg == 0:
             with cute.arch.elect_one():
-                cute.arch.mbarrier_arrive_and_expect_tx(
-                    mbar_KV_ptr, self.tma_copy_bytes["KV"]
-                )
+                cute.arch.mbarrier_arrive_and_expect_tx(mbar_KV_ptr, self.tma_copy_bytes["KV"])
             load_fn(tma_bar_ptr=mbar_KV_ptr)

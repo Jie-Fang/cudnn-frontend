@@ -147,11 +147,7 @@ def test_build_cfg_preserves_rope():
 
 def test_graph_uid_payload_ignores_unrelated_ragged_log_text():
     payload = fwd_payload(graph_uid=9)
-    log_text = (
-        "Backend Tensor named 'sdpa_fwd::O' with UID 4\n"
-        "Id: 4\n"
-        "raggedOffset: Enabled UID: 99\n"
-    )
+    log_text = "Backend Tensor named 'sdpa_fwd::O' with UID 4\n" "Id: 4\n" "raggedOffset: Enabled UID: 99\n"
 
     annotated_payload = sdpa_fwd.extract_and_annotate("{}", payload, log_text)
     cfg = sdpa_fwd.build_cfg("{}", annotated_payload, seed=123)
@@ -162,11 +158,7 @@ def test_graph_uid_payload_ignores_unrelated_ragged_log_text():
 
 def test_legacy_payload_keeps_ragged_log_text_fallback():
     payload = fwd_payload(graph_uid=None)
-    log_text = (
-        "Backend Tensor named 'sdpa_fwd::O' with UID 4\n"
-        "Id: 4\n"
-        "raggedOffset: Enabled UID: 99\n"
-    )
+    log_text = "Backend Tensor named 'sdpa_fwd::O' with UID 4\n" "Id: 4\n" "raggedOffset: Enabled UID: 99\n"
 
     annotated_payload = sdpa_fwd.extract_and_annotate("{}", payload, log_text)
     cfg = sdpa_fwd.build_cfg("{}", annotated_payload, seed=123)

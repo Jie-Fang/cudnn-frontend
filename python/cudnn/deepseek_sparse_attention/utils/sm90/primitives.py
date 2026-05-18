@@ -13,9 +13,7 @@ from cutlass.cutlass_dsl import T, dsl_user_op
 from cutlass._mlir.dialects import nvvm, llvm
 
 
-def get_smem_store_atom(
-    arch: cutlass.Constexpr[int], element_type: Type[cute.Numeric], transpose: bool = False
-) -> cute.CopyAtom:
+def get_smem_store_atom(arch: cutlass.Constexpr[int], element_type: Type[cute.Numeric], transpose: bool = False) -> cute.CopyAtom:
     if const_expr(arch < 90 or element_type.width != 16):
         return cute.make_copy_atom(
             cute.nvgpu.CopyUniversalOp(),
@@ -89,9 +87,7 @@ def convert_layout_acc_frgA(acc_layout: cute.Layout) -> cute.Layout:
     # For Sm90, FP16/BF16, convert acc_layout from ((2, 2, N / 8), MMA_M, MMA_N) to ((2, 2, 2), MMA_M, (N / 16, MMA_N))
     # TODO: Sm90 FP8
     if const_expr(cute.rank(acc_layout.shape[0]) == 3):  # Sm90
-        l = cute.logical_divide(
-            acc_layout, ((None, None, 2), None, None)
-        )  # ((2, 2, (2, N / 16)), MMA_M, MMA_N)
+        l = cute.logical_divide(acc_layout, ((None, None, 2), None, None))  # ((2, 2, (2, N / 16)), MMA_M, MMA_N)
         rA_mma_view = cute.make_layout(
             (
                 (l.shape[0][0], l.shape[0][1], l.shape[0][2][0]),
@@ -160,9 +156,7 @@ def logf(a: float | Float32, *, loc=None, ip=None) -> Float32:
 @dsl_user_op
 def atomic_add_fp32(a: float | Float32, gmem_ptr: cute.Pointer, *, loc=None, ip=None) -> None:
     """Scalar f32 atomicAdd: atomically adds `a` to the f32 value at `gmem_ptr`."""
-    nvvm.atomicrmw(
-        op=nvvm.AtomicOpKind.FADD, ptr=gmem_ptr.llvm_ptr, a=Float32(a).ir_value()
-    )
+    nvvm.atomicrmw(op=nvvm.AtomicOpKind.FADD, ptr=gmem_ptr.llvm_ptr, a=Float32(a).ir_value())
 
 
 @dsl_user_op
@@ -195,7 +189,8 @@ def atomic_add_fp32x4(
         has_side_effects=True,
         is_align_stack=False,
         asm_dialect=llvm.AsmDialect.AD_ATT,
-        loc=loc, ip=ip,
+        loc=loc,
+        ip=ip,
     )
 
 
@@ -263,9 +258,7 @@ def shuffle_sync(
 
 
 @dsl_user_op
-def cvt_f16x2_f32(
-    a: float | Float32, b: float | Float32, to_dtype: Type, *, loc=None, ip=None
-) -> cutlass.Int32:
+def cvt_f16x2_f32(a: float | Float32, b: float | Float32, to_dtype: Type, *, loc=None, ip=None) -> cutlass.Int32:
     assert to_dtype in [cutlass.BFloat16, cutlass.Float16], "to_dtype must be BFloat16 or Float16"
     return cutlass.Int32(
         llvm.inline_asm(
@@ -300,9 +293,7 @@ def cvt_f16(src: cute.Tensor, dst_or_dtype):
         dst = dst_or_dtype
         assert cute.size(dst.shape) == cute.size(src.shape), "dst and src must have the same size"
         assert cute.size(src.shape) % 2 == 0, "src must have an even number of elements"
-        assert dst.element_type in [cutlass.BFloat16, cutlass.Float16], (
-            "dst must be BFloat16 or Float16"
-        )
+        assert dst.element_type in [cutlass.BFloat16, cutlass.Float16], "dst must be BFloat16 or Float16"
         assert src.element_type is Float32, "src must be Float32"
         dst_i32 = cute.recast_tensor(dst, cutlass.Int32)
         assert cute.size(dst_i32.shape) * 2 == cute.size(src.shape)

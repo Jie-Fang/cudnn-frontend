@@ -18,7 +18,6 @@ from cudnn.api_base import APIBase, TupleDict
 
 from . import _interface_sm100 as _iface_sm100
 
-
 # ---------------------------------------------------------------------------
 # Base helpers
 # ---------------------------------------------------------------------------
@@ -137,11 +136,11 @@ class SparseIndexerScoreRecompute(_ScoreRecomputeBase):
 
     def __init__(
         self,
-        sample_q_indexer: torch.Tensor,        # (B, S_q, H_q, D) BF16
-        sample_k_indexer: torch.Tensor,        # (B, S_k, D) BF16 (MQA)
-        sample_weights: torch.Tensor,          # (B, S_q, H_q) BF16
-        sample_topk_indices: torch.Tensor,     # (B, S_q, topk) INT32
-        sample_out: torch.Tensor,              # (B, S_q, topk) FP32
+        sample_q_indexer: torch.Tensor,  # (B, S_q, H_q, D) BF16
+        sample_k_indexer: torch.Tensor,  # (B, S_k, D) BF16 (MQA)
+        sample_weights: torch.Tensor,  # (B, S_q, H_q) BF16
+        sample_topk_indices: torch.Tensor,  # (B, S_q, topk) INT32
+        sample_out: torch.Tensor,  # (B, S_q, topk) FP32
         sample_topk_length: Optional[torch.Tensor] = None,  # (B, S_q) INT32
         qhead_per_kv_head: Optional[int] = None,
         topk_indices_global: bool = False,
@@ -164,8 +163,15 @@ class SparseIndexerScoreRecompute(_ScoreRecomputeBase):
         self._check_dtype(self.topk_desc, torch.int32, name="topk_indices")
         self._check_dtype(self.out_desc, torch.float32, name="out")
         _check_sparse_score_shapes(
-            self, self.q_desc, self.k_desc, self.w_desc, self.topk_desc,
-            self.out_desc, self.topk_length_desc, "W", self.qhead_per_kv_head,
+            self,
+            self.q_desc,
+            self.k_desc,
+            self.w_desc,
+            self.topk_desc,
+            self.out_desc,
+            self.topk_length_desc,
+            "W",
+            self.qhead_per_kv_head,
         )
         self._is_supported = True
         return True
@@ -185,16 +191,24 @@ class SparseIndexerScoreRecompute(_ScoreRecomputeBase):
             from . import _interface_sm90 as _iface_sm90
 
             return _iface_sm90.sparse_indexer_score_recompute(
-                q_indexer, k_indexer, weights, topk_indices,
-                out=out, topk_length=topk_length,
+                q_indexer,
+                k_indexer,
+                weights,
+                topk_indices,
+                out=out,
+                topk_length=topk_length,
                 topk_indices_global=self.topk_indices_global,
                 current_stream=current_stream,
             )
         return _iface_sm100.sparse_indexer_score_recompute(
-            q_indexer, k_indexer, weights, topk_indices,
+            q_indexer,
+            k_indexer,
+            weights,
+            topk_indices,
             qhead_per_kv_head=self.qhead_per_kv_head,
             topk_indices_global=self.topk_indices_global,
-            out=out, topk_length=topk_length,
+            out=out,
+            topk_length=topk_length,
             current_stream=current_stream,
         )
 
@@ -220,11 +234,18 @@ def sparse_indexer_score_recompute_wrapper(
     ``batch_idx * S_k + local_idx``.
     """
     key = (
-        q_indexer.dtype, q_indexer.shape, k_indexer.shape,
-        weights.shape, topk_indices.shape,
-        q_indexer.stride(), k_indexer.stride(),
-        weights.stride(), topk_indices.stride(),
-        qhead_per_kv_head, topk_length is not None, bool(topk_indices_global),
+        q_indexer.dtype,
+        q_indexer.shape,
+        k_indexer.shape,
+        weights.shape,
+        topk_indices.shape,
+        q_indexer.stride(),
+        k_indexer.stride(),
+        weights.stride(),
+        topk_indices.stride(),
+        qhead_per_kv_head,
+        topk_length is not None,
+        bool(topk_indices_global),
     )
     obj = _cache_of_SparseIndexerScoreRecomputeObjects.get(key)
     if obj is None:
@@ -233,14 +254,18 @@ def sparse_indexer_score_recompute_wrapper(
             topk = topk_indices.shape[-1]
             out_sample = torch.empty(
                 (q_indexer.shape[0], q_indexer.shape[1], topk),
-                dtype=torch.float32, device=q_indexer.device,
+                dtype=torch.float32,
+                device=q_indexer.device,
             )
         else:
             out_sample = out
         obj = SparseIndexerScoreRecompute(
-            sample_q_indexer=q_indexer, sample_k_indexer=k_indexer,
-            sample_weights=weights, sample_topk_indices=topk_indices,
-            sample_out=out_sample, sample_topk_length=topk_length,
+            sample_q_indexer=q_indexer,
+            sample_k_indexer=k_indexer,
+            sample_weights=weights,
+            sample_topk_indices=topk_indices,
+            sample_out=out_sample,
+            sample_topk_length=topk_length,
             qhead_per_kv_head=qhead_per_kv_head,
             topk_indices_global=topk_indices_global,
         )
@@ -249,8 +274,13 @@ def sparse_indexer_score_recompute_wrapper(
         _cache_of_SparseIndexerScoreRecomputeObjects[key] = obj
 
     predict = obj.execute(
-        q_indexer, k_indexer, weights, topk_indices,
-        out=out, topk_length=topk_length, current_stream=stream,
+        q_indexer,
+        k_indexer,
+        weights,
+        topk_indices,
+        out=out,
+        topk_length=topk_length,
+        current_stream=stream,
     )
     return TupleDict(predict=predict)
 
@@ -270,11 +300,11 @@ class SparseAttnScoreRecompute(_ScoreRecomputeBase):
 
     def __init__(
         self,
-        sample_q_attn: torch.Tensor,           # (B, S_q, H_q, D) BF16
-        sample_k_attn: torch.Tensor,           # (B, S_k, D) BF16
-        sample_lse: torch.Tensor,              # (B, S_q, H_q) FP32
-        sample_topk_indices: torch.Tensor,     # (B, S_q, topk) INT32
-        sample_out: torch.Tensor,              # (B, S_q, topk) FP32
+        sample_q_attn: torch.Tensor,  # (B, S_q, H_q, D) BF16
+        sample_k_attn: torch.Tensor,  # (B, S_k, D) BF16
+        sample_lse: torch.Tensor,  # (B, S_q, H_q) FP32
+        sample_topk_indices: torch.Tensor,  # (B, S_q, topk) INT32
+        sample_out: torch.Tensor,  # (B, S_q, topk) FP32
         softmax_scale: float,
         sample_topk_length: Optional[torch.Tensor] = None,
         qhead_per_kv_head: Optional[int] = None,
@@ -299,8 +329,15 @@ class SparseAttnScoreRecompute(_ScoreRecomputeBase):
         self._check_dtype(self.topk_desc, torch.int32, name="topk_indices")
         self._check_dtype(self.out_desc, torch.float32, name="out")
         _check_sparse_score_shapes(
-            self, self.q_desc, self.k_desc, self.lse_desc, self.topk_desc,
-            self.out_desc, self.topk_length_desc, "LSE", self.qhead_per_kv_head,
+            self,
+            self.q_desc,
+            self.k_desc,
+            self.lse_desc,
+            self.topk_desc,
+            self.out_desc,
+            self.topk_length_desc,
+            "LSE",
+            self.qhead_per_kv_head,
         )
         self._is_supported = True
         return True
@@ -322,16 +359,26 @@ class SparseAttnScoreRecompute(_ScoreRecomputeBase):
             from . import _interface_sm90 as _iface_sm90
 
             return _iface_sm90.sparse_attn_score_recompute(
-                q_attn, k_attn, lse, topk_indices, scale,
-                out=out, topk_length=topk_length,
+                q_attn,
+                k_attn,
+                lse,
+                topk_indices,
+                scale,
+                out=out,
+                topk_length=topk_length,
                 topk_indices_global=self.topk_indices_global,
                 current_stream=current_stream,
             )
         return _iface_sm100.sparse_attn_score_recompute(
-            q_attn, k_attn, lse, topk_indices, scale,
+            q_attn,
+            k_attn,
+            lse,
+            topk_indices,
+            scale,
             qhead_per_kv_head=self.qhead_per_kv_head,
             topk_indices_global=self.topk_indices_global,
-            out=out, topk_length=topk_length,
+            out=out,
+            topk_length=topk_length,
             current_stream=current_stream,
         )
 
@@ -358,23 +405,39 @@ def sparse_attn_score_recompute_wrapper(
     ``batch_idx * S_k + local_idx``.
     """
     key = (
-        q_attn.dtype, q_attn.shape, k_attn.shape, lse.shape,
+        q_attn.dtype,
+        q_attn.shape,
+        k_attn.shape,
+        lse.shape,
         topk_indices.shape,
-        q_attn.stride(), k_attn.stride(), lse.stride(), topk_indices.stride(),
-        qhead_per_kv_head, topk_length is not None, bool(topk_indices_global),
+        q_attn.stride(),
+        k_attn.stride(),
+        lse.stride(),
+        topk_indices.stride(),
+        qhead_per_kv_head,
+        topk_length is not None,
+        bool(topk_indices_global),
         float(softmax_scale),
     )
     obj = _cache_of_SparseAttnScoreRecomputeObjects.get(key)
     if obj is None:
         topk = topk_indices.shape[-1]
-        out_sample = out if out is not None else torch.empty(
-            (q_attn.shape[0], q_attn.shape[1], topk),
-            dtype=torch.float32, device=q_attn.device,
+        out_sample = (
+            out
+            if out is not None
+            else torch.empty(
+                (q_attn.shape[0], q_attn.shape[1], topk),
+                dtype=torch.float32,
+                device=q_attn.device,
+            )
         )
         obj = SparseAttnScoreRecompute(
-            sample_q_attn=q_attn, sample_k_attn=k_attn,
-            sample_lse=lse, sample_topk_indices=topk_indices,
-            sample_out=out_sample, softmax_scale=softmax_scale,
+            sample_q_attn=q_attn,
+            sample_k_attn=k_attn,
+            sample_lse=lse,
+            sample_topk_indices=topk_indices,
+            sample_out=out_sample,
+            softmax_scale=softmax_scale,
             sample_topk_length=topk_length,
             qhead_per_kv_head=qhead_per_kv_head,
             topk_indices_global=topk_indices_global,
@@ -384,9 +447,14 @@ def sparse_attn_score_recompute_wrapper(
         _cache_of_SparseAttnScoreRecomputeObjects[key] = obj
 
     target = obj.execute(
-        q_attn, k_attn, lse, topk_indices,
-        out=out, topk_length=topk_length,
-        softmax_scale=softmax_scale, current_stream=stream,
+        q_attn,
+        k_attn,
+        lse,
+        topk_indices,
+        out=out,
+        topk_length=topk_length,
+        softmax_scale=softmax_scale,
+        current_stream=stream,
     )
     return TupleDict(target=target)
 
@@ -466,8 +534,15 @@ class DenseIndexerScoreRecompute(_ScoreRecomputeBase):
         self._check_dtype(self.denom_desc, torch.float32, name="denom_out")
         self._value_error_if(self.ratio < 1, f"ratio must be >= 1, got {self.ratio}")
         _check_dense_score_shapes(
-            self, self.q_desc, self.k_desc, self.w_desc, self.out_desc,
-            self.denom_desc, "W", self.is_thd, self.qhead_per_kv_head,
+            self,
+            self.q_desc,
+            self.k_desc,
+            self.w_desc,
+            self.out_desc,
+            self.denom_desc,
+            "W",
+            self.is_thd,
+            self.qhead_per_kv_head,
         )
         self._is_supported = True
         return True
@@ -499,7 +574,9 @@ class DenseIndexerScoreRecompute(_ScoreRecomputeBase):
             from . import _interface_sm90 as _iface_sm90
 
             return _iface_sm90.dense_indexer_score_recompute(
-                q, k, weights,
+                q,
+                k,
+                weights,
                 out=out,
                 denom_out=denom_out,
                 sm_scale=scale,
@@ -511,7 +588,9 @@ class DenseIndexerScoreRecompute(_ScoreRecomputeBase):
                 current_stream=current_stream,
             )
         return _iface_sm100.dense_indexer_score_recompute(
-            q, k, weights,
+            q,
+            k,
+            weights,
             qhead_per_kv_head=self.qhead_per_kv_head,
             out=out,
             denom_out=denom_out,
@@ -544,11 +623,21 @@ def dense_indexer_score_recompute_wrapper(
     stream: Optional[cuda.CUstream] = None,
 ) -> TupleDict:
     is_thd, max_q, max_k, out_shape, denom_shape = _dense_sample_shapes(
-        q, k, cu_seqlens_q, cu_seqlens_k, max_seqlen_q, max_seqlen_k,
+        q,
+        k,
+        cu_seqlens_q,
+        cu_seqlens_k,
+        max_seqlen_q,
+        max_seqlen_k,
     )
     key = (
-        q.dtype, q.shape, k.shape, weights.shape,
-        q.stride(), k.stride(), weights.stride(),
+        q.dtype,
+        q.shape,
+        k.shape,
+        weights.shape,
+        q.stride(),
+        k.stride(),
+        weights.stride(),
         qhead_per_kv_head,
         float(sm_scale),
         int(ratio),
@@ -560,15 +649,30 @@ def dense_indexer_score_recompute_wrapper(
     )
     obj = _cache_of_DenseIndexerScoreRecomputeObjects.get(key)
     if obj is None:
-        out_sample = out if out is not None else torch.empty(
-            out_shape, dtype=torch.float32, device=q.device,
+        out_sample = (
+            out
+            if out is not None
+            else torch.empty(
+                out_shape,
+                dtype=torch.float32,
+                device=q.device,
+            )
         )
-        denom_sample = denom_out if denom_out is not None else torch.empty(
-            denom_shape, dtype=torch.float32, device=q.device,
+        denom_sample = (
+            denom_out
+            if denom_out is not None
+            else torch.empty(
+                denom_shape,
+                dtype=torch.float32,
+                device=q.device,
+            )
         )
         obj = DenseIndexerScoreRecompute(
-            sample_q=q, sample_k=k, sample_weights=weights,
-            sample_out=out_sample, sample_denom_out=denom_sample,
+            sample_q=q,
+            sample_k=k,
+            sample_weights=weights,
+            sample_out=out_sample,
+            sample_denom_out=denom_sample,
             qhead_per_kv_head=qhead_per_kv_head,
             sm_scale=sm_scale,
             ratio=ratio,
@@ -579,7 +683,9 @@ def dense_indexer_score_recompute_wrapper(
         _cache_of_DenseIndexerScoreRecomputeObjects[key] = obj
 
     o, d = obj.execute(
-        q, k, weights,
+        q,
+        k,
+        weights,
         out=out,
         denom_out=denom_out,
         sm_scale=sm_scale,
@@ -633,8 +739,15 @@ class DenseAttnScoreRecompute(_ScoreRecomputeBase):
         self._check_dtype(self.denom_desc, torch.float32, name="denom_out")
         self._value_error_if(self.ratio < 1, f"ratio must be >= 1, got {self.ratio}")
         _check_dense_score_shapes(
-            self, self.q_desc, self.k_desc, self.lse_desc, self.out_desc,
-            self.denom_desc, "LSE", self.is_thd, self.qhead_per_kv_head,
+            self,
+            self.q_desc,
+            self.k_desc,
+            self.lse_desc,
+            self.out_desc,
+            self.denom_desc,
+            "LSE",
+            self.is_thd,
+            self.qhead_per_kv_head,
         )
         self._is_supported = True
         return True
@@ -666,7 +779,10 @@ class DenseAttnScoreRecompute(_ScoreRecomputeBase):
             from . import _interface_sm90 as _iface_sm90
 
             return _iface_sm90.dense_attn_score_recompute(
-                q, k, lse, scale,
+                q,
+                k,
+                lse,
+                scale,
                 out=out,
                 denom_out=denom_out,
                 ratio=ratio_value,
@@ -677,7 +793,10 @@ class DenseAttnScoreRecompute(_ScoreRecomputeBase):
                 current_stream=current_stream,
             )
         return _iface_sm100.dense_attn_score_recompute(
-            q, k, lse, scale,
+            q,
+            k,
+            lse,
+            scale,
             qhead_per_kv_head=self.qhead_per_kv_head,
             out=out,
             denom_out=denom_out,
@@ -709,11 +828,21 @@ def dense_attn_score_recompute_wrapper(
     stream: Optional[cuda.CUstream] = None,
 ) -> TupleDict:
     is_thd, max_q, max_k, out_shape, denom_shape = _dense_sample_shapes(
-        q, k, cu_seqlens_q, cu_seqlens_k, max_seqlen_q, max_seqlen_k,
+        q,
+        k,
+        cu_seqlens_q,
+        cu_seqlens_k,
+        max_seqlen_q,
+        max_seqlen_k,
     )
     key = (
-        q.dtype, q.shape, k.shape, lse.shape,
-        q.stride(), k.stride(), lse.stride(),
+        q.dtype,
+        q.shape,
+        k.shape,
+        lse.shape,
+        q.stride(),
+        k.stride(),
+        lse.stride(),
         qhead_per_kv_head,
         float(softmax_scale),
         int(ratio),
@@ -725,15 +854,30 @@ def dense_attn_score_recompute_wrapper(
     )
     obj = _cache_of_DenseAttnScoreRecomputeObjects.get(key)
     if obj is None:
-        out_sample = out if out is not None else torch.empty(
-            out_shape, dtype=torch.float32, device=q.device,
+        out_sample = (
+            out
+            if out is not None
+            else torch.empty(
+                out_shape,
+                dtype=torch.float32,
+                device=q.device,
+            )
         )
-        denom_sample = denom_out if denom_out is not None else torch.empty(
-            denom_shape, dtype=torch.float32, device=q.device,
+        denom_sample = (
+            denom_out
+            if denom_out is not None
+            else torch.empty(
+                denom_shape,
+                dtype=torch.float32,
+                device=q.device,
+            )
         )
         obj = DenseAttnScoreRecompute(
-            sample_q=q, sample_k=k, sample_lse=lse,
-            sample_out=out_sample, sample_denom_out=denom_sample,
+            sample_q=q,
+            sample_k=k,
+            sample_lse=lse,
+            sample_out=out_sample,
+            sample_denom_out=denom_sample,
             softmax_scale=softmax_scale,
             qhead_per_kv_head=qhead_per_kv_head,
             ratio=ratio,
@@ -744,7 +888,9 @@ def dense_attn_score_recompute_wrapper(
         _cache_of_DenseAttnScoreRecomputeObjects[key] = obj
 
     o, d = obj.execute(
-        q, k, lse,
+        q,
+        k,
+        lse,
         out=out,
         denom_out=denom_out,
         softmax_scale=softmax_scale,

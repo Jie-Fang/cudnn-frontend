@@ -12,7 +12,6 @@ from cutlass._mlir.dialects import llvm
 
 from cudnn.deepseek_sparse_attention.utils.sm100 import mma_desc as sm100_desc
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -64,9 +63,7 @@ def gemm_ptx_partial(
             sm100_desc.make_smem_desc_base(
                 cute.recast_layout(128, op.a_dtype.width, sA_layout[0]),
                 sA_swizzle,
-                sm100_desc.Major.K
-                if const_expr(op.a_major_mode == cute.nvgpu.tcgen05.mma.OperandMajorMode.K)
-                else sm100_desc.Major.MN,
+                sm100_desc.Major.K if const_expr(op.a_major_mode == cute.nvgpu.tcgen05.mma.OperandMajorMode.K) else sm100_desc.Major.MN,
             )
         )
         smem_desc_base_a_lo, smem_desc_a_hi = i64_to_i32x2(smem_desc_base_a)
@@ -80,34 +77,24 @@ def gemm_ptx_partial(
         sm100_desc.make_smem_desc_base(
             cute.recast_layout(128, op.b_dtype.width, sB_layout[0]),
             sB_swizzle,
-            sm100_desc.Major.K
-            if const_expr(op.b_major_mode == cute.nvgpu.tcgen05.mma.OperandMajorMode.K)
-            else sm100_desc.Major.MN,
+            sm100_desc.Major.K if const_expr(op.b_major_mode == cute.nvgpu.tcgen05.mma.OperandMajorMode.K) else sm100_desc.Major.MN,
         )
     )
     smem_desc_base_b_lo, smem_desc_b_hi = i64_to_i32x2(smem_desc_base_b)
     smem_desc_base_b_lo = const_expr(smem_desc_base_b_lo)
     smem_desc_b_hi = const_expr(smem_desc_b_hi)
 
-    tCrA_layout = (
-        tCrA.layout
-        if const_expr(not is_ts)
-        else cute.recast_layout(32, tCrA.element_type.width, tCrA.layout)
-    )
+    tCrA_layout = tCrA.layout if const_expr(not is_ts) else cute.recast_layout(32, tCrA.element_type.width, tCrA.layout)
     offset_a = [cute.crd2idx((0, 0, k), tCrA_layout) for k in range(cute.size(tCrA.shape[2]))]
     offset_a_diff = [offset_a[k] - offset_a[k - 1] for k in range(1, cute.size(tCrA.shape[2]))]
     offset_b = [cute.crd2idx((0, 0, k), tCrB.layout) for k in range(cute.size(tCrB.shape[2]))]
     offset_b_diff = [offset_b[k] - offset_b[k - 1] for k in range(1, cute.size(tCrB.shape[2]))]
 
     if const_expr(not is_ts):
-        smem_desc_start_a_lo = Int32(
-            smem_desc_base_a_lo | sm100_desc.make_smem_desc_start_addr(sA[None, None, 0].iterator)
-        )
+        smem_desc_start_a_lo = Int32(smem_desc_base_a_lo | sm100_desc.make_smem_desc_start_addr(sA[None, None, 0].iterator))
     else:
         smem_desc_start_a_lo = None
-    smem_desc_start_b_lo = Int32(
-        smem_desc_base_b_lo | sm100_desc.make_smem_desc_start_addr(sB[None, None, 0].iterator)
-    )
+    smem_desc_start_b_lo = Int32(smem_desc_base_b_lo | sm100_desc.make_smem_desc_start_addr(sB[None, None, 0].iterator))
     pred_str = "p" if isinstance(zero_init, Boolean) else "0" if zero_init else "1"
     if const_expr(not is_ts):
         assert mbar_ptr is None, "mbar_ptr must be None when a_src is not TMEM"
@@ -207,9 +194,7 @@ def gemm_ptx_partial(
                 )
                 for k in range(
                     1,
-                    cute.size(tCrA.shape[2])
-                    if const_expr(mbar_ptr is None)
-                    else cute.size(tCrA.shape[2]) // 4 * 3,
+                    cute.size(tCrA.shape[2]) if const_expr(mbar_ptr is None) else cute.size(tCrA.shape[2]) // 4 * 3,
                 )
             )
             + mbar_wait_str

@@ -26,17 +26,16 @@ from cudnn.deepseek_sparse_attention.utils.runtime import device_major, resolve_
 from .indexer_fwd_sm100 import IndexerForwardSm100
 from ._interface import indexer_fwd
 
-
 TMA_ALIGN_ELEMS = 4  # FP32 output => seqlen_k padded to multiples of 4 (16 B)
 
 
 class IndexerForward(APIBase):
     def __init__(
         self,
-        sample_q: torch.Tensor,          # (B, S_q, H_q, D) BF16
-        sample_k: torch.Tensor,          # (B, S_k, H_kv, D) BF16
-        sample_w: torch.Tensor,          # (B, S_q, H_q) BF16
-        sample_out: torch.Tensor,        # (B, S_q, S_k_padded) FP32
+        sample_q: torch.Tensor,  # (B, S_q, H_q, D) BF16
+        sample_k: torch.Tensor,  # (B, S_k, H_kv, D) BF16
+        sample_w: torch.Tensor,  # (B, S_q, H_q) BF16
+        sample_out: torch.Tensor,  # (B, S_q, S_k_padded) FP32
         ratio: int = 4,
         qhead_per_kv_head: Optional[int] = None,
         m_block_size: int = 128,
@@ -176,9 +175,17 @@ class IndexerForward(APIBase):
             # that depend on -inf in skipped positions should ensure the output
             # was filled to -inf before invoking (the wrapper does this).
             return _compiled_kernel(
-                q, k, w, out, self.h_kv,
-                cutlass.Int32(self.s_q), cutlass.Int32(self.s_k),
-                cutlass.Float32(self.sm_scale), None, None, stream,
+                q,
+                k,
+                w,
+                out,
+                self.h_kv,
+                cutlass.Int32(self.s_q),
+                cutlass.Int32(self.s_k),
+                cutlass.Float32(self.sm_scale),
+                None,
+                None,
+                stream,
             )
 
         self._compiled_kernel = tensor_api
@@ -227,11 +234,20 @@ def indexer_forward_wrapper(
     """
     if cu_seqlens_q is not None or cu_seqlens_k is not None:
         scores = indexer_fwd(
-            q, k, w, ratio=ratio, qhead_per_kv_head=qhead_per_kv_head,
-            m_block_size=m_block_size, n_block_size=n_block_size,
-            num_threads=384, q_stage=q_stage, kv_stage=kv_stage,
-            sm_scale=sm_scale, cu_seqlens_q=cu_seqlens_q,
-            cu_seqlens_k=cu_seqlens_k, max_seqlen_q=max_seqlen_q,
+            q,
+            k,
+            w,
+            ratio=ratio,
+            qhead_per_kv_head=qhead_per_kv_head,
+            m_block_size=m_block_size,
+            n_block_size=n_block_size,
+            num_threads=384,
+            q_stage=q_stage,
+            kv_stage=kv_stage,
+            sm_scale=sm_scale,
+            cu_seqlens_q=cu_seqlens_q,
+            cu_seqlens_k=cu_seqlens_k,
+            max_seqlen_q=max_seqlen_q,
             max_seqlen_k=max_seqlen_k,
         )
         return TupleDict(scores=scores)
@@ -256,21 +272,42 @@ def indexer_forward_wrapper(
         qhead_per_kv_head = h_q // h_kv
 
     cache_key = (
-        q.dtype, k.dtype, w.dtype,
-        b, s_q, s_k_padded, h_q, h_kv, d,
-        q.stride(), k.stride(), w.stride(), out_buf.stride(),
-        int(ratio), int(qhead_per_kv_head),
-        int(m_block_size), int(n_block_size),
-        int(q_stage), int(kv_stage), float(sm_scale),
+        q.dtype,
+        k.dtype,
+        w.dtype,
+        b,
+        s_q,
+        s_k_padded,
+        h_q,
+        h_kv,
+        d,
+        q.stride(),
+        k.stride(),
+        w.stride(),
+        out_buf.stride(),
+        int(ratio),
+        int(qhead_per_kv_head),
+        int(m_block_size),
+        int(n_block_size),
+        int(q_stage),
+        int(kv_stage),
+        float(sm_scale),
     )
 
     obj = _cache_of_IndexerForwardObjects.get(cache_key)
     if obj is None:
         obj = IndexerForward(
-            sample_q=q, sample_k=k, sample_w=w, sample_out=out_padded,
-            ratio=ratio, qhead_per_kv_head=qhead_per_kv_head,
-            m_block_size=m_block_size, n_block_size=n_block_size,
-            q_stage=q_stage, kv_stage=kv_stage, sm_scale=sm_scale,
+            sample_q=q,
+            sample_k=k,
+            sample_w=w,
+            sample_out=out_padded,
+            ratio=ratio,
+            qhead_per_kv_head=qhead_per_kv_head,
+            m_block_size=m_block_size,
+            n_block_size=n_block_size,
+            q_stage=q_stage,
+            kv_stage=kv_stage,
+            sm_scale=sm_scale,
         )
         assert obj.check_support()
         obj.compile()

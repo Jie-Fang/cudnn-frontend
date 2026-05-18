@@ -66,9 +66,7 @@ def _sparse_indexer_score_recompute(
     Returns:
         predict: (bs, seqlen_q, topk) [FP32] — softmax of sparse index scores
     """
-    q_indexer, k_indexer, weights = [
-        maybe_contiguous(t) for t in (q_indexer, k_indexer, weights)
-    ]
+    q_indexer, k_indexer, weights = [maybe_contiguous(t) for t in (q_indexer, k_indexer, weights)]
     topk_indices = topk_indices.to(torch.int32).contiguous()
 
     if qhead_per_kv_head is None:
@@ -96,10 +94,10 @@ def _sparse_indexer_score_recompute(
     SM100_SMEM_BYTES = 228 * 1024
     head_dim_padded = int(math.ceil(head_dim / 16) * 16)
     sK_per_stage = n_block_size * head_dim_padded * 2  # BF16
-    sQ_size = m_block_size * head_dim_padded * 2       # BF16
-    sTopkIdx_bytes = topk * 2 * 4              # double-buffer, INT32
-    sPerHead_bytes = m_block_size * 2 * 2      # double-buffer, BF16
-    smem_fixed = sPerHead_bytes + 2048         # barriers, sScoreAll, alignment
+    sQ_size = m_block_size * head_dim_padded * 2  # BF16
+    sTopkIdx_bytes = topk * 2 * 4  # double-buffer, INT32
+    sPerHead_bytes = m_block_size * 2 * 2  # double-buffer, BF16
+    smem_fixed = sPerHead_bytes + 2048  # barriers, sScoreAll, alignment
 
     topk_in_smem = True
     smem_overhead = sTopkIdx_bytes + smem_fixed
@@ -164,7 +162,11 @@ def _sparse_indexer_score_recompute(
 
             _sparse_indexer_score_recompute.compile_cache[compile_key] = cute.compile(
                 kernel_obj,
-                q_cute, k_cute, w_cute, topk_cute, out_cute,
+                q_cute,
+                k_cute,
+                w_cute,
+                topk_cute,
+                out_cute,
                 topk_length_cute,
                 scale_arg,
                 current_stream,
@@ -175,16 +177,18 @@ def _sparse_indexer_score_recompute(
         scale_arg = cutlass.Float32(sm_scale)
         with torch.cuda.nvtx.range("sparse_indexer_score_recompute"):
             _sparse_indexer_score_recompute.compile_cache[compile_key](
-                q_indexer, k_indexer, weights, topk_indices, out,
+                q_indexer,
+                k_indexer,
+                weights,
+                topk_indices,
+                out,
                 topk_length,
                 scale_arg,
                 current_stream,
             )
         return out
 
-    raise NotImplementedError(
-        f"Sparse indexer backward score requires SM100+ (got compute capability {compute_capability})."
-    )
+    raise NotImplementedError(f"Sparse indexer backward score requires SM100+ (got compute capability {compute_capability}).")
 
 
 _sparse_indexer_score_recompute.compile_cache = {}
@@ -229,8 +233,13 @@ def sparse_indexer_score_recompute(
         predict: (bs, seqlen_q, topk) [FP32]
     """
     return _sparse_indexer_score_recompute(
-        q_indexer, k_indexer, weights, topk_indices,
-        qhead_per_kv_head, out, topk_length,
+        q_indexer,
+        k_indexer,
+        weights,
+        topk_indices,
+        qhead_per_kv_head,
+        out,
+        topk_length,
         sm_scale=sm_scale,
         topk_indices_global=topk_indices_global,
         current_stream=current_stream,
@@ -240,6 +249,7 @@ def sparse_indexer_score_recompute(
 # =============================================================================
 # Sparse attention score: exp(QK*scale - LSE) -> head reduce -> L1-norm
 # =============================================================================
+
 
 def _sparse_attn_score_recompute(
     q_attn: torch.Tensor,
@@ -307,10 +317,10 @@ def _sparse_attn_score_recompute(
     head_dim_padded = int(math.ceil(head_dim / 16) * 16)
     k_block_size_eff = k_block_size if k_block_size is not None else head_dim_padded
     sK_per_stage = n_block_size * k_block_size_eff * 2  # BF16
-    sQ_size = m_block_size * head_dim_padded * 2        # BF16 (Q total unchanged)
-    sTopkIdx_bytes = topk * 2 * 4              # double-buffer, INT32
-    sPerHead_bytes = m_block_size * 2 * 4      # double-buffer, FP32
-    smem_fixed = sPerHead_bytes + 2048         # barriers, sScoreAll, alignment
+    sQ_size = m_block_size * head_dim_padded * 2  # BF16 (Q total unchanged)
+    sTopkIdx_bytes = topk * 2 * 4  # double-buffer, INT32
+    sPerHead_bytes = m_block_size * 2 * 4  # double-buffer, FP32
+    smem_fixed = sPerHead_bytes + 2048  # barriers, sScoreAll, alignment
 
     topk_in_smem = True
     smem_overhead = sTopkIdx_bytes + smem_fixed
@@ -371,7 +381,11 @@ def _sparse_attn_score_recompute(
 
             _sparse_attn_score_recompute.compile_cache[compile_key] = cute.compile(
                 kernel_obj,
-                q_cute, k_cute, lse_cute, topk_cute, out_cute,
+                q_cute,
+                k_cute,
+                lse_cute,
+                topk_cute,
+                out_cute,
                 topk_length_cute,
                 cutlass.Float32(softmax_scale),
                 current_stream,
@@ -381,23 +395,28 @@ def _sparse_attn_score_recompute(
         current_stream = _resolve_stream(current_stream)
         with torch.cuda.nvtx.range("sparse_attn_score_recompute"):
             _sparse_attn_score_recompute.compile_cache[compile_key](
-                q_attn, k_attn, scaled_lse, topk_indices, out,
+                q_attn,
+                k_attn,
+                scaled_lse,
+                topk_indices,
+                out,
                 topk_length,
                 cutlass.Float32(softmax_scale),
                 current_stream,
             )
         return out
 
-    raise NotImplementedError(
-        f"Sparse attention backward score requires SM100+ (got compute capability {compute_capability})."
-    )
+    raise NotImplementedError(f"Sparse attention backward score requires SM100+ (got compute capability {compute_capability}).")
 
 
 _sparse_attn_score_recompute.compile_cache = {}
 
 
 def _dispatch_sparse_attn_tile_params(
-    head_dim: int, qhead_per_kv_head: int, topk: int, compact: bool = False,
+    head_dim: int,
+    qhead_per_kv_head: int,
+    topk: int,
+    compact: bool = False,
 ):
     """Select (m_block_size, n_block_size, k_block_size) for sparse attention backward.
 
@@ -417,29 +436,29 @@ def _dispatch_sparse_attn_tile_params(
         # --- Compact tuned configs ---
         # hd=512
         if head_dim == 512 and qhead_per_kv_head == 64:
-            return m, 64, None     # kvs=2, ~789 TFLOPS
+            return m, 64, None  # kvs=2, ~789 TFLOPS
         if head_dim == 512 and qhead_per_kv_head == 128:
-            return m, 128, 128     # kvs=2, ~844/1004 TFLOPS
+            return m, 128, 128  # kvs=2, ~844/1004 TFLOPS
         # hd=576
         if head_dim == 576 and qhead_per_kv_head == 64:
-            return m, 64, None     # kvs=2, ~827 TFLOPS
+            return m, 64, None  # kvs=2, ~827 TFLOPS
         if head_dim == 576 and qhead_per_kv_head == 128:
-            return m, 64, 192      # kvs=2~3, ~677/1054 TFLOPS
+            return m, 64, 192  # kvs=2~3, ~677/1054 TFLOPS
         return m, 64, None
 
     # --- Non-compact tuned configs ---
     # hd=512
     if head_dim == 512 and qhead_per_kv_head == 64:
-        return m, 128, 256         # kvs=2, ~800 TFLOPS
+        return m, 128, 256  # kvs=2, ~800 TFLOPS
     if head_dim == 512 and qhead_per_kv_head == 128 and topk <= 512:
-        return m, 128, 128         # kvs=2, ~1000 TFLOPS
+        return m, 128, 128  # kvs=2, ~1000 TFLOPS
     if head_dim == 512 and qhead_per_kv_head == 128:
-        return m, 128, 256         # kvs=1, ~910 TFLOPS
+        return m, 128, 256  # kvs=1, ~910 TFLOPS
     # hd=576
     if head_dim == 576 and qhead_per_kv_head == 64:
-        return m, 128, 192         # kvs=3, ~770 TFLOPS
+        return m, 128, 192  # kvs=3, ~770 TFLOPS
     if head_dim == 576 and qhead_per_kv_head == 128:
-        return m, 128, 192         # kvs=1, ~830 TFLOPS
+        return m, 128, 192  # kvs=1, ~830 TFLOPS
 
     return m, 64, None
 
@@ -484,7 +503,10 @@ def sparse_attn_score_recompute(
 
     compact = topk_length is not None
     m_block_size, n_block_size, k_block_size = _dispatch_sparse_attn_tile_params(
-        head_dim, qhead_per_kv_head, topk, compact=compact,
+        head_dim,
+        qhead_per_kv_head,
+        topk,
+        compact=compact,
     )
 
     # Optimization: when compact and non-compact tile configs match,
@@ -495,14 +517,23 @@ def sparse_attn_score_recompute(
     # in epilogue, preserving correctness.
     if compact:
         nc_params = _dispatch_sparse_attn_tile_params(
-            head_dim, qhead_per_kv_head, topk, compact=False,
+            head_dim,
+            qhead_per_kv_head,
+            topk,
+            compact=False,
         )
         if (m_block_size, n_block_size, k_block_size) == nc_params:
             topk_length = None  # use non-compact kernel path
 
     return _sparse_attn_score_recompute(
-        q_attn, k_attn, lse, topk_indices, softmax_scale,
-        qhead_per_kv_head, out, topk_length,
+        q_attn,
+        k_attn,
+        lse,
+        topk_indices,
+        softmax_scale,
+        qhead_per_kv_head,
+        out,
+        topk_length,
         m_block_size=m_block_size,
         n_block_size=n_block_size,
         k_block_size=k_block_size,
@@ -518,8 +549,7 @@ def sparse_attn_score_recompute(
 _SM100_SMEM_BYTES = 228 * 1024
 
 
-def _select_dense_k_block_size(head_dim_padded, m_block_size, n_block_size,
-                               per_head_elem_bytes):
+def _select_dense_k_block_size(head_dim_padded, m_block_size, n_block_size, per_head_elem_bytes):
     """Auto-select k_block_size so that sQ + sK(1 stage) + overhead fits in SMEM.
 
     When head_dim_padded is too large (e.g. m_block=128, hd=512 -> sQ=128KB,
@@ -549,15 +579,11 @@ def _select_dense_k_block_size(head_dim_padded, m_block_size, n_block_size,
             kbs = 64
             break
 
-    assert head_dim_padded % kbs == 0, (
-        f"Cannot find valid k_block_size: head_dim_padded={head_dim_padded}, "
-        f"m_block={m_block_size}, n_block={n_block_size}"
-    )
+    assert head_dim_padded % kbs == 0, f"Cannot find valid k_block_size: head_dim_padded={head_dim_padded}, " f"m_block={m_block_size}, n_block={n_block_size}"
     return kbs
 
 
-def _compute_dense_kv_stage(head_dim_padded, m_block_size, n_block_size,
-                            k_block_size_eff, per_head_elem_bytes):
+def _compute_dense_kv_stage(head_dim_padded, m_block_size, n_block_size, k_block_size_eff, per_head_elem_bytes):
     sK_per_stage = n_block_size * k_block_size_eff * 2
     sQ_size = m_block_size * head_dim_padded * 2
     sPerHead_bytes = m_block_size * 2 * per_head_elem_bytes
@@ -566,6 +592,7 @@ def _compute_dense_kv_stage(head_dim_padded, m_block_size, n_block_size,
 
 
 # ---- Dispatch helpers (mirror _dispatch_sparse_attn_tile_params) -------------
+
 
 def _dense_m_block_with_smem_check(qhead_per_kv_head, head_dim, per_head_elem_bytes):
     """Return m=qhpkv*2 if SMEM fits, else fall back to m=qhpkv."""
@@ -647,6 +674,7 @@ def _dispatch_dense_indexer_tile_params(head_dim, qhead_per_kv_head):
 
 # ---- Internal dense functions (explicit tile params) ------------------------
 
+
 def _dense_indexer_score_recompute(
     q: torch.Tensor,
     k: torch.Tensor,
@@ -689,9 +717,7 @@ def _dense_indexer_score_recompute(
 
     is_varlen_q = cu_seqlens_q is not None
     is_varlen_k = cu_seqlens_k is not None
-    assert is_varlen_q == is_varlen_k, (
-        "THD input requires both cu_seqlens_q and cu_seqlens_k"
-    )
+    assert is_varlen_q == is_varlen_k, "THD input requires both cu_seqlens_q and cu_seqlens_k"
     is_varlen = is_varlen_q
 
     if is_varlen:
@@ -699,9 +725,7 @@ def _dense_indexer_score_recompute(
             assert t.dtype == torch.int32, f"{name} must be int32"
             assert t.ndim == 1 and t.is_cuda, f"{name} must be 1D CUDA tensor"
             assert t.stride(0) == 1, f"{name} must be contiguous"
-        assert q.ndim == 3 and k.ndim == 3 and weights.ndim == 2, (
-            "THD dense indexer expects q=(total_q,H,D), k=(total_k,H_kv,D), w=(total_q,H)"
-        )
+        assert q.ndim == 3 and k.ndim == 3 and weights.ndim == 2, "THD dense indexer expects q=(total_q,H,D), k=(total_k,H_kv,D), w=(total_q,H)"
         if max_seqlen_q is None or max_seqlen_k is None:
             raise ValueError("THD dense indexer requires max_seqlen_q and max_seqlen_k")
         total_q, n_heads_q, head_dim = q.shape
@@ -732,16 +756,12 @@ def _dense_indexer_score_recompute(
 
     head_dim_padded = int(math.ceil(head_dim / 16) * 16)
     if k_block_size is None:
-        k_block_size = _select_dense_k_block_size(
-            head_dim_padded, m_block_size, n_block_size, per_head_elem_bytes=2)
-    kv_stage = _compute_dense_kv_stage(
-        head_dim_padded, m_block_size, n_block_size, k_block_size, per_head_elem_bytes=2)
+        k_block_size = _select_dense_k_block_size(head_dim_padded, m_block_size, n_block_size, per_head_elem_bytes=2)
+    kv_stage = _compute_dense_kv_stage(head_dim_padded, m_block_size, n_block_size, k_block_size, per_head_elem_bytes=2)
 
     compute_capability = _get_device_capability()
     if compute_capability < 10:
-        raise NotImplementedError(
-            f"Dense indexer backward requires SM100+ (got {compute_capability})."
-        )
+        raise NotImplementedError(f"Dense indexer backward requires SM100+ (got {compute_capability}).")
 
     compile_key = (
         "dense_indexer",
@@ -787,10 +807,16 @@ def _dense_indexer_score_recompute(
 
         _dense_indexer_score_recompute.compile_cache[compile_key] = cute.compile(
             kernel_obj,
-            q_cute, k_cute, w_cute, out_cute, denom_cute,
+            q_cute,
+            k_cute,
+            w_cute,
+            out_cute,
+            denom_cute,
             scale_arg,
-            max_q_arg, max_k_arg,
-            cu_q_cute, cu_k_cute,
+            max_q_arg,
+            max_k_arg,
+            cu_q_cute,
+            cu_k_cute,
             current_stream,
             options=compile_options(),
         )
@@ -801,9 +827,14 @@ def _dense_indexer_score_recompute(
     max_k_arg = cutlass.Int32(seqlen_k)
     with torch.cuda.nvtx.range("dense_indexer_score_recompute"):
         _dense_indexer_score_recompute.compile_cache[compile_key](
-            q, k, weights, out, denom_out,
+            q,
+            k,
+            weights,
+            out,
+            denom_out,
             scale_arg,
-            max_q_arg, max_k_arg,
+            max_q_arg,
+            max_k_arg,
             cu_seqlens_q if is_varlen else None,
             cu_seqlens_k if is_varlen else None,
             current_stream,
@@ -856,9 +887,7 @@ def _dense_attn_score_recompute(
 
     is_varlen_q = cu_seqlens_q is not None
     is_varlen_k = cu_seqlens_k is not None
-    assert is_varlen_q == is_varlen_k, (
-        "THD input requires both cu_seqlens_q and cu_seqlens_k"
-    )
+    assert is_varlen_q == is_varlen_k, "THD input requires both cu_seqlens_q and cu_seqlens_k"
     is_varlen = is_varlen_q
 
     if is_varlen:
@@ -866,9 +895,7 @@ def _dense_attn_score_recompute(
             assert t.dtype == torch.int32, f"{name} must be int32"
             assert t.ndim == 1 and t.is_cuda, f"{name} must be 1D CUDA tensor"
             assert t.stride(0) == 1, f"{name} must be contiguous"
-        assert q.ndim == 3 and k.ndim == 3 and lse.ndim == 2, (
-            "THD dense attn expects q=(total_q,H,D), k=(total_k,H_kv,D), lse=(total_q,H)"
-        )
+        assert q.ndim == 3 and k.ndim == 3 and lse.ndim == 2, "THD dense attn expects q=(total_q,H,D), k=(total_k,H_kv,D), lse=(total_q,H)"
         if max_seqlen_q is None or max_seqlen_k is None:
             raise ValueError("THD dense attn requires max_seqlen_q and max_seqlen_k")
         total_q, n_heads_q, head_dim = q.shape
@@ -903,16 +930,12 @@ def _dense_attn_score_recompute(
 
     head_dim_padded = int(math.ceil(head_dim / 16) * 16)
     if k_block_size is None:
-        k_block_size = _select_dense_k_block_size(
-            head_dim_padded, m_block_size, n_block_size, per_head_elem_bytes=4)
-    kv_stage = _compute_dense_kv_stage(
-        head_dim_padded, m_block_size, n_block_size, k_block_size, per_head_elem_bytes=4)
+        k_block_size = _select_dense_k_block_size(head_dim_padded, m_block_size, n_block_size, per_head_elem_bytes=4)
+    kv_stage = _compute_dense_kv_stage(head_dim_padded, m_block_size, n_block_size, k_block_size, per_head_elem_bytes=4)
 
     compute_capability = _get_device_capability()
     if compute_capability < 10:
-        raise NotImplementedError(
-            f"Dense attention backward requires SM100+ (got {compute_capability})."
-        )
+        raise NotImplementedError(f"Dense attention backward requires SM100+ (got {compute_capability}).")
 
     compile_key = (
         "dense_attention",
@@ -956,10 +979,16 @@ def _dense_attn_score_recompute(
 
         _dense_attn_score_recompute.compile_cache[compile_key] = cute.compile(
             kernel_obj,
-            q_cute, k_cute, lse_cute, out_cute, denom_cute,
+            q_cute,
+            k_cute,
+            lse_cute,
+            out_cute,
+            denom_cute,
             cutlass.Float32(softmax_scale),
-            max_q_arg, max_k_arg,
-            cu_q_cute, cu_k_cute,
+            max_q_arg,
+            max_k_arg,
+            cu_q_cute,
+            cu_k_cute,
             current_stream,
             options=compile_options(),
         )
@@ -969,9 +998,14 @@ def _dense_attn_score_recompute(
     max_k_arg = cutlass.Int32(seqlen_k)
     with torch.cuda.nvtx.range("dense_attn_score_recompute"):
         _dense_attn_score_recompute.compile_cache[compile_key](
-            q, k, scaled_lse, out, denom_out,
+            q,
+            k,
+            scaled_lse,
+            out,
+            denom_out,
             cutlass.Float32(softmax_scale),
-            max_q_arg, max_k_arg,
+            max_q_arg,
+            max_k_arg,
             cu_seqlens_q if is_varlen else None,
             cu_seqlens_k if is_varlen else None,
             current_stream,
@@ -983,6 +1017,7 @@ _dense_attn_score_recompute.compile_cache = {}
 
 
 # ---- Public dense entry points (auto-dispatch tile params) ------------------
+
 
 def dense_indexer_score_recompute(
     q: torch.Tensor,
@@ -1027,8 +1062,15 @@ def dense_indexer_score_recompute(
 
     m, n, kbs = _dispatch_dense_indexer_tile_params(head_dim, qhead_per_kv_head)
     return _dense_indexer_score_recompute(
-        q, k, weights, qhead_per_kv_head, out, denom_out,
-        m_block_size=m, n_block_size=n, k_block_size=kbs,
+        q,
+        k,
+        weights,
+        qhead_per_kv_head,
+        out,
+        denom_out,
+        m_block_size=m,
+        n_block_size=n,
+        k_block_size=kbs,
         sm_scale=sm_scale,
         ratio=ratio,
         cu_seqlens_q=cu_seqlens_q,
@@ -1080,8 +1122,16 @@ def dense_attn_score_recompute(
 
     m, n, kbs = _dispatch_dense_attn_tile_params(head_dim, qhead_per_kv_head)
     return _dense_attn_score_recompute(
-        q, k, lse, softmax_scale, qhead_per_kv_head, out, denom_out,
-        m_block_size=m, n_block_size=n, k_block_size=kbs,
+        q,
+        k,
+        lse,
+        softmax_scale,
+        qhead_per_kv_head,
+        out,
+        denom_out,
+        m_block_size=m,
+        n_block_size=n,
+        k_block_size=kbs,
         ratio=ratio,
         cu_seqlens_q=cu_seqlens_q,
         cu_seqlens_k=cu_seqlens_k,

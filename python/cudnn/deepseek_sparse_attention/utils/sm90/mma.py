@@ -62,9 +62,7 @@ def gemm_zero_init(
     swap_AB: bool = False,
 ) -> cute.Tensor:
     if const_expr(swap_AB):
-        return gemm_zero_init(
-            tiled_mma, shape[::-1], tCrB, tCrA, B_idx, A_idx, wg_wait, swap_AB=False
-        )
+        return gemm_zero_init(tiled_mma, shape[::-1], tCrB, tCrA, B_idx, A_idx, wg_wait, swap_AB=False)
     else:
         acc = cute.make_rmem_tensor(tiled_mma.partition_shape_C(shape), Float32)
         rA = tCrA if const_expr(A_idx is None) else tCrA[None, None, None, A_idx]

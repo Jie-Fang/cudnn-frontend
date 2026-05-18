@@ -19,7 +19,7 @@ import torch
 
 
 def _make_topk_mask(
-    topk_idxs: torch.Tensor,       # (T, topk)
+    topk_idxs: torch.Tensor,  # (T, topk)
     topk_length: Optional[torch.Tensor],  # (T,) or None
     s_kv: int,
 ) -> torch.Tensor:
@@ -44,10 +44,10 @@ def _make_topk_mask(
 
 
 def ref_sparse_attention_forward(
-    q: torch.Tensor,                # (T, H, D)
-    kv: torch.Tensor,               # (T_kv, D), K=V shared
-    attn_sink: torch.Tensor,        # (H,)
-    topk_idxs: torch.Tensor,        # (T, topk)
+    q: torch.Tensor,  # (T, H, D)
+    kv: torch.Tensor,  # (T_kv, D), K=V shared
+    attn_sink: torch.Tensor,  # (H,)
+    topk_idxs: torch.Tensor,  # (T, topk)
     topk_length: Optional[torch.Tensor] = None,  # (T,)
     softmax_scale: Optional[float] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -85,10 +85,20 @@ def ref_sparse_attention_forward(
 
 
 def check_ref_dsa_sparse_attention_backward(
-    q, kv, attn_sink, topk_idxs, out, dout, lse,
-    dq_actual, dkv_actual, d_sink_actual,
-    softmax_scale=None, topk_length=None,
-    atol: float = 1e-2, rtol: float = 1e-2,
+    q,
+    kv,
+    attn_sink,
+    topk_idxs,
+    out,
+    dout,
+    lse,
+    dq_actual,
+    dkv_actual,
+    d_sink_actual,
+    softmax_scale=None,
+    topk_length=None,
+    atol: float = 1e-2,
+    rtol: float = 1e-2,
 ):
     """Run autograd on the reference forward to compare ``dq`` / ``dkv`` / ``d_sink``."""
     q_r = q.detach().clone().to(torch.float32).requires_grad_(True)
@@ -96,26 +106,39 @@ def check_ref_dsa_sparse_attention_backward(
     sink_r = attn_sink.detach().clone().to(torch.float32).requires_grad_(True)
 
     out_r, _ = ref_sparse_attention_forward(
-        q_r, kv_r, sink_r, topk_idxs,
-        topk_length=topk_length, softmax_scale=softmax_scale,
+        q_r,
+        kv_r,
+        sink_r,
+        topk_idxs,
+        topk_length=topk_length,
+        softmax_scale=softmax_scale,
     )
     out_r.backward(dout.to(torch.float32))
 
     torch.testing.assert_close(
-        dq_actual.to(torch.float32), q_r.grad, atol=atol, rtol=rtol,
+        dq_actual.to(torch.float32),
+        q_r.grad,
+        atol=atol,
+        rtol=rtol,
     )
     torch.testing.assert_close(
-        dkv_actual.to(torch.float32), kv_r.grad, atol=atol, rtol=rtol,
+        dkv_actual.to(torch.float32),
+        kv_r.grad,
+        atol=atol,
+        rtol=rtol,
     )
     torch.testing.assert_close(
-        d_sink_actual.to(torch.float32), sink_r.grad, atol=atol, rtol=rtol,
+        d_sink_actual.to(torch.float32),
+        sink_r.grad,
+        atol=atol,
+        rtol=rtol,
     )
 
 
 def ref_indexer_forward(
-    q: torch.Tensor,        # (B, S_q, H_q, D)
-    k: torch.Tensor,        # (B, S_k, H_kv, D)
-    w: torch.Tensor,        # (B, S_q, H_q)
+    q: torch.Tensor,  # (B, S_q, H_q, D)
+    k: torch.Tensor,  # (B, S_k, H_kv, D)
+    w: torch.Tensor,  # (B, S_q, H_q)
     ratio: int,
 ) -> torch.Tensor:
     """Dense indexer score computation. Returns (B, S_q, S_k) FP32."""
@@ -144,20 +167,28 @@ def ref_indexer_forward(
 
 
 def check_ref_indexer_forward(
-    q, k, w, out_actual, ratio: int,
-    atol: float = 1e-4, rtol: float = 1e-4,
+    q,
+    k,
+    w,
+    out_actual,
+    ratio: int,
+    atol: float = 1e-4,
+    rtol: float = 1e-4,
 ):
     out_ref = ref_indexer_forward(q, k, w, ratio)
     # Compare only over finite positions (mask out -inf).
     finite = torch.isfinite(out_ref)
     torch.testing.assert_close(
-        out_actual[finite], out_ref[finite], atol=atol, rtol=rtol,
+        out_actual[finite],
+        out_ref[finite],
+        atol=atol,
+        rtol=rtol,
     )
 
 
 def ref_indexer_top_k(
-    input_values: torch.Tensor,     # (n_rows, num_cols)
-    seq_lens: torch.Tensor,         # (batch_size,)
+    input_values: torch.Tensor,  # (n_rows, num_cols)
+    seq_lens: torch.Tensor,  # (batch_size,)
     top_k: int,
     next_n: int = 1,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -183,9 +214,15 @@ def ref_indexer_top_k(
 
 
 def check_ref_indexer_top_k(
-    input_values, seq_lens, top_k, next_n,
-    idx_actual, val_actual, return_val: bool,
-    atol: float = 0.0, rtol: float = 0.0,
+    input_values,
+    seq_lens,
+    top_k,
+    next_n,
+    idx_actual,
+    val_actual,
+    return_val: bool,
+    atol: float = 0.0,
+    rtol: float = 0.0,
 ):
     idx_ref, val_ref = ref_indexer_top_k(input_values, seq_lens, top_k, next_n)
     # Topk order is permitted to differ; compare as sorted sets per row up to the
@@ -207,10 +244,10 @@ def check_ref_indexer_top_k(
 
 
 def ref_sparse_indexer_score_recompute(
-    q_indexer: torch.Tensor,        # (B, S_q, H_q, D)
-    k_indexer: torch.Tensor,        # (B, S_k, D)
-    weights: torch.Tensor,          # (B, S_q, H_q)
-    topk_indices: torch.Tensor,     # (B, S_q, topk)
+    q_indexer: torch.Tensor,  # (B, S_q, H_q, D)
+    k_indexer: torch.Tensor,  # (B, S_k, D)
+    weights: torch.Tensor,  # (B, S_q, H_q)
+    topk_indices: torch.Tensor,  # (B, S_q, topk)
     topk_length: Optional[torch.Tensor] = None,  # (B, S_q)
 ) -> torch.Tensor:
     """Reference for sparse_indexer_score_recompute.
@@ -249,10 +286,10 @@ def ref_sparse_indexer_score_recompute(
 
 
 def ref_sparse_attn_score_recompute(
-    q_attn: torch.Tensor,           # (B, S_q, H_q, D)
-    k_attn: torch.Tensor,           # (B, S_k, D)
-    lse: torch.Tensor,              # (B, S_q, H_q)
-    topk_indices: torch.Tensor,     # (B, S_q, topk)
+    q_attn: torch.Tensor,  # (B, S_q, H_q, D)
+    k_attn: torch.Tensor,  # (B, S_k, D)
+    lse: torch.Tensor,  # (B, S_q, H_q)
+    topk_indices: torch.Tensor,  # (B, S_q, topk)
     softmax_scale: float,
     topk_length: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
@@ -290,10 +327,15 @@ def ref_sparse_attn_score_recompute(
 
 def check_ref_sparse_score_recompute(
     score_type: str,
-    q, k_or_lse, topk_indices, actual, aux=None,
+    q,
+    k_or_lse,
+    topk_indices,
+    actual,
+    aux=None,
     softmax_scale: Optional[float] = None,
     topk_length: Optional[torch.Tensor] = None,
-    atol: float = 1e-3, rtol: float = 1e-3,
+    atol: float = 1e-3,
+    rtol: float = 1e-3,
 ):
     if score_type == "indexer":
         # aux = weights
@@ -324,9 +366,9 @@ def _bottom_right_causal_mask(
 
 
 def ref_dense_indexer_score_recompute(
-    q_indexer: torch.Tensor,            # (B, S_q, H_q, D)
-    k_indexer: torch.Tensor,            # (B, S_k, H_kv, D) — H_kv=1 for MQA
-    weights: torch.Tensor,              # (B, S_q, H_q)
+    q_indexer: torch.Tensor,  # (B, S_q, H_q, D)
+    k_indexer: torch.Tensor,  # (B, S_k, H_kv, D) — H_kv=1 for MQA
+    weights: torch.Tensor,  # (B, S_q, H_q)
     ratio: int = 1,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Reference for ``DSA.dense_indexer_score_recompute_wrapper``.
@@ -356,9 +398,9 @@ def ref_dense_indexer_score_recompute(
 
 
 def ref_dense_attn_score_recompute(
-    q_attn: torch.Tensor,               # (B, S_q, H_q, D)
-    k_attn: torch.Tensor,               # (B, S_k, H_kv, D)
-    lse: torch.Tensor,                  # (B, S_q, H_q) FP32
+    q_attn: torch.Tensor,  # (B, S_q, H_q, D)
+    k_attn: torch.Tensor,  # (B, S_k, H_kv, D)
+    lse: torch.Tensor,  # (B, S_q, H_q) FP32
     softmax_scale: float,
     ratio: int = 1,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -377,18 +419,22 @@ def ref_dense_attn_score_recompute(
 
     k_exp = k_f.repeat_interleave(qhpkv, dim=2)
     qk = torch.einsum("bqhd,bkhd->bqhk", q_f, k_exp) * softmax_scale
-    p = torch.exp(qk - lse_f.unsqueeze(-1))            # (B, S_q, H_q, S_k)
-    s = p.sum(dim=2)                                   # (B, S_q, S_k)
+    p = torch.exp(qk - lse_f.unsqueeze(-1))  # (B, S_q, H_q, S_k)
+    s = p.sum(dim=2)  # (B, S_q, S_k)
 
     valid = _bottom_right_causal_mask(s_q, s_k, ratio, q_attn.device)
     s = s.masked_fill(~valid.unsqueeze(0), 0.0)
-    denom = s.sum(dim=-1)                              # (B, S_q)
+    denom = s.sum(dim=-1)  # (B, S_q)
     return s, denom
 
 
 def check_ref_dense_score_recompute(
     score_type: str,
-    q, k, aux, out_actual, denom_actual,
+    q,
+    k,
+    aux,
+    out_actual,
+    denom_actual,
     softmax_scale: Optional[float] = None,
     ratio: int = 1,
     atol_scores: float = 5e-3,
@@ -408,7 +454,11 @@ def check_ref_dense_score_recompute(
     else:
         # aux = lse
         s_ref, denom_ref = ref_dense_attn_score_recompute(
-            q, k, aux, softmax_scale, ratio,
+            q,
+            k,
+            aux,
+            softmax_scale,
+            ratio,
         )
 
     finite = torch.isfinite(out_actual)
@@ -416,11 +466,14 @@ def check_ref_dense_score_recompute(
         torch.testing.assert_close(
             out_actual[finite].to(torch.float32),
             s_ref[finite],
-            atol=atol_scores, rtol=rtol_scores,
+            atol=atol_scores,
+            rtol=rtol_scores,
         )
     torch.testing.assert_close(
-        denom_actual.to(torch.float32), denom_ref,
-        atol=atol_denom, rtol=rtol_denom,
+        denom_actual.to(torch.float32),
+        denom_ref,
+        atol=atol_denom,
+        rtol=rtol_denom,
     )
 
 
@@ -430,10 +483,10 @@ def check_ref_dense_score_recompute(
 
 
 def _indexer_predict_distribution(
-    q_indexer: torch.Tensor,            # (B, S_q, H, D)
-    k_indexer: torch.Tensor,            # (B, S_k, D)
-    weights: torch.Tensor,              # (B, S_q, H)
-    topk_indices: torch.Tensor,         # (B, S_q, topk) INT32
+    q_indexer: torch.Tensor,  # (B, S_q, H, D)
+    k_indexer: torch.Tensor,  # (B, S_k, D)
+    weights: torch.Tensor,  # (B, S_q, H)
+    topk_indices: torch.Tensor,  # (B, S_q, topk) INT32
     sm_scale: float,
 ) -> torch.Tensor:
     """Differentiable predict-distribution computation for autograd reference.
@@ -467,12 +520,12 @@ def _indexer_predict_distribution(
 
 
 def ref_indexer_backward(
-    index_q: torch.Tensor,              # (B, S_q, H, D) bf16
-    weights: torch.Tensor,              # (B, S_q, H)   bf16
-    index_k: torch.Tensor,              # (B, S_k, D)   bf16
-    attn_score: torch.Tensor,           # (B, S_q, topk) target FP32
-    index_score: torch.Tensor,          # (B, S_q, topk) predict FP32 (unused — recomputed)
-    topk_indices: torch.Tensor,         # (B, S_q, topk) INT32
+    index_q: torch.Tensor,  # (B, S_q, H, D) bf16
+    weights: torch.Tensor,  # (B, S_q, H)   bf16
+    index_k: torch.Tensor,  # (B, S_k, D)   bf16
+    attn_score: torch.Tensor,  # (B, S_q, topk) target FP32
+    index_score: torch.Tensor,  # (B, S_q, topk) predict FP32 (unused — recomputed)
+    topk_indices: torch.Tensor,  # (B, S_q, topk) INT32
     sm_scale: float = 1.0,
     grad_scale: float = 1.0,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -495,7 +548,11 @@ def ref_indexer_backward(
     k = index_k.detach().clone().requires_grad_(True)
 
     predict = _indexer_predict_distribution(
-        q, k, w, topk_indices, sm_scale,
+        q,
+        k,
+        w,
+        topk_indices,
+        sm_scale,
     )  # (B, S_q, topk) — dtype follows inputs, cast to fp32 inside softmax
 
     eps = torch.finfo(torch.float32).tiny
@@ -517,9 +574,9 @@ def ref_indexer_backward(
 
 
 def _dense_indexer_predict_distribution(
-    q_indexer: torch.Tensor,            # (B, S_q, H, D)
-    k_indexer: torch.Tensor,            # (B, S_k, D)
-    weights: torch.Tensor,              # (B, S_q, H)
+    q_indexer: torch.Tensor,  # (B, S_q, H, D)
+    k_indexer: torch.Tensor,  # (B, S_k, D)
+    weights: torch.Tensor,  # (B, S_q, H)
     sm_scale: float,
     ratio: int,
 ) -> torch.Tensor:
@@ -583,9 +640,15 @@ def _cosine_similarity(a: torch.Tensor, b: torch.Tensor) -> float:
 
 
 def check_ref_indexer_backward(
-    index_q, weights, index_k,
-    attn_score, index_score, topk_indices,
-    d_index_q_actual, d_weights_actual, d_index_k_actual,
+    index_q,
+    weights,
+    index_k,
+    attn_score,
+    index_score,
+    topk_indices,
+    d_index_q_actual,
+    d_weights_actual,
+    d_index_k_actual,
     sm_scale: float = 1.0,
     grad_scale: float = 1.0,
     cos_min: float = 0.97,
@@ -608,9 +671,14 @@ def check_ref_indexer_backward(
     pass ``cos_min=0.99``.
     """
     dq_ref, dw_ref, dk_ref = ref_indexer_backward(
-        index_q, weights, index_k,
-        attn_score, index_score, topk_indices,
-        sm_scale=sm_scale, grad_scale=grad_scale,
+        index_q,
+        weights,
+        index_k,
+        attn_score,
+        index_score,
+        topk_indices,
+        sm_scale=sm_scale,
+        grad_scale=grad_scale,
     )
 
     for name, actual, ref in (
@@ -619,24 +687,25 @@ def check_ref_indexer_backward(
         ("d_index_k", d_index_k_actual, dk_ref),
     ):
         cos = _cosine_similarity(actual, ref)
-        err = (actual.to(torch.float32) - ref.to(torch.float32))
+        err = actual.to(torch.float32) - ref.to(torch.float32)
         rms_err = err.pow(2).mean().sqrt().item()
         rms_ref = ref.to(torch.float32).pow(2).mean().sqrt().item()
         rms_rel = rms_err / max(rms_ref, 1e-12)
-        assert cos >= cos_min, (
-            f"{name}: cosine similarity {cos:.4f} < {cos_min} — "
-            f"direction mismatch"
-        )
+        assert cos >= cos_min, f"{name}: cosine similarity {cos:.4f} < {cos_min} — " f"direction mismatch"
         assert rms_rel <= rms_rel_max, (
-            f"{name}: RMS relative error {rms_rel:.4f} > {rms_rel_max} — "
-            f"magnitude mismatch (rms_err={rms_err:.4g}, rms_ref={rms_ref:.4g})"
+            f"{name}: RMS relative error {rms_rel:.4f} > {rms_rel_max} — " f"magnitude mismatch (rms_err={rms_err:.4g}, rms_ref={rms_ref:.4g})"
         )
 
 
 def check_ref_dense_indexer_backward(
-    index_q, weights, index_k,
-    attn_score_raw, attn_l1norm,
-    d_index_q_actual, d_weights_actual, d_index_k_actual,
+    index_q,
+    weights,
+    index_k,
+    attn_score_raw,
+    attn_l1norm,
+    d_index_q_actual,
+    d_weights_actual,
+    d_index_k_actual,
     sm_scale: float = 1.0,
     ratio: int = 1,
     grad_scale: float = 1.0,
@@ -644,9 +713,14 @@ def check_ref_dense_indexer_backward(
     rms_rel_max: float = 0.55,
 ):
     dq_ref, dw_ref, dk_ref = ref_dense_indexer_backward(
-        index_q, weights, index_k,
-        attn_score_raw, attn_l1norm,
-        sm_scale=sm_scale, ratio=ratio, grad_scale=grad_scale,
+        index_q,
+        weights,
+        index_k,
+        attn_score_raw,
+        attn_l1norm,
+        sm_scale=sm_scale,
+        ratio=ratio,
+        grad_scale=grad_scale,
     )
 
     for name, actual, ref in (
@@ -655,15 +729,11 @@ def check_ref_dense_indexer_backward(
         ("d_index_k", d_index_k_actual, dk_ref),
     ):
         cos = _cosine_similarity(actual, ref)
-        err = (actual.to(torch.float32) - ref.to(torch.float32))
+        err = actual.to(torch.float32) - ref.to(torch.float32)
         rms_err = err.pow(2).mean().sqrt().item()
         rms_ref = ref.to(torch.float32).pow(2).mean().sqrt().item()
         rms_rel = rms_err / max(rms_ref, 1e-12)
-        assert cos >= cos_min, (
-            f"{name}: cosine similarity {cos:.4f} < {cos_min} — "
-            f"direction mismatch"
-        )
+        assert cos >= cos_min, f"{name}: cosine similarity {cos:.4f} < {cos_min} — " f"direction mismatch"
         assert rms_rel <= rms_rel_max, (
-            f"{name}: RMS relative error {rms_rel:.4f} > {rms_rel_max} — "
-            f"magnitude mismatch (rms_err={rms_err:.4g}, rms_ref={rms_ref:.4g})"
+            f"{name}: RMS relative error {rms_rel:.4f} > {rms_rel_max} — " f"magnitude mismatch (rms_err={rms_err:.4g}, rms_ref={rms_ref:.4g})"
         )

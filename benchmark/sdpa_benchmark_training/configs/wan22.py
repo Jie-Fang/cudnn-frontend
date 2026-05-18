@@ -42,16 +42,16 @@ CONFIG = BenchmarkConfig(
     name="wan22",
     models=[WAN22_A14B],
     seqlens=[
-        (7800, 7800),     # 480p, 17 frames
-        (17160, 17160),   # 480p, 41 frames
-        (32760, 32760),   # 480p, 81 frames (default)
-        (48360, 48360),   # 480p, 121 frames
-        (75600, 75600),   # 720p, 81 frames
+        (7800, 7800),  # 480p, 17 frames
+        (17160, 17160),  # 480p, 41 frames
+        (32760, 32760),  # 480p, 81 frames (default)
+        (48360, 48360),  # 480p, 121 frames
+        (75600, 75600),  # 720p, 81 frames
     ],
     backends=["cudnn", "flash_attention_4"],
     data_types=["bfloat16"],  # Wan 2.2 is released/trained in bf16; no official FP8 checkpoint
     attn_masks=["no_mask"],  # bidirectional diffusion DiT, no causal mask
-    profile_pass="both",     # forward + backward for training
+    profile_pass="both",  # forward + backward for training
     deterministic_bwd=[False, True],
     batch_size=1,
     num_iterations=10,

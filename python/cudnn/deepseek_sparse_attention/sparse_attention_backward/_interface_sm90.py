@@ -21,7 +21,6 @@ from .dsa_bwd_sm90 import (
     _FlashAttentionDSABackwardPreprocessSm90,
 )
 
-
 torch2cute_dtype_map = {
     torch.float16: cutlass.Float16,
     torch.bfloat16: cutlass.BFloat16,
@@ -29,11 +28,9 @@ torch2cute_dtype_map = {
 }
 
 
-
-
 def flash_attn_bwd_sm90(
     q: torch.Tensor,
-    kv: torch.Tensor,        # K=V unified tensor
+    kv: torch.Tensor,  # K=V unified tensor
     out: torch.Tensor,
     dout: torch.Tensor,
     lse: torch.Tensor,
@@ -80,12 +77,12 @@ def flash_attn_bwd_sm90(
     num_head_kv = 1
 
     # --- wrap flat tensors as batch=1 4D for the CuTe DSL kernel ---
-    q4 = q.unsqueeze(0)                          # (1, total_S_q, H, D)
-    kv4 = kv.unsqueeze(0).unsqueeze(2)            # (1, total_S_kv, 1, D)
-    out4 = out.unsqueeze(0)                       # (1, total_S_q, H, D_v)
-    dout4 = dout.unsqueeze(0)                     # (1, total_S_q, H, D_v)
-    lse4 = lse.unsqueeze(0)                       # (1, total_S_q, H)
-    topk4 = topk_idxs.unsqueeze(0) if topk_idxs is not None else None   # (1, total_S_q, TopK)
+    q4 = q.unsqueeze(0)  # (1, total_S_q, H, D)
+    kv4 = kv.unsqueeze(0).unsqueeze(2)  # (1, total_S_kv, 1, D)
+    out4 = out.unsqueeze(0)  # (1, total_S_q, H, D_v)
+    dout4 = dout.unsqueeze(0)  # (1, total_S_q, H, D_v)
+    lse4 = lse.unsqueeze(0)  # (1, total_S_q, H)
+    topk4 = topk_idxs.unsqueeze(0) if topk_idxs is not None else None  # (1, total_S_q, TopK)
     tlen4 = topk_length.unsqueeze(0) if topk_length is not None else None  # (1, total_S_q)
 
     m_block_size = 64
@@ -124,12 +121,12 @@ def flash_attn_bwd_sm90(
 
     # Allocate flat output buffers, then view as 4D for the kernel
     if dq is None:
-        dq = torch.empty_like(q)              # (total_S_q, H, D)
+        dq = torch.empty_like(q)  # (total_S_q, H, D)
     if dkv is None:
         dkv = torch.empty(total_S_kv, head_dim, dtype=kv.dtype, device=device)
 
-    dq4 = dq.unsqueeze(0)                        # (1, total_S_q, H, D)
-    dkv4 = dkv.unsqueeze(0).unsqueeze(2)          # (1, total_S_kv, 1, D)
+    dq4 = dq.unsqueeze(0)  # (1, total_S_q, H, D)
+    dkv4 = dkv.unsqueeze(0).unsqueeze(2)  # (1, total_S_kv, 1, D)
 
     sink_enabled = attn_sink is not None
     return_d_sink = need_d_sink or d_sink is not None
@@ -144,16 +141,27 @@ def flash_attn_bwd_sm90(
     head_dim_rounded = (head_dim + 32 - 1) // 32 * 32
 
     dpsum = torch.empty(
-        batch_size, seqlen_q_rounded, num_head, dtype=torch.float32, device=device,
+        batch_size,
+        seqlen_q_rounded,
+        num_head,
+        dtype=torch.float32,
+        device=device,
     )
     lse_log2 = torch.empty(
-        batch_size, seqlen_q_rounded, num_head, dtype=torch.float32, device=device,
+        batch_size,
+        seqlen_q_rounded,
+        num_head,
+        dtype=torch.float32,
+        device=device,
     )
 
     if dkv_accum is None:
         dkv_accum = torch.zeros(
-            batch_size, num_head_kv, seqlen_k_rounded * head_dim_rounded,
-            dtype=torch.float32, device=device,
+            batch_size,
+            num_head_kv,
+            seqlen_k_rounded * head_dim_rounded,
+            dtype=torch.float32,
+            device=device,
         )
     else:
         dkv_accum.fill_(0)
@@ -165,33 +173,53 @@ def flash_attn_bwd_sm90(
 
     # --- preprocess ---
     compile_key_pre = (
-        dtype, head_dim_v, m_block_size, num_threads, sink_enabled, write_d_sink,
+        dtype,
+        head_dim_v,
+        m_block_size,
+        num_threads,
+        sink_enabled,
+        write_d_sink,
     )
     if compile_key_pre not in flash_attn_bwd_sm90.compile_cache_pre:
         o_tensor, do_tensor = [to_cute_tensor(t) for t in (out4, dout4)]
-        dpsum_tensor, lse_log2_tensor = [
-            to_cute_tensor(t) for t in (dpsum, lse_log2)
-        ]
+        dpsum_tensor, lse_log2_tensor = [to_cute_tensor(t) for t in (dpsum, lse_log2)]
         lse_tensor = to_cute_tensor(lse4, assumed_align=4)
         attn_sink_tensor = to_cute_tensor(attn_sink) if sink_enabled else None
         d_sink_tensor = to_cute_tensor(d_sink) if write_d_sink else None
         fa_bwd_pre = _FlashAttentionDSABackwardPreprocessSm90(
-            dtype, head_dim_v, arch, m_block_size, num_threads=num_threads,
+            dtype,
+            head_dim_v,
+            arch,
+            m_block_size,
+            num_threads=num_threads,
         )
         flash_attn_bwd_sm90.compile_cache_pre[compile_key_pre] = cute.compile(
             fa_bwd_pre,
-            o_tensor, do_tensor, dpsum_tensor, lse_tensor, lse_log2_tensor,
-            attn_sink_tensor, d_sink_tensor,
+            o_tensor,
+            do_tensor,
+            dpsum_tensor,
+            lse_tensor,
+            lse_log2_tensor,
+            attn_sink_tensor,
+            d_sink_tensor,
             None,
-            None, None, current_stream,
+            None,
+            None,
+            current_stream,
             options="--enable-tvm-ffi",
         )
     flash_attn_bwd_sm90.compile_cache_pre[compile_key_pre](
-        out4, dout4, dpsum, lse4, lse_log2,
+        out4,
+        dout4,
+        dpsum,
+        lse4,
+        lse_log2,
         attn_sink if sink_enabled else None,
         d_sink if write_d_sink else None,
         None,
-        None, None, current_stream,
+        None,
+        None,
+        current_stream,
     )
 
     # --- main kernel ---
@@ -206,50 +234,75 @@ def flash_attn_bwd_sm90(
 
     num_threads = 256
     compile_key = (
-        dtype, head_dim, head_dim_v, qhead_per_kvhead,
-        m_block_size, n_block_size, num_threads,
-        KV_stage, PdS_stage, SdP_swapAB, dKV_swapAB, dQ_swapAB,
-        have_topk_length, max_topk,
+        dtype,
+        head_dim,
+        head_dim_v,
+        qhead_per_kvhead,
+        m_block_size,
+        n_block_size,
+        num_threads,
+        KV_stage,
+        PdS_stage,
+        SdP_swapAB,
+        dKV_swapAB,
+        dQ_swapAB,
+        have_topk_length,
+        max_topk,
     )
     if compile_key not in flash_attn_bwd_sm90.compile_cache:
         q_tensor = to_cute_tensor(q4)
         kv_tensor = to_cute_tensor(kv4)
         do_tensor = to_cute_tensor(dout4)
-        dpsum_tensor, lse_log2_tensor = [
-            to_cute_tensor(t) for t in (dpsum, lse_log2)
-        ]
+        dpsum_tensor, lse_log2_tensor = [to_cute_tensor(t) for t in (dpsum, lse_log2)]
         dq_tensor = to_cute_tensor(dq4)
         dkv_accum_tensor = to_cute_tensor(dkv_accum)
         topk_idxs_tensor = to_cute_tensor(topk4)
         topk_length_tensor = to_cute_tensor(tlen4)
 
         fa_bwd_obj = FlashAttentionDSABackwardSm90(
-            dtype, head_dim, head_dim_v, qhead_per_kvhead,
-            tile_m=m_block_size, tile_n=n_block_size,
-            KV_stage=KV_stage, PdS_stage=PdS_stage,
-            SdP_swapAB=SdP_swapAB, dKV_swapAB=dKV_swapAB, dQ_swapAB=dQ_swapAB,
+            dtype,
+            head_dim,
+            head_dim_v,
+            qhead_per_kvhead,
+            tile_m=m_block_size,
+            tile_n=n_block_size,
+            KV_stage=KV_stage,
+            PdS_stage=PdS_stage,
+            SdP_swapAB=SdP_swapAB,
+            dKV_swapAB=dKV_swapAB,
+            dQ_swapAB=dQ_swapAB,
             num_threads=num_threads,
             have_topk_length=have_topk_length,
             max_topk=max_topk,
         )
         flash_attn_bwd_sm90.compile_cache[compile_key] = cute.compile(
             fa_bwd_obj,
-            q_tensor, kv_tensor, do_tensor,
-            lse_log2_tensor, dpsum_tensor,
+            q_tensor,
+            kv_tensor,
+            do_tensor,
+            lse_log2_tensor,
+            dpsum_tensor,
             dq_tensor,
             dkv_accum_tensor,
-            topk_idxs_tensor, topk_length_tensor,
-            softmax_scale, current_stream,
+            topk_idxs_tensor,
+            topk_length_tensor,
+            softmax_scale,
+            current_stream,
             options="--enable-tvm-ffi",
         )
     with torch.cuda.nvtx.range("flash_attn_bwd_sm90_kernel"):
         flash_attn_bwd_sm90.compile_cache[compile_key](
-            q4, kv4, dout4,
-            lse_log2, dpsum,
+            q4,
+            kv4,
+            dout4,
+            lse_log2,
+            dpsum,
             dq4,
             dkv_accum,
-            topk4, tlen4,
-            softmax_scale, current_stream,
+            topk4,
+            tlen4,
+            softmax_scale,
+            current_stream,
         )
 
     # --- postprocess: fake-col f32 dKVAccum -> real-col bf16 dKV ---
@@ -258,7 +311,12 @@ def flash_attn_bwd_sm90(
     num_threads_post = hdim_chunk
 
     compile_key_post = (
-        dtype, hdim_chunk, n_block_size, head_dim, num_threads_post, N_hdim_chunks,
+        dtype,
+        hdim_chunk,
+        n_block_size,
+        head_dim,
+        num_threads_post,
+        N_hdim_chunks,
     )
     if compile_key_post not in flash_attn_bwd_sm90.compile_cache_post:
         dkv_accum_tensor = to_cute_tensor(dkv_accum)
@@ -274,18 +332,24 @@ def flash_attn_bwd_sm90(
         )
         flash_attn_bwd_sm90.compile_cache_post[compile_key_post] = cute.compile(
             postprocess,
-            dkv_accum_tensor, dkv_tensor,
-            seqlen_k, current_stream,
+            dkv_accum_tensor,
+            dkv_tensor,
+            seqlen_k,
+            current_stream,
             options="--enable-tvm-ffi",
         )
     flash_attn_bwd_sm90.compile_cache_post[compile_key_post](
-        dkv_accum, dkv4, seqlen_k, current_stream,
+        dkv_accum,
+        dkv4,
+        seqlen_k,
+        current_stream,
     )
 
     # dq / dkv are already the flat tensors (unsqueeze was a view)
     if return_d_sink:
         return dq, dkv, d_sink
     return dq, dkv
+
 
 flash_attn_bwd_sm90.compile_cache_pre = {}
 flash_attn_bwd_sm90.compile_cache = {}

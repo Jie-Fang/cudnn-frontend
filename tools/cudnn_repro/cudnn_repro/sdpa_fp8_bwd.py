@@ -60,9 +60,7 @@ def build_cfg(raw_line: str, payload: dict, seed: Optional[int] = None) -> dict:
     repro_metadata = payload.get("repro_metadata", {})
     ragged_tensor_names = set(repro_metadata.get("ragged_tensor_names", []))
     is_ragged = any(
-        entry is not None and (
-            utils.parse_optional_int(entry.get("ragged_offset_uid")) is not None or entry.get("name") in ragged_tensor_names
-        )
+        entry is not None and (utils.parse_optional_int(entry.get("ragged_offset_uid")) is not None or entry.get("name") in ragged_tensor_names)
         for entry in (q_entry, k_entry, v_entry, o_entry, dq_entry, dk_entry, dv_entry)
     )
 

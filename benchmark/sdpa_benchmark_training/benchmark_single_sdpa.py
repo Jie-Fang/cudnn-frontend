@@ -237,10 +237,7 @@ def run_benchmark(
             (callers must invoke once per pass so each has independent success)
     """
     if profile_pass == "both":
-        raise RuntimeError(
-            "run_benchmark no longer accepts profile_pass='both'. Call once "
-            "per pass ('fwd' or 'bwd') so failures remain independent."
-        )
+        raise RuntimeError("run_benchmark no longer accepts profile_pass='both'. Call once " "per pass ('fwd' or 'bwd') so failures remain independent.")
     import subprocess
     import sys
 

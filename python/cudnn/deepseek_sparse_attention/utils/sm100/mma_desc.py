@@ -124,19 +124,19 @@ def make_instr_desc(
     n_dim = N >> 3
 
     desc = 0
-    desc |= (0                 & 0x3) << 0
-    desc |= (int(is_sparse)    & 0x1) << 2
-    desc |= (int(c_sat)        & 0x1) << 3
-    desc |= (c_fmt             & 0x3) << 4
-    desc |= (a_fmt             & 0x7) << 7
-    desc |= (b_fmt             & 0x7) << 10
-    desc |= (int(a_neg)        & 0x1) << 13
-    desc |= (int(b_neg)        & 0x1) << 14
-    desc |= (int(a_major)      & 0x1) << 15
-    desc |= (int(b_major)      & 0x1) << 16
-    desc |= (n_dim             & 0x3F) << 17
-    desc |= (m_dim             & 0x1F) << 24
-    desc |= (int(max_shift)    & 0x3) << 30
+    desc |= (0 & 0x3) << 0
+    desc |= (int(is_sparse) & 0x1) << 2
+    desc |= (int(c_sat) & 0x1) << 3
+    desc |= (c_fmt & 0x3) << 4
+    desc |= (a_fmt & 0x7) << 7
+    desc |= (b_fmt & 0x7) << 10
+    desc |= (int(a_neg) & 0x1) << 13
+    desc |= (int(b_neg) & 0x1) << 14
+    desc |= (int(a_major) & 0x1) << 15
+    desc |= (int(b_major) & 0x1) << 16
+    desc |= (n_dim & 0x3F) << 17
+    desc |= (m_dim & 0x1F) << 24
+    desc |= (int(max_shift) & 0x3) << 30
     return desc & 0xFFFF_FFFF
 
 

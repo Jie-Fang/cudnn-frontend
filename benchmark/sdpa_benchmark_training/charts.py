@@ -37,7 +37,7 @@ BAR_LABEL_FONT_SIZE = 6
 # so the display reads: cuDNN BF16, FAv4 BF16, cuDNN MXFP8, cuDNN FP8.
 DTYPE_ORDER = {
     "bfloat16": 0,
-    "float16": 0,   # same bucket as bf16
+    "float16": 0,  # same bucket as bf16
     "mxfp8": 1,
     "fp8": 2,
 }
@@ -145,11 +145,7 @@ def generate_charts_by_mask(
     # instead of O(N*W). The result is misleading single-digit TFLOPS bars
     # next to bf16 bwd's correct linear scaling. Forward fp8/mxfp8 honors
     # SWA and is kept.
-    swa_bad = (
-        (df["sliding_window_size"].fillna(0).astype(float) > 0)
-        & (df["profile_pass"] == "bwd")
-        & (df["data_type"].isin(["fp8", "mxfp8"]))
-    )
+    swa_bad = (df["sliding_window_size"].fillna(0).astype(float) > 0) & (df["profile_pass"] == "bwd") & (df["data_type"].isin(["fp8", "mxfp8"]))
     df = df[~swa_bad].copy()
 
     if df.empty:
@@ -168,7 +164,8 @@ def generate_charts_by_mask(
         # Create display names
         mask_df["backend_display"] = mask_df.apply(
             lambda r: get_backend_display_name(
-                r["backend"], r["data_type"],
+                r["backend"],
+                r["data_type"],
                 r.get("cudnn_backend_version") if r["backend"] == "cudnn" else None,
             ),
             axis=1,
@@ -191,9 +188,7 @@ def generate_charts_by_mask(
         # Build the hue order with the same precedence so seaborn lays out
         # the grouped bars and the legend in this exact order.
         hue_rows = (
-            mask_df[["backend", "data_type", "backend_display", "dtype_order", "backend_order"]]
-            .drop_duplicates()
-            .sort_values(["dtype_order", "backend_order"])
+            mask_df[["backend", "data_type", "backend_display", "dtype_order", "backend_order"]].drop_duplicates().sort_values(["dtype_order", "backend_order"])
         )
         hue_order = list(hue_rows["backend_display"])
 
@@ -288,10 +283,7 @@ def generate_det_overhead_charts(
     import seaborn as sns
 
     bwd = df[
-        (df["success"] == True)
-        & (df["profile_pass"] == "bwd")
-        & (df["backend"].isin(["cudnn", "flash_attention_4"]))
-        & (df["data_type"] == "bfloat16")
+        (df["success"] == True) & (df["profile_pass"] == "bwd") & (df["backend"].isin(["cudnn", "flash_attention_4"])) & (df["data_type"] == "bfloat16")
     ].copy()
     if bwd.empty:
         return []
@@ -304,7 +296,8 @@ def generate_det_overhead_charts(
     # Build a unified hue label so each bar reads e.g. "cudnn 9.22.0 (BF16) det"
     def _label(row) -> str:
         base = get_backend_display_name(
-            row["backend"], row["data_type"],
+            row["backend"],
+            row["data_type"],
             row.get("cudnn_backend_version") if row["backend"] == "cudnn" else None,
         )
         suffix = "det" if row["det_flag"] == "true" else "nondet"
@@ -327,6 +320,7 @@ def generate_det_overhead_charts(
         if row["det_flag"] == "true":
             # darken the base color slightly for det bars
             from matplotlib.colors import to_rgb
+
             r, g, b = to_rgb(base)
             palette[row["backend_display"]] = (r * 0.65, g * 0.65, b * 0.65)
         else:
@@ -338,11 +332,7 @@ def generate_det_overhead_charts(
         if sub.empty:
             continue
         sub.sort_values(["q_seqlen", "backend_order", "det_order"], inplace=True)
-        hue_rows = (
-            sub[["backend_display", "backend_order", "det_order"]]
-            .drop_duplicates()
-            .sort_values(["backend_order", "det_order"])
-        )
+        hue_rows = sub[["backend_display", "backend_order", "det_order"]].drop_duplicates().sort_values(["backend_order", "det_order"])
         hue_order = list(hue_rows["backend_display"])
 
         fig, ax = plt.subplots(figsize=(10, 6), dpi=150)

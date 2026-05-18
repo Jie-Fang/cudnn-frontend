@@ -26,7 +26,12 @@ def _allocate_inputs(cfg):
 @torch_fork_set_rng(seed=0)
 @with_dsa_indexer_forward_params
 def test_DSA_indexer_forward_wrapper(
-    dtype, acc_dtype, head_dim, qhead_per_kv_head, ratio, request,
+    dtype,
+    acc_dtype,
+    head_dim,
+    qhead_per_kv_head,
+    ratio,
+    request,
 ):
     try:
         from cudnn import DSA
@@ -35,17 +40,25 @@ def test_DSA_indexer_forward_wrapper(
         pytest.skip("Environment not supported: cudnn[cutedsl] not installed")
 
     cfg = dsa_init(
-        request=request, dtype=dtype, acc_dtype=acc_dtype,
-        head_dim=head_dim, qhead_per_kv_head=qhead_per_kv_head, ratio=ratio,
-        s_q_default=256, s_kv_default=512,
+        request=request,
+        dtype=dtype,
+        acc_dtype=acc_dtype,
+        head_dim=head_dim,
+        qhead_per_kv_head=qhead_per_kv_head,
+        ratio=ratio,
+        s_q_default=256,
+        s_kv_default=512,
     )
     q, k, w = _allocate_inputs(cfg)
     stream = cuda.CUstream(torch.cuda.current_stream().cuda_stream)
 
     try:
         result = DSA.indexer_forward_wrapper(
-            q, k, w,
-            ratio=ratio, qhead_per_kv_head=qhead_per_kv_head,
+            q,
+            k,
+            w,
+            ratio=ratio,
+            qhead_per_kv_head=qhead_per_kv_head,
             stream=stream,
         )
     except (ValueError, NotImplementedError, RuntimeError) as e:

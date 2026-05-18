@@ -5,13 +5,12 @@ import os
 import subprocess
 from pathlib import Path
 from urllib.parse import urlparse
+
 # should be in pytorch container
 import requests
 
 # <a*>x.y.w.z[-{hex}-{hex}]/</a> DD-month-YYYY HH:MM, [] is optional
-PATTERN = re.compile(
-    r"<a.*?>v(\d+\.\d+\.\d+\.\d+(?:-[a-f0-9]+-[a-f0-9]+)?)/</a>\s+(\d{2}-[A-Za-z]+-\d{4} \d{2}:\d{2})\s"
-)
+PATTERN = re.compile(r"<a.*?>v(\d+\.\d+\.\d+\.\d+(?:-[a-f0-9]+-[a-f0-9]+)?)/</a>\s+(\d{2}-[A-Za-z]+-\d{4} \d{2}:\d{2})\s")
 
 
 def request_kwargs(url):
@@ -103,9 +102,7 @@ def fetch_cudnn(base_url, cuda_version, download_dir, unzip_dir, output_dir, cud
     matches = sorted(matches, key=lambda x: (tuple(map(int, x["version_num"].split("."))), x["last_modified"]), reverse=True)
 
     if artifact_property_dict:
-        matches = filter_matches_by_artifact_property(
-            matches, base_url, cuda_version, cudnn_version, artifact_property_dict, max_count=3
-        )
+        matches = filter_matches_by_artifact_property(matches, base_url, cuda_version, cudnn_version, artifact_property_dict, max_count=3)
         if not matches:
             raise Exception("No version had tarball with required Artifactory properties")
 
@@ -145,7 +142,9 @@ def fetch_cudnn(base_url, cuda_version, download_dir, unzip_dir, output_dir, cud
     subprocess.run(["mv", str(Path(unzip_dir) / "cudnn"), output_dir], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
     print(f"Copying {Path(output_dir) / 'lib'} to {Path(output_dir) / 'lib64'}")
-    subprocess.run(["cp", "-r", str(Path(output_dir) / "lib"), str(Path(output_dir) / "lib64")], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+    subprocess.run(
+        ["cp", "-r", str(Path(output_dir) / "lib"), str(Path(output_dir) / "lib64")], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT
+    )
 
     print(f"fetch_cudnn complete")
 
@@ -163,14 +162,20 @@ def create_prop_dict(props):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Fetch cuDNN debug tarball from Artifactory, extract to /debug_cudnn, clean old cache.")
-    parser.add_argument("--base-url", dest="base_url", required=True, help="Base URL, e.g. https://artifactory.nvidia.com/artifactory/hw-cudnn-generic-local/CUDNN/v9.21")
+    parser.add_argument(
+        "--base-url", dest="base_url", required=True, help="Base URL, e.g. https://artifactory.nvidia.com/artifactory/hw-cudnn-generic-local/CUDNN/v9.21"
+    )
     parser.add_argument("--cuda-version", dest="cuda_version", required=True, help="CUDA version subdir, e.g. 13.2")
     parser.add_argument("--download-dir", dest="download_dir", default="downloads", help="Directory where downloaded tarballs are cached.")
     parser.add_argument("--unzip-dir", dest="unzip_dir", default="/", help="Directory where the tarball is extracted before moving cudnn/ into place.")
     parser.add_argument("--output-dir", dest="output_dir", default="/debug_cudnn", help="Directory where the extracted cudnn/ tree will be moved.")
     parser.add_argument("--cudnn-version", dest="cudnn_version", help="Optional cuDNN version x.y.w.z")
-    parser.add_argument("--require-artifact-prop", action="append", metavar="KEY=VALUE",
-        help="Require Artifactory property (repeat for multiple). E.g. --require-artifact-prop pipeline_type=merge_train --require-artifact-prop arch=x86_64")
+    parser.add_argument(
+        "--require-artifact-prop",
+        action="append",
+        metavar="KEY=VALUE",
+        help="Require Artifactory property (repeat for multiple). E.g. --require-artifact-prop pipeline_type=merge_train --require-artifact-prop arch=x86_64",
+    )
     args = parser.parse_args()
 
     prop_dict = None
@@ -178,5 +183,4 @@ if __name__ == "__main__":
     if args.require_artifact_prop:
         prop_dict = create_prop_dict(args.require_artifact_prop)
 
-    fetch_cudnn(args.base_url, args.cuda_version, args.download_dir, args.unzip_dir, args.output_dir, args.cudnn_version,
-        artifact_property_dict=prop_dict)
+    fetch_cudnn(args.base_url, args.cuda_version, args.download_dir, args.unzip_dir, args.output_dir, args.cudnn_version, artifact_property_dict=prop_dict)

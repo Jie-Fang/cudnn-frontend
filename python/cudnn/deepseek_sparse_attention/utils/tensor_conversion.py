@@ -19,7 +19,5 @@ def to_cute_tensor(
         leading_dim = t.ndim - 1
     tensor = tensor.mark_layout_dynamic(leading_dim=leading_dim)
     if divisibility is not None:
-        tensor = tensor.mark_compact_shape_dynamic(
-            mode=leading_dim, stride_order=t.dim_order(), divisibility=divisibility
-        )
+        tensor = tensor.mark_compact_shape_dynamic(mode=leading_dim, stride_order=t.dim_order(), divisibility=divisibility)
     return tensor

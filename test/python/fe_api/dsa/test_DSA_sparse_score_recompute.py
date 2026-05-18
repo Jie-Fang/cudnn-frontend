@@ -23,12 +23,7 @@ def _allocate(cfg, score_type: str, has_topk_length: bool):
 
     # Random top-K indices in [0, s_k). Use a guaranteed-valid range.
     topk_k = min(topk, s_k)
-    topk_indices = torch.stack([
-        torch.stack([
-            torch.randperm(s_k, device=device)[:topk_k]
-            for _ in range(s_q)
-        ]) for _ in range(b)
-    ]).to(torch.int32)
+    topk_indices = torch.stack([torch.stack([torch.randperm(s_k, device=device)[:topk_k] for _ in range(s_q)]) for _ in range(b)]).to(torch.int32)
     if topk_k < topk:
         pad = torch.full((b, s_q, topk - topk_k), -1, dtype=torch.int32, device=device)
         topk_indices = torch.cat([topk_indices, pad], dim=-1)
@@ -46,11 +41,7 @@ def _allocate(cfg, score_type: str, has_topk_length: bool):
 
 
 def _local_to_global_topk_indices(topk_indices: torch.Tensor, seqlen_k: int) -> torch.Tensor:
-    batch_offsets = (
-        torch.arange(topk_indices.shape[0], device=topk_indices.device, dtype=torch.int32)
-        .view(-1, 1, 1)
-        .mul_(int(seqlen_k))
-    )
+    batch_offsets = torch.arange(topk_indices.shape[0], device=topk_indices.device, dtype=torch.int32).view(-1, 1, 1).mul_(int(seqlen_k))
     return torch.where(topk_indices >= 0, topk_indices + batch_offsets, topk_indices)
 
 
@@ -58,7 +49,12 @@ def _local_to_global_topk_indices(topk_indices: torch.Tensor, seqlen_k: int) -> 
 @torch_fork_set_rng(seed=0)
 @with_dsa_score_recompute_params
 def test_DSA_sparse_score_recompute_wrapper(
-    dtype, acc_dtype, head_dim, qhead_per_kv_head, score_type, request,
+    dtype,
+    acc_dtype,
+    head_dim,
+    qhead_per_kv_head,
+    score_type,
+    request,
 ):
     try:
         from cudnn import DSA
@@ -67,11 +63,15 @@ def test_DSA_sparse_score_recompute_wrapper(
         pytest.skip("Environment not supported: cudnn[cutedsl] not installed")
 
     cfg = dsa_init(
-        request=request, dtype=dtype, acc_dtype=acc_dtype,
-        head_dim=head_dim, qhead_per_kv_head=qhead_per_kv_head,
+        request=request,
+        dtype=dtype,
+        acc_dtype=acc_dtype,
+        head_dim=head_dim,
+        qhead_per_kv_head=qhead_per_kv_head,
         score_type=score_type,
         min_compute_capability=90,
-        s_q_default=256, s_kv_default=2048,
+        s_q_default=256,
+        s_kv_default=2048,
     )
     q, k, aux, topk_indices, topk_length = _allocate(cfg, score_type, has_topk_length=False)
     stream = cuda.CUstream(torch.cuda.current_stream().cuda_stream)
@@ -79,17 +79,26 @@ def test_DSA_sparse_score_recompute_wrapper(
     try:
         if score_type == "indexer":
             result = DSA.sparse_indexer_score_recompute_wrapper(
-                q, k, aux, topk_indices,
+                q,
+                k,
+                aux,
+                topk_indices,
                 qhead_per_kv_head=qhead_per_kv_head,
-                topk_length=topk_length, stream=stream,
+                topk_length=topk_length,
+                stream=stream,
             )
             actual = result["predict"]
         else:
             softmax_scale = 1.0 / math.sqrt(head_dim)
             result = DSA.sparse_attn_score_recompute_wrapper(
-                q, k, aux, topk_indices, softmax_scale,
+                q,
+                k,
+                aux,
+                topk_indices,
+                softmax_scale,
                 qhead_per_kv_head=qhead_per_kv_head,
-                topk_length=topk_length, stream=stream,
+                topk_length=topk_length,
+                stream=stream,
             )
             actual = result["target"]
     except (ValueError, NotImplementedError, RuntimeError) as e:
@@ -98,13 +107,23 @@ def test_DSA_sparse_score_recompute_wrapper(
     if not cfg["skip_ref"]:
         if score_type == "indexer":
             check_ref_sparse_score_recompute(
-                "indexer", q, k, topk_indices, actual,
-                aux=aux, topk_length=topk_length,
+                "indexer",
+                q,
+                k,
+                topk_indices,
+                actual,
+                aux=aux,
+                topk_length=topk_length,
             )
         else:
             check_ref_sparse_score_recompute(
-                "attention", q, aux, topk_indices, actual,
-                aux=k, softmax_scale=softmax_scale,
+                "attention",
+                q,
+                aux,
+                topk_indices,
+                actual,
+                aux=k,
+                softmax_scale=softmax_scale,
                 topk_length=topk_length,
             )
 
@@ -120,26 +139,34 @@ def test_DSA_sparse_score_recompute_wrapper_batch_gt_one(score_type, request):
         pytest.skip("Environment not supported: cudnn[cutedsl] not installed")
 
     cfg = dsa_init(
-        request=request, dtype=torch.bfloat16, acc_dtype=torch.float32,
-        head_dim=128, qhead_per_kv_head=32,
-        topk=128, score_type=score_type,
+        request=request,
+        dtype=torch.bfloat16,
+        acc_dtype=torch.float32,
+        head_dim=128,
+        qhead_per_kv_head=32,
+        topk=128,
+        score_type=score_type,
         min_compute_capability=90,
-        b_default=2, s_q_default=32, s_kv_default=256,
+        b_default=2,
+        s_q_default=32,
+        s_kv_default=256,
     )
     q, k, aux, topk_indices, topk_length = _allocate(
-        cfg, score_type, has_topk_length=False,
+        cfg,
+        score_type,
+        has_topk_length=False,
     )
     stream = cuda.CUstream(torch.cuda.current_stream().cuda_stream)
 
     for use_global in (False, True):
-        topk_for_kernel = (
-            _local_to_global_topk_indices(topk_indices, cfg["s_kv"])
-            if use_global else topk_indices
-        )
+        topk_for_kernel = _local_to_global_topk_indices(topk_indices, cfg["s_kv"]) if use_global else topk_indices
         try:
             if score_type == "indexer":
                 result = DSA.sparse_indexer_score_recompute_wrapper(
-                    q, k, aux, topk_for_kernel,
+                    q,
+                    k,
+                    aux,
+                    topk_for_kernel,
                     qhead_per_kv_head=cfg["qhead_per_kv_head"],
                     topk_length=topk_length,
                     topk_indices_global=use_global,
@@ -149,7 +176,11 @@ def test_DSA_sparse_score_recompute_wrapper_batch_gt_one(score_type, request):
             else:
                 softmax_scale = 1.0 / math.sqrt(cfg["head_dim"])
                 result = DSA.sparse_attn_score_recompute_wrapper(
-                    q, k, aux, topk_for_kernel, softmax_scale,
+                    q,
+                    k,
+                    aux,
+                    topk_for_kernel,
+                    softmax_scale,
                     qhead_per_kv_head=cfg["qhead_per_kv_head"],
                     topk_length=topk_length,
                     topk_indices_global=use_global,
@@ -162,12 +193,22 @@ def test_DSA_sparse_score_recompute_wrapper_batch_gt_one(score_type, request):
         if not cfg["skip_ref"]:
             if score_type == "indexer":
                 check_ref_sparse_score_recompute(
-                    "indexer", q, k, topk_indices, actual,
-                    aux=aux, topk_length=topk_length,
+                    "indexer",
+                    q,
+                    k,
+                    topk_indices,
+                    actual,
+                    aux=aux,
+                    topk_length=topk_length,
                 )
             else:
                 check_ref_sparse_score_recompute(
-                    "attention", q, aux, topk_indices, actual,
-                    aux=k, softmax_scale=softmax_scale,
+                    "attention",
+                    q,
+                    aux,
+                    topk_indices,
+                    actual,
+                    aux=k,
+                    softmax_scale=softmax_scale,
                     topk_length=topk_length,
                 )

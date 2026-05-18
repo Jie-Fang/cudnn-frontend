@@ -58,9 +58,7 @@ def _normalize_payload(payload):
     normalized = {
         "context": payload.get("context"),
         "nodes": [],
-        "tensors": sorted(
-            json.dumps(_normalize_tensor_entry(entry), sort_keys=True) for entry in tensors.values()
-        ),
+        "tensors": sorted(json.dumps(_normalize_tensor_entry(entry), sort_keys=True) for entry in tensors.values()),
     }
     for node in payload.get("nodes", []):
         normalized_node = {}

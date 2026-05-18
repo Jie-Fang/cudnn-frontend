@@ -43,9 +43,7 @@ class ParamsBase:
     def __new_from_mlir_values__(self, values):
         all_fields = {field.name: getattr(self, field.name) for field in fields(self)}
         constexpr_fields = {n: f for n, f in all_fields.items() if isinstance(f, cutlass.Constexpr)}
-        non_constexpr_fields = {
-            n: f for n, f in all_fields.items() if not isinstance(f, cutlass.Constexpr)
-        }
+        non_constexpr_fields = {n: f for n, f in all_fields.items() if not isinstance(f, cutlass.Constexpr)}
         for (name, field), n_items in zip(non_constexpr_fields.items(), self._values_pos):
             non_constexpr_fields[name] = cutlass.new_from_mlir_values(field, values[:n_items])
             values = values[n_items:]
@@ -86,9 +84,7 @@ class SingleTileScheduler:
         cluster_shape_mn: cutlass.Constexpr[Tuple[int, int]] = (1, 1)
 
         @staticmethod
-        def create(
-            args: TileSchedulerArguments, *, loc=None, ip=None
-        ) -> "SingleTileScheduler.Params":
+        def create(args: TileSchedulerArguments, *, loc=None, ip=None) -> "SingleTileScheduler.Params":
             return SingleTileScheduler.Params(
                 args.num_block,
                 args.num_head,
@@ -173,13 +169,9 @@ class StaticPersistentTileScheduler:
         total_blocks: Int32
 
         @staticmethod
-        def create(
-            args: TileSchedulerArguments, *, loc=None, ip=None
-        ) -> "StaticPersistentTileScheduler.Params":
+        def create(args: TileSchedulerArguments, *, loc=None, ip=None) -> "StaticPersistentTileScheduler.Params":
             total_blocks = args.num_block * args.num_head * args.num_batch
-            return StaticPersistentTileScheduler.Params(
-                FastDivmodDivisor(args.num_block), FastDivmodDivisor(args.num_head), total_blocks
-            )
+            return StaticPersistentTileScheduler.Params(FastDivmodDivisor(args.num_block), FastDivmodDivisor(args.num_head), total_blocks)
 
     def __init__(self, params: Params, tile_idx: Int32, *, loc=None, ip=None):
         self.params = params
@@ -211,9 +203,7 @@ class StaticPersistentTileScheduler:
         hn_idx, block_idx = divmod(self._tile_idx, self.params.num_block_divmod)
         batch_idx, head_idx = divmod(hn_idx, self.params.num_head_divmod)
         is_valid = self._tile_idx < self.params.total_blocks
-        return WorkTileInfo(
-            (Int32(block_idx), Int32(head_idx), Int32(batch_idx), Int32(0)), is_valid
-        )
+        return WorkTileInfo((Int32(block_idx), Int32(head_idx), Int32(batch_idx), Int32(0)), is_valid)
 
     def initial_work_tile_info(self, *, loc=None, ip=None):
         return self.get_current_work(loc=loc, ip=ip)

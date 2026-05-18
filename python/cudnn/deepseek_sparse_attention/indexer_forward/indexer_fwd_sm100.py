@@ -41,19 +41,20 @@ from cudnn.deepseek_sparse_attention.utils.sm100.gemm import gemm_ptx_partial as
 from cudnn.deepseek_sparse_attention.utils import copy as copy_ops
 from cudnn.deepseek_sparse_attention.utils.seqlen import SeqlenInfoQK
 
-mul_packed_f32x2 = partial(cute.arch.mul_packed_f32x2, rnd='rn')
-add_packed_f32x2 = partial(cute.arch.add_packed_f32x2, rnd='rn')
+mul_packed_f32x2 = partial(cute.arch.mul_packed_f32x2, rnd="rn")
+add_packed_f32x2 = partial(cute.arch.add_packed_f32x2, rnd="rn")
+
 
 class IndexerForwardSm100:
     """
     SM100 Cute-DSL kernel for Indexer QK scoring.
-    
+
     SwapAB design:
       - A = K (n_tile x head_dim), loaded via TMA as A operand
         # For sparse GEMM: use sparse load KV via cp.async instead of TMA.
       - B = Q_packed (m_tile x head_dim), loaded via TMA as B operand
       - C = S^T in TMEM: (n_tile, m_tile), m_tile = q_tokens x qhpkv
-    
+
     Warp layout (12 warps total):
       - Warp 0:     Load (TMA K/Q, regular W load)
       - Warp 1:     MMA  (QK GEMM via TCGen05, swapAB)
@@ -91,9 +92,7 @@ class IndexerForwardSm100:
 
         # Pad head_dim to multiple of 16
         hdim_multiple_of = 16
-        self.head_dim_padded = int(
-            math.ceil(head_dim / hdim_multiple_of) * hdim_multiple_of
-        )
+        self.head_dim_padded = int(math.ceil(head_dim / hdim_multiple_of) * hdim_multiple_of)
 
         # q_tokens per q_stage tile
         self.q_tokens_per_tile = m_block_size // qhead_per_kvhead
@@ -129,7 +128,7 @@ class IndexerForwardSm100:
         assert self.tmem_total <= SM100_TMEM_CAPACITY_COLUMNS
         self.tmem_alloc_cols = SM100_TMEM_CAPACITY_COLUMNS
 
-        # Pipeline barrier counts 
+        # Pipeline barrier counts
         self.Q_mbar_size = 2 * self.q_stage
         self.K_mbar_size = 2 * self.kv_stage
         self.S_mbar_size = 2 * self.q_stage
@@ -138,8 +137,8 @@ class IndexerForwardSm100:
 
         # Score store barriers: full/empty for each q_stage
         self.Score_store_mbar_size = 2 * self.q_stage
-        self.score_store_full_arrive_count = 128   # EPI WG (128 threads) arrive
-        self.score_store_empty_arrive_count = 32   # TMA store warp (32 threads) arrive
+        self.score_store_full_arrive_count = 128  # EPI WG (128 threads) arrive
+        self.score_store_empty_arrive_count = 32  # TMA store warp (32 threads) arrive
 
         # Score smem: (q_tokens_per_tile, n_block_size) per q_stage
         self.sScore_size = self.q_tokens_per_tile * self.n_block_size * self.q_stage
@@ -153,9 +152,9 @@ class IndexerForwardSm100:
     @cute.jit
     def __call__(
         self,
-        mQ: cute.Tensor,   # (bs, seqlen_q, n_heads_q, head_dim) BF16
-        mK: cute.Tensor,   # (bs, seqlen_k, n_heads_kv, head_dim) BF16
-        mW: cute.Tensor,   # (bs, seqlen_q, n_heads_q) BF16
+        mQ: cute.Tensor,  # (bs, seqlen_q, n_heads_q, head_dim) BF16
+        mK: cute.Tensor,  # (bs, seqlen_k, n_heads_kv, head_dim) BF16
+        mW: cute.Tensor,  # (bs, seqlen_q, n_heads_q) BF16
         mOut: cute.Tensor,  # (bs, seqlen_q, seqlen_k) FP32
         n_heads_kv: Int32,
         max_seqlen_q: Int32,
@@ -199,19 +198,17 @@ class IndexerForwardSm100:
         # --- PackGQA: reshape Q to pack qhpkv heads into seqlen_q dim ---
         shape_Q_packed = (
             (self.qhead_per_kvhead, mQ.shape[0]),  # packed M dim
-            mQ.shape[1],                           # head_dim
-            mK.shape[2],                           # n_heads_kv
-            *mQ.shape[3:],                         # bs (and beyond)
+            mQ.shape[1],  # head_dim
+            mK.shape[2],  # n_heads_kv
+            *mQ.shape[3:],  # bs (and beyond)
         )
         stride_Q_packed = (
-            (mQ.stride[2], mQ.stride[0]),          # (stride_head, stride_seqlen)
-            mQ.stride[1],                          # stride_hdim
+            (mQ.stride[2], mQ.stride[0]),  # (stride_head, stride_seqlen)
+            mQ.stride[1],  # stride_hdim
             mQ.stride[2] * self.qhead_per_kvhead,  # stride across kv_head groups
-            *mQ.stride[3:],                        # stride_bs
+            *mQ.stride[3:],  # stride_bs
         )
-        mQ = cute.make_tensor(
-            mQ.iterator, cute.make_layout(shape_Q_packed, stride=stride_Q_packed)
-        )
+        mQ = cute.make_tensor(mQ.iterator, cute.make_layout(shape_Q_packed, stride=stride_Q_packed))
 
         cta_group = tcgen05.CtaGroup.ONE
         self.k_major_mode = cutlass.utils.LayoutEnum.from_tensor(mK).mma_major_mode()
@@ -234,10 +231,16 @@ class IndexerForwardSm100:
 
         # --- SMEM layouts ---
         sK_layout = _make_smem_layout_a(
-            tiled_mma_qk, self.mma_tiler_qk, self.k_dtype, self.kv_stage,
+            tiled_mma_qk,
+            self.mma_tiler_qk,
+            self.k_dtype,
+            self.kv_stage,
         )
         sQ_layout = _make_smem_layout_b(
-            tiled_mma_qk, self.mma_tiler_qk, self.q_dtype, self.q_stage,
+            tiled_mma_qk,
+            self.mma_tiler_qk,
+            self.q_dtype,
+            self.q_stage,
         )
 
         # --- TMA atoms ---
@@ -278,47 +281,43 @@ class IndexerForwardSm100:
         # --- TMA store descriptor for Score (smem -> gmem) ---
         tma_store_op = cpasync.CopyBulkTensorTileS2GOp()
         score_tile = (self.q_tokens_per_tile, self.n_block_size)
-        score_cta_v_layout = cute.composition(
-            cute.make_identity_layout(mOut.shape), score_tile
-        )
+        score_cta_v_layout = cute.composition(cute.make_identity_layout(mOut.shape), score_tile)
         sScore_layout = cute.make_layout(
             (self.q_tokens_per_tile, self.n_block_size, self.q_stage),
             stride=(self.n_block_size, 1, self.q_tokens_per_tile * self.n_block_size),
         )
         sScore_single = cute.select(sScore_layout, mode=[0, 1])
         tma_atom_Score, mOut = cpasync.make_tiled_tma_atom(
-            tma_store_op, mOut, sScore_single, score_cta_v_layout,
+            tma_store_op,
+            mOut,
+            sScore_single,
+            score_cta_v_layout,
         )
         self.sScore_layout = sScore_layout
 
         # --- Grid and kernel dispatch (CLC persistent scheduling) ---
         # Grid tiles only in M and batch — each CTA iterates all n_blocks
         # internally, so N-dim of grid must be 1 (NOT tiled by n_block_size).
-        seqlen_q_static = (
-            max_seqlen_q if const_expr(is_varlen)
-            else cute.size(mQ.shape[0]) // self.qhead_per_kvhead
-        )
+        seqlen_q_static = max_seqlen_q if const_expr(is_varlen) else cute.size(mQ.shape[0]) // self.qhead_per_kvhead
         seqlen_q_packed = seqlen_q_static * self.qhead_per_kvhead
-        num_m_blocks = cute.ceil_div(
-            seqlen_q_packed, self.q_stage * self.m_block_size
-        )
-        batch_size = (
-            cute.size(mCuSeqlensQ.shape[0]) - 1
-            if const_expr(is_varlen)
-            else cute.size(mQ.shape[3])
-        )
+        num_m_blocks = cute.ceil_div(seqlen_q_packed, self.q_stage * self.m_block_size)
+        batch_size = cute.size(mCuSeqlensQ.shape[0]) - 1 if const_expr(is_varlen) else cute.size(mQ.shape[3])
         cluster_shape_mnl = (*self.cluster_shape_mn, 1)
-        tile_sched_params = utils.ClcDynamicPersistentTileSchedulerParams(
-            (num_m_blocks, 1, batch_size), cluster_shape_mnl
-        )
-        grid_dim = utils.ClcDynamicPersistentTileScheduler.get_grid_shape(
-            tile_sched_params
-        )
+        tile_sched_params = utils.ClcDynamicPersistentTileSchedulerParams((num_m_blocks, 1, batch_size), cluster_shape_mnl)
+        grid_dim = utils.ClcDynamicPersistentTileScheduler.get_grid_shape(tile_sched_params)
         self.kernel(
-            mQ, mK, mW, mOut, mOut_scalar,
-            tma_atom_Q, tma_atom_K, tma_atom_Score,
+            mQ,
+            mK,
+            mW,
+            mOut,
+            mOut_scalar,
+            tma_atom_Q,
+            tma_atom_K,
+            tma_atom_Score,
             tiled_mma_qk,
-            sQ_layout, sK_layout, sScore_layout,
+            sQ_layout,
+            sK_layout,
+            sScore_layout,
             tile_sched_params,
             max_seqlen_q,
             max_seqlen_k,
@@ -335,10 +334,18 @@ class IndexerForwardSm100:
     @cute.kernel
     def kernel(
         self,
-        mQ, mK, mW, mOut, mOut_scalar,
-        tma_atom_Q, tma_atom_K, tma_atom_Score,
+        mQ,
+        mK,
+        mW,
+        mOut,
+        mOut_scalar,
+        tma_atom_Q,
+        tma_atom_K,
+        tma_atom_Score,
         tiled_mma_qk,
-        sQ_layout, sK_layout, sScore_layout,
+        sQ_layout,
+        sK_layout,
+        sScore_layout,
         tile_sched_params: utils.ClcDynamicPersistentTileSchedulerParams,
         max_seqlen_q: Int32,
         max_seqlen_k: Int32,
@@ -359,18 +366,10 @@ class IndexerForwardSm100:
             assert not self.is_varlen
 
         # --- Runtime seqlen from dynamic tensor shapes ---
-        seqlen_q = (
-            max_seqlen_q if const_expr(is_varlen)
-            else cute.size(mQ.shape[0]) // self.qhead_per_kvhead
-        )
-        seqlen_k = (
-            max_seqlen_k if const_expr(is_varlen)
-            else cute.size(mK.shape[0])
-        )
+        seqlen_q = max_seqlen_q if const_expr(is_varlen) else cute.size(mQ.shape[0]) // self.qhead_per_kvhead
+        seqlen_k = max_seqlen_k if const_expr(is_varlen) else cute.size(mK.shape[0])
         seqlen_q_packed = seqlen_q * self.qhead_per_kvhead
-        num_m_blocks = cute.ceil_div(
-            seqlen_q_packed, self.q_stage * self.m_block_size
-        )
+        num_m_blocks = cute.ceil_div(seqlen_q_packed, self.q_stage * self.m_block_size)
         SeqlenInfoCls = partial(
             SeqlenInfoQK.create,
             seqlen_q_static=seqlen_q,
@@ -393,7 +392,7 @@ class IndexerForwardSm100:
         sQ_size = cute.cosize(sQ_layout)
         sK_size = cute.cosize(sK_layout)
         sW_single = self.m_block_size * self.q_stage
-        sW_size = sW_single * 2  # double-buffer to avoid LOAD/EPI race 
+        sW_size = sW_single * 2  # double-buffer to avoid LOAD/EPI race
         sScore_size = self.sScore_size
 
         @cute.struct
@@ -446,18 +445,12 @@ class IndexerForwardSm100:
             cute.make_layout(self.cluster_shape_mnk),
             (tiled_mma_qk.thr_id.shape,),
         )
-        cta_rank_in_cluster = cute.arch.make_warp_uniform(
-            cute.arch.block_idx_in_cluster()
-        )
+        cta_rank_in_cluster = cute.arch.make_warp_uniform(cute.arch.block_idx_in_cluster())
         is_first_cta_in_cluster = cta_rank_in_cluster == 0
 
         # TMA producer (load warp) and UMMA consumer (mma warp) pipelines
-        pipeline_producer_group = CooperativeGroup(
-            Agent.Thread, len([self.load_warp_id])
-        )
-        pipeline_consumer_group = CooperativeGroup(
-            Agent.Thread, len([self.mma_warp_id])
-        )
+        pipeline_producer_group = CooperativeGroup(Agent.Thread, len([self.load_warp_id]))
+        pipeline_consumer_group = CooperativeGroup(Agent.Thread, len([self.mma_warp_id]))
         pipeline_Q = PipelineTmaUmma.create(
             barrier_storage=Q_mbar_ptr,
             num_stages=self.q_stage,
@@ -479,33 +472,23 @@ class IndexerForwardSm100:
 
         # S barriers and tmem_dealloc: manual init (S has custom s_empty count=128)
         if warp_idx == 1:
-            cute.arch.mbarrier_init(
-                tmem_dealloc_mbar_ptr, 2
-            )  # both epilogue WG0 and WG1 must arrive
+            cute.arch.mbarrier_init(tmem_dealloc_mbar_ptr, 2)  # both epilogue WG0 and WG1 must arrive
         if warp_idx == 0:
             for i in cutlass.range_constexpr(self.q_stage):
                 cute.arch.mbarrier_init(S_mbar_ptr + i, 1)  # s_full
-                cute.arch.mbarrier_init(
-                    S_mbar_ptr + self.q_stage + i, self.s_empty_arrive_count
-                )  # s_empty
+                cute.arch.mbarrier_init(S_mbar_ptr + self.q_stage + i, self.s_empty_arrive_count)  # s_empty
         if warp_idx == self.tma_store_warp_id:
             for i in cutlass.range_constexpr(self.q_stage):
-                cute.arch.mbarrier_init(
-                    Score_store_mbar_ptr + i, self.score_store_full_arrive_count
-                )  # Score_full
+                cute.arch.mbarrier_init(Score_store_mbar_ptr + i, self.score_store_full_arrive_count)  # Score_full
                 cute.arch.mbarrier_init(
                     Score_store_mbar_ptr + self.q_stage + i,
                     self.score_store_empty_arrive_count,
                 )  # Score_empty
 
         cluster_size = cute.size(self.cluster_shape_mn)
-        num_clc_consumer_threads = 32 * (
-            1 + cluster_size * (1 + 1 + 8 + 1)
-        )  # load(1) + mma(1) + tma_store(1) + epilogue(8) + sched(1) warps
+        num_clc_consumer_threads = 32 * (1 + cluster_size * (1 + 1 + 8 + 1))  # load(1) + mma(1) + tma_store(1) + epilogue(8) + sched(1) warps
         clc_pipeline_producer_group = CooperativeGroup(Agent.Thread)
-        clc_pipeline_consumer_group = CooperativeGroup(
-            Agent.Thread, num_clc_consumer_threads
-        )
+        clc_pipeline_consumer_group = CooperativeGroup(Agent.Thread, num_clc_consumer_threads)
         clc_pipeline = PipelineClcFetchAsync.create(
             barrier_storage=clc_mbar_ptr,
             num_stages=self.num_clc_stage,
@@ -520,9 +503,7 @@ class IndexerForwardSm100:
         cute.arch.sync_threads()
         pipeline_init_wait(cluster_shape_mn=cluster_layout_vmnk)
 
-        clc_consumer_state = make_pipeline_state(
-            PipelineUserType.Consumer, self.num_clc_stage
-        )
+        clc_consumer_state = make_pipeline_state(PipelineUserType.Consumer, self.num_clc_stage)
 
         tile_sched = utils.ClcDynamicPersistentTileScheduler.create(
             tile_sched_params,
@@ -539,27 +520,20 @@ class IndexerForwardSm100:
         qk_acc_shape = thr_mma_qk.partition_shape_C(self.mma_tiler_qk[:2])
         tStS_fake = thr_mma_qk.make_fragment_C(qk_acc_shape)
 
-        tmem_ptr = cute.make_ptr(
-            Float32, 0, mem_space=cute.AddressSpace.tmem, assumed_align=16
-        )
+        tmem_ptr = cute.make_ptr(Float32, 0, mem_space=cute.AddressSpace.tmem, assumed_align=16)
         tStS = cute.make_tensor(tmem_ptr, tStS_fake.layout)
 
-        tStSs = tuple(
-            cute.make_tensor(tStS.iterator + self.tmem_s_offset[stage], tStS.layout)
-            for stage in range(self.q_stage)
-        )
+        tStSs = tuple(cute.make_tensor(tStS.iterator + self.tmem_s_offset[stage], tStS.layout) for stage in range(self.q_stage))
 
         warp_group_idx = tidx // 128
         # --- Warpgroup 0 (warps 0-3): Load + MMA + Sched + Empty ---
         if warp_group_idx == 0:
             cute.arch.setmaxregister_decrease(self.num_regs_load)
 
-            # Load warp (warp 0): CLC persistent loop 
+            # Load warp (warp 0): CLC persistent loop
             if warp_idx == self.load_warp_id:
                 warp_threads_load = 32
-                rows_per_thread_load = cute.ceil_div(
-                    self.m_block_size, warp_threads_load
-                )
+                rows_per_thread_load = cute.ceil_div(self.m_block_size, warp_threads_load)
                 load_tile_count = Int32(0)
                 while work_tile.is_valid_tile:
                     batch_idx = work_tile.tile_idx[2]
@@ -571,8 +545,7 @@ class IndexerForwardSm100:
                     is_valid_m_block = work_tile.tile_idx[0] < num_m_blocks_cur
                     if is_valid_m_block:
                         m_block = num_m_blocks_cur - 1 - work_tile.tile_idx[0]
-                        num_n_blocks = self._causal_num_n_blocks(
-                            m_block, seqlen.seqlen_k, seqlen.seqlen_q)
+                        num_n_blocks = self._causal_num_n_blocks(m_block, seqlen.seqlen_k, seqlen.seqlen_q)
                         # W load (double-buffered: even tiles → first half, odd tiles → second half)
                         sW_buf_off = (load_tile_count % 2) * self.q_stage * self.m_block_size
                         mW_cur = seqlen.offset_batch_Q(mW, batch_idx, dim=2)
@@ -580,10 +553,7 @@ class IndexerForwardSm100:
                             for ri in cutlass.range_constexpr(rows_per_thread_load):
                                 row = ri * warp_threads_load + (tidx % warp_threads_load)
                                 if row < self.m_block_size:
-                                    m_packed_idx = (
-                                        (self.q_stage * m_block + qs) * self.m_block_size
-                                        + row
-                                    )
+                                    m_packed_idx = (self.q_stage * m_block + qs) * self.m_block_size + row
                                     m_idx = m_packed_idx // self.qhead_per_kvhead
                                     h_idx = m_packed_idx - m_idx * self.qhead_per_kvhead
                                     sW_idx = sW_buf_off + qs * self.m_block_size + row
@@ -604,8 +574,12 @@ class IndexerForwardSm100:
                             )
                             sQ_stage = sQ[None, None, None, qs]
                             load_Q_fn, _, _ = copy_ops.tma_get_copy_fn(
-                                tma_atom_Q, 0, cute.make_layout(1),
-                                gQ, sQ_stage, single_stage=True,
+                                tma_atom_Q,
+                                0,
+                                cute.make_layout(1),
+                                gQ,
+                                sQ_stage,
+                                single_stage=True,
                             )
                             load_Q_fn(tma_bar_ptr=handle_Q.barrier)
                         # TMA K (same inline pattern)
@@ -625,8 +599,12 @@ class IndexerForwardSm100:
                             )
                             sK_stage = sK[None, None, None, handle_K.index]
                             load_K_fn, _, _ = copy_ops.tma_get_copy_fn(
-                                tma_atom_K, 0, cute.make_layout(1),
-                                gK, sK_stage, single_stage=True,
+                                tma_atom_K,
+                                0,
+                                cute.make_layout(1),
+                                gK,
+                                sK_stage,
+                                single_stage=True,
                             )
                             load_K_fn(tma_bar_ptr=handle_K.barrier)
                             peek_K = cutlass.Boolean(1)
@@ -660,8 +638,7 @@ class IndexerForwardSm100:
                     is_valid_m_block = work_tile.tile_idx[0] < num_m_blocks_cur
                     if is_valid_m_block:
                         m_block = num_m_blocks_cur - 1 - work_tile.tile_idx[0]
-                        num_n_blocks = self._causal_num_n_blocks(
-                            m_block, seqlen.seqlen_k, seqlen.seqlen_q)
+                        num_n_blocks = self._causal_num_n_blocks(m_block, seqlen.seqlen_k, seqlen.seqlen_q)
                         Q_consumer.reset()
                         handle_Q0 = Q_consumer.wait_and_advance()
                         handle_Q1 = Q_consumer.wait_and_advance()
@@ -679,30 +656,34 @@ class IndexerForwardSm100:
                             kv_stage = handle_K.index
 
                             if iter_idx > 0:
-                                cute.arch.mbarrier_wait(
-                                    S_mbar_ptr + self.q_stage + 0, mma_s_empty_phase_0
-                                )
+                                cute.arch.mbarrier_wait(S_mbar_ptr + self.q_stage + 0, mma_s_empty_phase_0)
                                 mma_s_empty_phase_0 ^= 1
                             if iter_idx > 0:
-                                cute.arch.mbarrier_wait(
-                                    S_mbar_ptr + self.q_stage + 1, mma_s_empty_phase_1
-                                )
+                                cute.arch.mbarrier_wait(S_mbar_ptr + self.q_stage + 1, mma_s_empty_phase_1)
                                 mma_s_empty_phase_1 ^= 1
 
                             tSrKi = tSrK[None, None, None, kv_stage]
                             sK_cur = sK[None, None, None, kv_stage]
                             _gemm_ptx_partial(
-                                qk_mma_op, self.tmem_s_offset[0],
-                                tSrKi, tSrQs[0],
-                                sA=sK_cur, sB=sQs[0], zero_init=True,
+                                qk_mma_op,
+                                self.tmem_s_offset[0],
+                                tSrKi,
+                                tSrQs[0],
+                                sA=sK_cur,
+                                sB=sQs[0],
+                                zero_init=True,
                             )
                             with cute.arch.elect_one():
                                 tcgen05.commit(S_mbar_ptr + 0)
 
                             _gemm_ptx_partial(
-                                qk_mma_op, self.tmem_s_offset[1],
-                                tSrKi, tSrQs[1],
-                                sA=sK_cur, sB=sQs[1], zero_init=True,
+                                qk_mma_op,
+                                self.tmem_s_offset[1],
+                                tSrKi,
+                                tSrQs[1],
+                                sA=sK_cur,
+                                sB=sQs[1],
+                                zero_init=True,
                             )
                             with cute.arch.elect_one():
                                 tcgen05.commit(S_mbar_ptr + 1)
@@ -713,13 +694,9 @@ class IndexerForwardSm100:
                                 peek_K_full = K_consumer.try_wait()
 
                         if num_n_blocks > 0:
-                            cute.arch.mbarrier_wait(
-                                S_mbar_ptr + self.q_stage + 0, mma_s_empty_phase_0
-                            )
+                            cute.arch.mbarrier_wait(S_mbar_ptr + self.q_stage + 0, mma_s_empty_phase_0)
                             mma_s_empty_phase_0 ^= 1
-                            cute.arch.mbarrier_wait(
-                                S_mbar_ptr + self.q_stage + 1, mma_s_empty_phase_1
-                            )
+                            cute.arch.mbarrier_wait(S_mbar_ptr + self.q_stage + 1, mma_s_empty_phase_1)
                             mma_s_empty_phase_1 ^= 1
 
                         handle_Q0.release()
@@ -734,16 +711,15 @@ class IndexerForwardSm100:
                 cute.arch.relinquish_tmem_alloc_permit()
                 cute.arch.mbarrier_wait(tmem_dealloc_mbar_ptr, 0)
                 tmem_ptr_dealloc = cute.arch.retrieve_tmem_ptr(
-                    Float32, alignment=16,
+                    Float32,
+                    alignment=16,
                     ptr_to_buffer_holding_addr=tmem_holding_buf,
                 )
                 cute.arch.dealloc_tmem(tmem_ptr_dealloc, Int32(self.tmem_alloc_cols))
 
             # Sched warp (warp 2): CLC producer loop
             if warp_idx == self.sched_warp_id and is_first_cta_in_cluster:
-                clc_producer_state = make_pipeline_state(
-                    PipelineUserType.ProducerConsumer, self.num_clc_stage
-                )
+                clc_producer_state = make_pipeline_state(PipelineUserType.ProducerConsumer, self.num_clc_stage)
                 sched_tile_count = Int32(0)
                 while work_tile.is_valid_tile:
                     clc_pipeline.producer_acquire(clc_producer_state)
@@ -772,8 +748,7 @@ class IndexerForwardSm100:
                     is_valid_m_block = work_tile.tile_idx[0] < num_m_blocks_cur
                     if is_valid_m_block:
                         m_block = num_m_blocks_cur - 1 - work_tile.tile_idx[0]
-                        num_n_blocks = self._causal_num_n_blocks(
-                            m_block, seqlen.seqlen_k, seqlen.seqlen_q)
+                        num_n_blocks = self._causal_num_n_blocks(m_block, seqlen.seqlen_k, seqlen.seqlen_q)
                         local_count = num_n_blocks if num_n_blocks < Int32(3) else Int32(3)
 
                         if const_expr(is_varlen):
@@ -781,68 +756,64 @@ class IndexerForwardSm100:
                             # range stays within seqlen_q_b → safe to TMA-bulk.
                             # Misaligned (last m_block of a batch) falls back
                             # to per-q-token scalar store with OOB guard.
-                            q_token_end_tile = (
-                                self.q_stage * (m_block + 1) * self.q_tokens_per_tile
-                            )
+                            q_token_end_tile = self.q_stage * (m_block + 1) * self.q_tokens_per_tile
                             both_aligned = q_token_end_tile <= seqlen.seqlen_q
-                            mOut_thd = cute.domain_offset(
-                                (seqlen.offset_q, Int32(0)), mOut
-                            )
+                            mOut_thd = cute.domain_offset((seqlen.offset_q, Int32(0)), mOut)
                             if both_aligned:
                                 # Fast path: TMA bulk store, mirrors BSHD path.
                                 for iter_idx in cutlass.range(num_n_blocks, unroll=1):
                                     _n_block = iter_idx - local_count
                                     if iter_idx < local_count:
                                         _n_block = num_n_blocks - Int32(1) - iter_idx
-                                    cute.arch.mbarrier_wait(
-                                        Score_store_mbar_ptr + 0, score_full_phase_0
-                                    )
+                                    cute.arch.mbarrier_wait(Score_store_mbar_ptr + 0, score_full_phase_0)
                                     score_full_phase_0 = score_full_phase_0 ^ 1
                                     gScore_0 = cute.local_tile(
-                                        mOut_thd, score_tile,
+                                        mOut_thd,
+                                        score_tile,
                                         (self.q_stage * m_block + 0, _n_block),
                                     )
                                     sScore_0 = sScore[None, None, 0]
                                     store_fn_0, _, _ = copy_ops.tma_get_copy_fn(
-                                        tma_atom_Score, 0, cute.make_layout(1),
-                                        sScore_0, gScore_0, single_stage=True,
+                                        tma_atom_Score,
+                                        0,
+                                        cute.make_layout(1),
+                                        sScore_0,
+                                        gScore_0,
+                                        single_stage=True,
                                     )
                                     store_fn_0()
                                     cute.arch.cp_async_bulk_commit_group()
 
-                                    cute.arch.mbarrier_wait(
-                                        Score_store_mbar_ptr + 1, score_full_phase_1
-                                    )
+                                    cute.arch.mbarrier_wait(Score_store_mbar_ptr + 1, score_full_phase_1)
                                     score_full_phase_1 = score_full_phase_1 ^ 1
                                     gScore_1 = cute.local_tile(
-                                        mOut_thd, score_tile,
+                                        mOut_thd,
+                                        score_tile,
                                         (self.q_stage * m_block + 1, _n_block),
                                     )
                                     sScore_1 = sScore[None, None, 1]
                                     store_fn_1, _, _ = copy_ops.tma_get_copy_fn(
-                                        tma_atom_Score, 0, cute.make_layout(1),
-                                        sScore_1, gScore_1, single_stage=True,
+                                        tma_atom_Score,
+                                        0,
+                                        cute.make_layout(1),
+                                        sScore_1,
+                                        gScore_1,
+                                        single_stage=True,
                                     )
                                     store_fn_1()
                                     cute.arch.cp_async_bulk_commit_group()
 
                                     cute.arch.cp_async_bulk_wait_group(1, read=True)
-                                    cute.arch.mbarrier_arrive(
-                                        Score_store_mbar_ptr + self.q_stage + 0
-                                    )
+                                    cute.arch.mbarrier_arrive(Score_store_mbar_ptr + self.q_stage + 0)
                                     cute.arch.cp_async_bulk_wait_group(0, read=True)
-                                    cute.arch.mbarrier_arrive(
-                                        Score_store_mbar_ptr + self.q_stage + 1
-                                    )
+                                    cute.arch.mbarrier_arrive(Score_store_mbar_ptr + self.q_stage + 1)
                             else:
                                 lane_id = tidx % cute.arch.WARP_SIZE
                                 for iter_idx in cutlass.range(num_n_blocks, unroll=1):
                                     _n_block = iter_idx - local_count
                                     if iter_idx < local_count:
                                         _n_block = num_n_blocks - Int32(1) - iter_idx
-                                    cute.arch.mbarrier_wait(
-                                        Score_store_mbar_ptr + 0, score_full_phase_0
-                                    )
+                                    cute.arch.mbarrier_wait(Score_store_mbar_ptr + 0, score_full_phase_0)
                                     score_full_phase_0 = score_full_phase_0 ^ 1
                                     sScore_0 = sScore[None, None, 0]
                                     for idx in cutlass.range(
@@ -858,13 +829,9 @@ class IndexerForwardSm100:
                                         if q_local < seqlen.seqlen_q and k_local < cute.size(mOut_scalar.shape[1]):
                                             mOut_scalar[seqlen.offset_q + q_local, k_local] = sScore_0[qi, kj]
                                     cute.arch.sync_warp()
-                                    cute.arch.mbarrier_arrive(
-                                        Score_store_mbar_ptr + self.q_stage + 0
-                                    )
+                                    cute.arch.mbarrier_arrive(Score_store_mbar_ptr + self.q_stage + 0)
 
-                                    cute.arch.mbarrier_wait(
-                                        Score_store_mbar_ptr + 1, score_full_phase_1
-                                    )
+                                    cute.arch.mbarrier_wait(Score_store_mbar_ptr + 1, score_full_phase_1)
                                     score_full_phase_1 = score_full_phase_1 ^ 1
                                     sScore_1 = sScore[None, None, 1]
                                     for idx in cutlass.range(
@@ -880,9 +847,7 @@ class IndexerForwardSm100:
                                         if q_local < seqlen.seqlen_q and k_local < cute.size(mOut_scalar.shape[1]):
                                             mOut_scalar[seqlen.offset_q + q_local, k_local] = sScore_1[qi, kj]
                                     cute.arch.sync_warp()
-                                    cute.arch.mbarrier_arrive(
-                                        Score_store_mbar_ptr + self.q_stage + 1
-                                    )
+                                    cute.arch.mbarrier_arrive(Score_store_mbar_ptr + self.q_stage + 1)
                         else:
                             mOut_cur = mOut[None, None, batch_idx]
                             for iter_idx in cutlass.range(num_n_blocks, unroll=1):
@@ -890,47 +855,49 @@ class IndexerForwardSm100:
                                 if iter_idx < local_count:
                                     _n_block = num_n_blocks - Int32(1) - iter_idx
                                 # Wait for both stages, issue TMA store for each
-                                cute.arch.mbarrier_wait(
-                                    Score_store_mbar_ptr + 0, score_full_phase_0
-                                )
+                                cute.arch.mbarrier_wait(Score_store_mbar_ptr + 0, score_full_phase_0)
                                 score_full_phase_0 = score_full_phase_0 ^ 1
                                 gScore_0 = cute.local_tile(
-                                    mOut_cur, score_tile,
+                                    mOut_cur,
+                                    score_tile,
                                     (self.q_stage * m_block + 0, _n_block),
                                 )
                                 sScore_0 = sScore[None, None, 0]
                                 store_fn_0, _, _ = copy_ops.tma_get_copy_fn(
-                                    tma_atom_Score, 0, cute.make_layout(1),
-                                    sScore_0, gScore_0, single_stage=True,
+                                    tma_atom_Score,
+                                    0,
+                                    cute.make_layout(1),
+                                    sScore_0,
+                                    gScore_0,
+                                    single_stage=True,
                                 )
                                 store_fn_0()
                                 cute.arch.cp_async_bulk_commit_group()
 
-                                cute.arch.mbarrier_wait(
-                                    Score_store_mbar_ptr + 1, score_full_phase_1
-                                )
+                                cute.arch.mbarrier_wait(Score_store_mbar_ptr + 1, score_full_phase_1)
                                 score_full_phase_1 = score_full_phase_1 ^ 1
                                 gScore_1 = cute.local_tile(
-                                    mOut_cur, score_tile,
+                                    mOut_cur,
+                                    score_tile,
                                     (self.q_stage * m_block + 1, _n_block),
                                 )
                                 sScore_1 = sScore[None, None, 1]
                                 store_fn_1, _, _ = copy_ops.tma_get_copy_fn(
-                                    tma_atom_Score, 0, cute.make_layout(1),
-                                    sScore_1, gScore_1, single_stage=True,
+                                    tma_atom_Score,
+                                    0,
+                                    cute.make_layout(1),
+                                    sScore_1,
+                                    gScore_1,
+                                    single_stage=True,
                                 )
                                 store_fn_1()
                                 cute.arch.cp_async_bulk_commit_group()
 
                                 # Wait for stores to complete, then signal smem empty
                                 cute.arch.cp_async_bulk_wait_group(1, read=True)
-                                cute.arch.mbarrier_arrive(
-                                    Score_store_mbar_ptr + self.q_stage + 0
-                                )
+                                cute.arch.mbarrier_arrive(Score_store_mbar_ptr + self.q_stage + 0)
                                 cute.arch.cp_async_bulk_wait_group(0, read=True)
-                                cute.arch.mbarrier_arrive(
-                                    Score_store_mbar_ptr + self.q_stage + 1
-                                )
+                                cute.arch.mbarrier_arrive(Score_store_mbar_ptr + self.q_stage + 1)
 
                     clc_pipeline.consumer_wait(clc_consumer_state)
                     work_tile = tile_sched.get_current_work()
@@ -943,12 +910,8 @@ class IndexerForwardSm100:
             epi_s_full_phase_0 = Int32(0)
             score_empty_phase_0 = Int32(0)
             epi0_tile_count = Int32(0)
-            sScore_0_layout_1d = cute.make_layout(
-                (self.q_tokens_per_tile * self.n_block_size,), stride=(1,)
-            )
-            sScore_0 = cute.make_tensor(
-                sScore[None, None, 0].iterator, sScore_0_layout_1d
-            )
+            sScore_0_layout_1d = cute.make_layout((self.q_tokens_per_tile * self.n_block_size,), stride=(1,))
+            sScore_0 = cute.make_tensor(sScore[None, None, 0].iterator, sScore_0_layout_1d)
             while work_tile.is_valid_tile:
                 batch_idx = work_tile.tile_idx[2]
                 seqlen = SeqlenInfoCls(batch_idx)
@@ -959,13 +922,18 @@ class IndexerForwardSm100:
                 is_valid_m_block = work_tile.tile_idx[0] < num_m_blocks_cur
                 if is_valid_m_block:
                     m_block = num_m_blocks_cur - 1 - work_tile.tile_idx[0]
-                    num_n_blocks = self._causal_num_n_blocks(
-                        m_block, seqlen.seqlen_k, seqlen.seqlen_q)
+                    num_n_blocks = self._causal_num_n_blocks(m_block, seqlen.seqlen_k, seqlen.seqlen_q)
                     epi0_sW_base = (epi0_tile_count % 2) * self.q_stage * self.m_block_size
                     epi_s_full_phase_0, score_empty_phase_0 = self._epilogue_warp(
-                        0, tiled_mma_qk, tStSs[0],
-                        sW, sScore_0, S_mbar_ptr, Score_store_mbar_ptr,
-                        m_block, batch_idx,
+                        0,
+                        tiled_mma_qk,
+                        tStSs[0],
+                        sW,
+                        sScore_0,
+                        S_mbar_ptr,
+                        Score_store_mbar_ptr,
+                        m_block,
+                        batch_idx,
                         num_n_blocks,
                         seqlen.seqlen_k,
                         seqlen.seqlen_q,
@@ -990,12 +958,8 @@ class IndexerForwardSm100:
             epi_s_full_phase_1 = Int32(0)
             score_empty_phase_1 = Int32(0)
             epi1_tile_count = Int32(0)
-            sScore_1_layout_1d = cute.make_layout(
-                (self.q_tokens_per_tile * self.n_block_size,), stride=(1,)
-            )
-            sScore_1 = cute.make_tensor(
-                sScore[None, None, 1].iterator, sScore_1_layout_1d
-            )
+            sScore_1_layout_1d = cute.make_layout((self.q_tokens_per_tile * self.n_block_size,), stride=(1,))
+            sScore_1 = cute.make_tensor(sScore[None, None, 1].iterator, sScore_1_layout_1d)
             while work_tile.is_valid_tile:
                 batch_idx = work_tile.tile_idx[2]
                 seqlen = SeqlenInfoCls(batch_idx)
@@ -1006,13 +970,18 @@ class IndexerForwardSm100:
                 is_valid_m_block = work_tile.tile_idx[0] < num_m_blocks_cur
                 if is_valid_m_block:
                     m_block = num_m_blocks_cur - 1 - work_tile.tile_idx[0]
-                    num_n_blocks = self._causal_num_n_blocks(
-                        m_block, seqlen.seqlen_k, seqlen.seqlen_q)
+                    num_n_blocks = self._causal_num_n_blocks(m_block, seqlen.seqlen_k, seqlen.seqlen_q)
                     epi1_sW_base = (epi1_tile_count % 2) * self.q_stage * self.m_block_size
                     epi_s_full_phase_1, score_empty_phase_1 = self._epilogue_warp(
-                        1, tiled_mma_qk, tStSs[1],
-                        sW, sScore_1, S_mbar_ptr, Score_store_mbar_ptr,
-                        m_block, batch_idx,
+                        1,
+                        tiled_mma_qk,
+                        tStSs[1],
+                        sW,
+                        sScore_1,
+                        S_mbar_ptr,
+                        Score_store_mbar_ptr,
+                        m_block,
+                        batch_idx,
                         num_n_blocks,
                         seqlen.seqlen_k,
                         seqlen.seqlen_q,
@@ -1060,8 +1029,12 @@ class IndexerForwardSm100:
         q_stage_idx,
         tiled_mma_qk,
         tStS_stage,
-        sW, sScore_stage, S_mbar_ptr, Score_store_mbar_ptr,
-        m_block, batch_idx,
+        sW,
+        sScore_stage,
+        S_mbar_ptr,
+        Score_store_mbar_ptr,
+        m_block,
+        batch_idx,
         num_n_blocks,
         seqlen_k,
         seqlen_q,
@@ -1089,9 +1062,7 @@ class IndexerForwardSm100:
         tScS = thr_tmem_load.partition_D(tScS_mma)
 
         # RF fragment for TMEM→RF copy (destination partition)
-        tSrS_shape = thr_tmem_load.partition_D(
-            cute.make_identity_tensor(tStS_stage.shape)
-        ).shape
+        tSrS_shape = thr_tmem_load.partition_D(cute.make_identity_tensor(tStS_stage.shape)).shape
         tSrS = cute.make_rmem_tensor(tSrS_shape, Float32)
 
         _sW_base = Int32(0) if sW_base is None else sW_base
@@ -1111,11 +1082,13 @@ class IndexerForwardSm100:
             cute.make_layout((self.m_block_size // 2,)),
         )
         tSsW_f32_tiled = cute.logical_divide(
-            sW_1d_f32, cute.make_layout((rW_ILP,)),
+            sW_1d_f32,
+            cute.make_layout((rW_ILP,)),
         )
         rW_f32 = cute.make_rmem_tensor((self.m_block_size // 2,), Float32)
         tRsW_f32_tiled = cute.logical_divide(
-            rW_f32, cute.make_layout((rW_ILP,)),
+            rW_f32,
+            cute.make_layout((rW_ILP,)),
         )
         rW_buf = cute.make_rmem_tensor((2 * rW_ILP,), self.w_dtype)
         rW_buf_f32 = cute.recast_tensor(rW_buf, Float32)
@@ -1126,9 +1099,7 @@ class IndexerForwardSm100:
             if iter_idx < local_count:
                 _n_block = num_n_blocks - Int32(1) - iter_idx
 
-            cute.arch.mbarrier_wait(
-                S_mbar_ptr + q_stage_idx, epi_s_full_phase
-            )
+            cute.arch.mbarrier_wait(S_mbar_ptr + q_stage_idx, epi_s_full_phase)
             epi_s_full_phase = epi_s_full_phase ^ 1
 
             if iter_idx == 0:
@@ -1138,9 +1109,7 @@ class IndexerForwardSm100:
             cute.copy(thr_tmem_load, tStS_t2r, tSrS)
             cute.arch.fence_view_async_tmem_load()
 
-            cute.arch.mbarrier_arrive(
-                S_mbar_ptr + self.q_stage + q_stage_idx
-            )
+            cute.arch.mbarrier_arrive(S_mbar_ptr + self.q_stage + q_stage_idx)
 
             local_sum = [(Float32(0.0), Float32(0.0)) for _ in range(self.q_tokens_per_tile)]
 
@@ -1157,7 +1126,7 @@ class IndexerForwardSm100:
                         idx1 = idx0 + 1
 
                         val0 = tSrS[idx0]
-                        val0 = val0 if val0 > Float32(0.0) else Float32(0.0) # relu
+                        val0 = val0 if val0 > Float32(0.0) else Float32(0.0)  # relu
                         val1 = tSrS[idx1]
                         val1 = val1 if val1 > Float32(0.0) else Float32(0.0)
 
@@ -1167,9 +1136,7 @@ class IndexerForwardSm100:
             # Apply sm_scale onto the fp32 head-reduced score (post-reduce,
             # pre causal mask). Preserves precision vs pre-multiplying onto
             # bf16 W on the host.
-            rAcc = cute.make_rmem_tensor(
-                (self.q_tokens_per_tile,), Float32
-            )
+            rAcc = cute.make_rmem_tensor((self.q_tokens_per_tile,), Float32)
             for qi in cutlass.range_constexpr(self.q_tokens_per_tile):
                 rAcc[qi] = (local_sum[qi][0] + local_sum[qi][1]) * Float32(sm_scale)
 
@@ -1215,9 +1182,7 @@ class IndexerForwardSm100:
             cute.autovec_copy(rAcc, sScore_dst)
 
             cute.arch.fence_view_async_shared()
-            cute.arch.mbarrier_arrive(
-                Score_store_mbar_ptr + q_stage_idx
-            )
+            cute.arch.mbarrier_arrive(Score_store_mbar_ptr + q_stage_idx)
 
         # Trailing Score_empty wait: consume the last TMA store arrival so
         # phase stays in sync across tiles (mirrors MMA's trailing S_empty wait).

@@ -25,7 +25,6 @@ from cudnn.deepseek_sparse_attention.utils.runtime import (
 )
 from cudnn.deepseek_sparse_attention.utils.tensor_conversion import to_cute_tensor as _to_cute
 
-
 WARPS_PER_CTA = 4
 ROWS_PER_CTA = WARPS_PER_CTA  # One warp per row.
 
@@ -126,9 +125,7 @@ _compile_cache: dict[tuple, object] = {}
 
 def _compile_or_fetch(key, kernel_obj, *args):
     if key not in _compile_cache:
-        _compile_cache[key] = cute.compile(
-            kernel_obj, *args, options=compile_options("--opt-level 3")
-        )
+        _compile_cache[key] = cute.compile(kernel_obj, *args, options=compile_options("--opt-level 3"))
     return _compile_cache[key]
 
 

@@ -47,9 +47,7 @@ def warp_scan(val: cutlass.Int32, tidx, lane_id, num_threads_per_warp: cutlass.C
     iteration = cute.arch.log2_of_pow2_int(cutlass.Int32(num_threads_per_warp))
     for i in cutlass.range(iteration, unroll_full=True):
         offset = 1 << i
-        other = cute.arch.shuffle_sync_up(
-            val, offset, mask=mask_val, mask_and_clamp=mask_and_clamp_val
-        )
+        other = cute.arch.shuffle_sync_up(val, offset, mask=mask_val, mask_and_clamp=mask_and_clamp_val)
         if lane_id >= offset:
             val = val + other
     return val
@@ -71,9 +69,7 @@ def block_prefix_sum_kernel(
     lane_id = tidx % 32
 
     # Currently, we only support num_warps > 1, will support num_warps <= 1 logic later.
-    assert num_threads % 32 == 0, "num_threads must be divisible by 32, but got {}".format(
-        num_threads
-    )
+    assert num_threads % 32 == 0, "num_threads must be divisible by 32, but got {}".format(num_threads)
     assert num_warps > 1, "num_warps must be > 1, but got {}".format(num_warps)
     assert num_warps == 2 ** int(math.log2(num_warps)), "num_warps must be a power of 2"
 
@@ -127,15 +123,11 @@ def block_prefix_sum(
     if cutlass.const_expr(num_bins < num_threads_per_block):
         if tidx < num_bins:
             val = input[tidx]
-            val, total_sum = block_prefix_sum_kernel(
-                val, s_warp_sums, tidx, num_bins, num_warps, barrier_id=1
-            )
+            val, total_sum = block_prefix_sum_kernel(val, s_warp_sums, tidx, num_bins, num_warps, barrier_id=1)
             output[tidx] = val
     elif cutlass.const_expr(num_bins == num_threads_per_block):
         val = input[tidx]
-        val, total_sum = block_prefix_sum_kernel(
-            val, s_warp_sums, tidx, num_bins, num_warps, barrier_id=1
-        )
+        val, total_sum = block_prefix_sum_kernel(val, s_warp_sums, tidx, num_bins, num_warps, barrier_id=1)
         output[tidx] = val
     else:
         assert num_bins % num_threads_per_block == 0
