@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <mutex>
 #include <unordered_map>
 #include <stdexcept>
 #include <string>
@@ -1244,8 +1245,8 @@ class Graph : public ICudnn, public INode {
         }
         plans.candidate = 0;
 
-        // Re-prepare the variant pack template to match the new plan ordering
-        CHECK_CUDNN_FRONTEND_ERROR(prepare_variant_pack_template());
+        // Re-prepare OSS slot indices to match the new plan ordering
+        apply_oss_slot_indices_to_plans();
 
         detail::cuda_event_destroy(start);
         detail::cuda_event_destroy(stop);
@@ -1335,7 +1336,7 @@ class Graph : public ICudnn, public INode {
                           std::vector<int64_t> const &override_uids                 = {},
                           std::vector<std::vector<int64_t>> const &override_shapes  = {},
                           std::vector<std::vector<int64_t>> const &override_strides = {}) const {
-        if (!varpack_template.prepared) {
+        if (!varpack_prep_state->prepared.load(std::memory_order_acquire)) {
             CHECK_CUDNN_FRONTEND_ERROR(const_cast<Graph *>(this)->prepare_variant_pack_template());
         }
         const int n_user        = (int)varpack_template.user_slots.size();
@@ -1367,7 +1368,7 @@ class Graph : public ICudnn, public INode {
                           std::vector<std::vector<int64_t>> const &override_shapes  = {},
                           std::vector<std::vector<int64_t>> const &override_strides = {}) const {
         // Lazy init: prepare template if not done (e.g. deserialized graphs, build_plan_at_index)
-        if (!varpack_template.prepared) {
+        if (!varpack_prep_state->prepared.load(std::memory_order_acquire)) {
             CHECK_CUDNN_FRONTEND_ERROR(const_cast<Graph *>(this)->prepare_variant_pack_template());
         }
 
@@ -1445,17 +1446,13 @@ class Graph : public ICudnn, public INode {
         }
 
         // Backend path
-        std::vector<void *> ptrs_vec(ptrs, ptrs + N);
         if (override_uids.empty()) {
-            CHECK_CUDNN_FRONTEND_ERROR(detail::execute(handle,
-                                                       plans.execution_plans[plan_index].get(),
-                                                       ptrs_vec,
-                                                       varpack_template.all_uids,
-                                                       engine_workspace));
+            CHECK_CUDNN_FRONTEND_ERROR(detail::execute(
+                handle, plans.execution_plans[plan_index].get(), ptrs, varpack_template.all_uids, engine_workspace));
         } else {
             CHECK_CUDNN_FRONTEND_ERROR(detail::execute(handle,
                                                        plans.execution_plans[plan_index].get(),
-                                                       ptrs_vec,
+                                                       ptrs,
                                                        varpack_template.all_uids,
                                                        engine_workspace,
                                                        override_uids,
@@ -1678,6 +1675,9 @@ class Graph : public ICudnn, public INode {
         // Initialize the execution caches from deserialized data
         cached_pass_by_value           = deserialized_pass_by_value;
         cached_workspace_modifications = deserialized_workspace_modifications;
+
+        // Eager prep, matching what build_plans() does for fresh-build graphs.
+        CHECK_CUDNN_FRONTEND_ERROR(prepare_variant_pack_template());
 
         if (j.contains("tensors_to_dump")) {
             auto dump_uids = j["tensors_to_dump"].get<std::vector<std::pair<uid_t, char>>>();
@@ -2052,33 +2052,69 @@ class Graph : public ICudnn, public INode {
         std::vector<std::pair<int, int64_t>> workspace_slots;  // (slot, byte_offset)
         std::vector<std::pair<int, std::pair<int, int64_t>>>
             replacement_slots;  // (dst_slot, (src_slot, offset)) — only used by Slice nodes
-
-        bool prepared = false;
     };
 
     VariantPackTemplate varpack_template;
 
+    // Per-Graph sync state for lazy varpack-template prep. Wrapped in a box so
+    // Graph stays default-copy/move-constructible (samples build Graphs into
+    // std::tuple by copy).
+    struct VarpackPrepState {
+        std::atomic<bool> prepared{false};
+        std::mutex mu;
+    };
+    struct VarpackPrepStateBox {
+        std::unique_ptr<VarpackPrepState> ptr                = std::make_unique<VarpackPrepState>();
+        VarpackPrepStateBox()                                = default;
+        VarpackPrepStateBox(VarpackPrepStateBox &&) noexcept = default;
+        VarpackPrepStateBox &
+        operator=(VarpackPrepStateBox &&) noexcept = default;
+        VarpackPrepStateBox(VarpackPrepStateBox const &other) : ptr(std::make_unique<VarpackPrepState>()) {
+            if (other.ptr) {
+                ptr->prepared.store(other.ptr->prepared.load(std::memory_order_acquire), std::memory_order_release);
+            }
+        }
+        VarpackPrepStateBox &
+        operator=(VarpackPrepStateBox const &other) {
+            if (this != &other) {
+                VarpackPrepStateBox tmp(other);
+                ptr.swap(tmp.ptr);
+            }
+            return *this;
+        }
+        VarpackPrepState *
+        operator->() const {
+            return ptr.get();
+        }
+    };
+    mutable VarpackPrepStateBox varpack_prep_state;
+
     // Prepares the variant pack template. Called automatically at the end of build_plans().
     error_t
     prepare_variant_pack_template() {
-        varpack_template = VariantPackTemplate{};
+        std::lock_guard<std::mutex> lk(varpack_prep_state->mu);
+        if (varpack_prep_state->prepared.load(std::memory_order_relaxed)) {
+            return {error_code_t::OK, ""};
+        }
+
+        VariantPackTemplate t;
 
         // 1. Start with variant_pack_uids + any replacement source UIDs not already included.
         //    Replacement sources (e.g. slice input on cuDNN < 9.22 pointer-arithmetic fallback) may not
         //    be in variant_pack_uids; we still need a slot for the source pointer when replacements apply.
-        varpack_template.all_uids.assign(variant_pack_uids.begin(), variant_pack_uids.end());
+        t.all_uids.assign(variant_pack_uids.begin(), variant_pack_uids.end());
         for (auto const &[from_uid, value] : variant_pack_replacements) {
             if (variant_pack_uids.find(from_uid) == variant_pack_uids.end()) {
-                varpack_template.all_uids.push_back(from_uid);
+                t.all_uids.push_back(from_uid);
             }
         }
-        std::sort(varpack_template.all_uids.begin(), varpack_template.all_uids.end());
-        varpack_template.template_ptrs.resize(varpack_template.all_uids.size(), nullptr);
+        std::sort(t.all_uids.begin(), t.all_uids.end());
+        t.template_ptrs.assign(t.all_uids.size(), nullptr);
 
         // 2. Build UID → slot index
         std::unordered_map<int64_t, int> uid_to_slot;
-        for (int i = 0; i < (int)varpack_template.all_uids.size(); i++) {
-            uid_to_slot[varpack_template.all_uids[i]] = i;
+        for (int i = 0; i < (int)t.all_uids.size(); i++) {
+            uid_to_slot[t.all_uids[i]] = i;
         }
 
         // 3. Pre-fill pass_by_value entries (scalars like epsilon, alpha, beta)
@@ -2087,11 +2123,11 @@ class Graph : public ICudnn, public INode {
         for (auto const &[uid, ptr] : pbv_ptrs) {
             auto it = uid_to_slot.find(uid);
             if (it != uid_to_slot.end()) {
-                varpack_template.template_ptrs[it->second] = ptr;
+                t.template_ptrs[it->second] = ptr;
             } else {
-                int slot = (int)varpack_template.all_uids.size();
-                varpack_template.all_uids.push_back(uid);
-                varpack_template.template_ptrs.push_back(ptr);
+                int slot = (int)t.all_uids.size();
+                t.all_uids.push_back(uid);
+                t.template_ptrs.push_back(ptr);
                 uid_to_slot[uid] = slot;
             }
         }
@@ -2100,9 +2136,9 @@ class Graph : public ICudnn, public INode {
         for (auto const &[uid, data] : cached_workspace_modifications) {
             auto it = uid_to_slot.find(uid);
             if (it == uid_to_slot.end()) {
-                int slot = (int)varpack_template.all_uids.size();
-                varpack_template.all_uids.push_back(uid);
-                varpack_template.template_ptrs.push_back(nullptr);  // filled at execute time
+                int slot = (int)t.all_uids.size();
+                t.all_uids.push_back(uid);
+                t.template_ptrs.push_back(nullptr);  // filled at execute time
                 uid_to_slot[uid] = slot;
             }
         }
@@ -2117,11 +2153,11 @@ class Graph : public ICudnn, public INode {
             (void)from_uid;
             replacement_dst_uids.insert(value.first);  // value.first = to_uid (the destination)
         }
-        for (int i = 0; i < (int)varpack_template.template_ptrs.size(); i++) {
-            int64_t uid = varpack_template.all_uids[i];
-            if (varpack_template.template_ptrs[i] == nullptr && workspace_uids.find(uid) == workspace_uids.end() &&
+        for (int i = 0; i < (int)t.template_ptrs.size(); i++) {
+            int64_t uid = t.all_uids[i];
+            if (t.template_ptrs[i] == nullptr && workspace_uids.find(uid) == workspace_uids.end() &&
                 replacement_dst_uids.find(uid) == replacement_dst_uids.end()) {
-                varpack_template.user_slots.push_back(i);
+                t.user_slots.push_back(i);
             }
         }
 
@@ -2130,7 +2166,7 @@ class Graph : public ICudnn, public INode {
             const auto &[operation_type, offset, vec_data] = data;
             auto it                                        = uid_to_slot.find(uid);
             if (it != uid_to_slot.end()) {
-                varpack_template.workspace_slots.emplace_back(it->second, offset);
+                t.workspace_slots.emplace_back(it->second, offset);
             }
         }
 
@@ -2143,20 +2179,30 @@ class Graph : public ICudnn, public INode {
             auto it_dst                       = uid_to_slot.find(to_uid);
             // Replacement: dst_ptr = src_ptr + byte_offset
             if (it_src != uid_to_slot.end() && it_dst != uid_to_slot.end()) {
-                varpack_template.replacement_slots.emplace_back(it_dst->second,
-                                                                std::make_pair(it_src->second, byte_offset));
+                t.replacement_slots.emplace_back(it_dst->second, std::make_pair(it_src->second, byte_offset));
             }
         }
 
-        // 8. Pre-compute OSS engine slot indices (if applicable)
-        plans.set_oss_slot_indices([&](int64_t uid) -> int {
-            if (uid < 0) return -1;
-            auto it = uid_to_slot.find(uid);
-            return (it != uid_to_slot.end()) ? it->second : -1;
-        });
+        varpack_template = std::move(t);
+        // Apply OSS slot indices before the release-store so a reader that
+        // observes prepared=true also sees the slot writes.
+        apply_oss_slot_indices_to_plans();
+        varpack_prep_state->prepared.store(true, std::memory_order_release);
 
-        varpack_template.prepared = true;
         return {error_code_t::OK, ""};
+    }
+
+    // Depends on plans.candidate; kept separate so autotune can re-apply without
+    // rebuilding the (candidate-independent) variant pack template.
+    void
+    apply_oss_slot_indices_to_plans() {
+        plans.set_oss_slot_indices([this](int64_t uid) -> int {
+            if (uid < 0) return -1;
+            for (size_t i = 0; i < varpack_template.all_uids.size(); ++i) {
+                if (varpack_template.all_uids[i] == uid) return static_cast<int>(i);
+            }
+            return -1;
+        });
     }
 
     std::vector<int64_t>
