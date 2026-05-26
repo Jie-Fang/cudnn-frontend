@@ -340,7 +340,6 @@ class Graph:
             "deselect_engines",
             "deselect_numeric_notes",
             "deselect_workspace_greater_than",
-            "estimate_run_times",
             "execute",
             "execute_plan_at_index",
             "get_behavior_notes",
