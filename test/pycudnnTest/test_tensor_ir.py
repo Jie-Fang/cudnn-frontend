@@ -63,15 +63,6 @@ def get_element_bits(data_type):
         raise ValueError(f"Unsupported data type: {data_type}")
 
 
-def is_float_dtype(data_type):
-    return data_type in [
-        DataType.FLOAT,
-        DataType.DOUBLE,
-        DataType.HALF,
-        DataType.BFLOAT16,
-    ]
-
-
 # Maximum shared memory per SM (bytes) by architecture, used to pre-filter
 # CudaTile tile configs before invoking ptxas.  Values are the hard limits
 # reported by ptxas ("uses too much shared data … max").
@@ -124,10 +115,6 @@ _CUDA_TILE_F32_ONLY_OPS = frozenset(
         "gelu",
     ]
 )
-
-
-def is_integer_dtype(data_type):
-    return data_type in [DataType.INT8, DataType.INT32, DataType.INT64]
 
 
 def parse_int_list(value):
@@ -185,19 +172,11 @@ def _extract_config_properties(config):
         config.clusterShape.n,
         config.clusterShape.k,
     ]
-    cta_count = config.mmaTileSize.m // config.ctaTileSize.m
+    cta_count = config.ctaCount
     return cga_tile_size, mma_shape, cluster_shape, cta_count
 
 
-def _create_config_list(
-    cga_tile_size,
-    mma_shape,
-    cluster_shape,
-    cta_count,
-    stream_k,
-    cubin_chip,
-    matmul_element_bits,
-):
+def _create_config_list(cga_tile_size, mma_shape, cluster_shape, cta_count, stream_k, cubin_chip):
     """
     Create a configuration list with all parameters.
 
@@ -211,7 +190,6 @@ def _create_config_list(
         cta_count,
         stream_k,
         cubin_chip,
-        matmul_element_bits,
     ]
 
 
@@ -239,7 +217,7 @@ class TensorIRArguments:
             ]
         )
 
-    def create_config(self, cga_tile_size, mma_shape, cluster_shape, cta_count, matmul_element_bits):
+    def create_config(self, cga_tile_size, mma_shape, cluster_shape, cta_count):
         """Create a configuration using the stored stream_k and cubin_chip."""
         return _create_config_list(
             cga_tile_size,
@@ -248,7 +226,6 @@ class TensorIRArguments:
             cta_count,
             self.stream_k,
             self.cubin_chip,
-            matmul_element_bits,
         )
 
     def print_args(self):
@@ -257,15 +234,9 @@ class TensorIRArguments:
 
 
 def generate_tensorir_compilation_configs(
-    m,
-    n,
-    k,
-    matmul_element_bits,
     tensorir_args,
-    is8BitTransposeB,
-    isUTCHMMA=False,
-    isUTCIMMA=False,
-    isBlockScaled=False,
+    module,
+    matmul_element_bits,
     compiler_backend="Tile",
 ):
     """
@@ -283,34 +254,16 @@ def generate_tensorir_compilation_configs(
                 args.mma_shape,
                 args.cluster_shape,
                 args.cta_count,
-                matmul_element_bits,
             )
         ]
 
     args.print_args()
 
     # Generate all valid configurations
-    print(
-        "isUTCHMMA",
-        isUTCHMMA,
-        "isUTCIMMA",
-        isUTCIMMA,
-        "is8BitTransposeB",
-        is8BitTransposeB,
-    )
-    print("m", m, "n", n, "k", k)
     cc = CompilerWithKernelCacheSingleton().get_compute_capability()
-    configList = nv_tensor_ir.generateAllValidConfigurations_by_problem_size(
-        nv_tensor_ir.MmaShape(m, n, k),
-        matmul_element_bits,
+    configList = nv_tensor_ir.generateAllValidConfigurations(
+        module,
         cc,
-        isSparse=False,
-        isWSMode=False,
-        is8BitTransposeB=is8BitTransposeB,
-        kPhase=4,
-        isUTCHMMA=isUTCHMMA,
-        isUTCIMMA=isUTCIMMA,
-        blockScaling=isBlockScaled,
     )
 
     def should_keep_config(config):
@@ -371,7 +324,6 @@ def generate_tensorir_compilation_configs(
             cta_count,
             args.stream_k,
             args.cubin_chip,
-            matmul_element_bits,
         )
         if config_tuple not in seen:
             seen.add(config_tuple)
@@ -381,7 +333,6 @@ def generate_tensorir_compilation_configs(
                     mma_shape,
                     cluster_shape,
                     cta_count,
-                    matmul_element_bits,
                 )
             )
 
@@ -398,7 +349,7 @@ def generate_tensorir_compilation_configs(
     return configs
 
 
-def get_tensorir_compilation_config(m, n, k, matmul_element_bits, tensorir_args):
+def get_tensorir_compilation_config(module, matmul_element_bits, tensorir_args):
     """Get a single tensor IR compilation configuration.
 
     Args:
@@ -442,7 +393,6 @@ def get_tensorir_compilation_config(m, n, k, matmul_element_bits, tensorir_args)
         config_values["cta_count"],
         config_values["stream_k"],
         config_values["cubin_chip"],
-        matmul_element_bits,
     ]
 
 
@@ -1409,21 +1359,8 @@ class test_tensor_ir:
                     cta_count,
                     stream_k,
                     cubin_chip,
-                    matmul_element_bits,
                 ) in kernel_configs:
                     cc = self.compiler_with_kernel_cache.get_compute_capability()
-                    if not nv_tensor_ir.SM10xCompilationConfig.isValidConfiguration(
-                        nv_tensor_ir.MmaShape(mma_shape[0], mma_shape[1], mma_shape[2]),
-                        nv_tensor_ir.MmaShape(tile_size[0], tile_size[1], tile_size[2]),
-                        cta_count,
-                        matmul_element_bits,
-                        nv_tensor_ir.MmaShape(cluster_shape[0], cluster_shape[1], cluster_shape[2]),
-                        cc,
-                    ):
-                        print(f"#### Invalid configuration: {tile_size}, {mma_shape}, {cluster_shape}, {cta_count}")
-                        print(f"#### Skip this config")
-                        continue
-                    print(f"\n#### Valid configuration: {tile_size}, {mma_shape}, {cluster_shape}, {cta_count}")
 
                     # TODO: Add enum to support more cubin_chip
                     expected_cubin_chip = _get_cubin_chip_for_compute_capability(cc)

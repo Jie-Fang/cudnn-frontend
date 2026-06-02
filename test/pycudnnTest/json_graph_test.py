@@ -103,14 +103,7 @@ def replace_abstract_test_params(json_test_def, abstract_params):
 
 
 def run_tensor_ir_from_legacy_args(parent_args, unknown_args):
-    from test_tensor_ir import (
-        get_element_bits,
-        get_default_cubin_chip,
-        generate_tensorir_compilation_configs,
-        get_tensorir_compilation_config,
-        is_float_dtype,
-        is_integer_dtype,
-    )
+    from test_tensor_ir import get_default_cubin_chip
 
     tensorir_parser = argparse.ArgumentParser("tensorir_graph_runner", allow_abbrev=False)
     tensorir_parser.add_argument("-tile_size", action="store")
@@ -144,79 +137,8 @@ def run_tensor_ir_from_legacy_args(parent_args, unknown_args):
         -1,
     )
 
-    compiler_backend = tensorir_args.compiler_backend if tensorir_args.compiler_backend else "Tile"
-
-    is8BitTransposeB = False
-    isUTCHMMA = False
-    isUTCIMMA = False
-    isBlockScaled = False
-
-    if compiler_backend in ("Tile", "CudaTile"):
-        m, n, k = 256, 256, 256
-        matmul_element_bits = get_element_bits(get_input_dataTypes(concrete_test_dict)[0])
-        cudatile_matmul_output_rank = None
-        if compiler_backend == "CudaTile":
-            for node in testGraph.nodes:
-                if isinstance(node, operation) and node.op_name in ("matmul", "scaled_matmul"):
-                    cudatile_matmul_output_rank = len(node.output[0].dim)
-                    matmul_element_bits = get_element_bits(node.producer_nodes[0].output[0].data_type)
-                    break
-    elif compiler_backend == "Collective":
-        flag_matmul = False
-        for node in testGraph.nodes:
-            if isinstance(node, operation) and (node.op_name == "matmul" or node.op_name == "scaled_matmul"):
-                tensor_A = node.producer_nodes[0].output[0]
-                tensor_B = node.producer_nodes[1].output[0]
-
-                matmul_element_bits = get_element_bits(tensor_A.data_type)
-
-                if (tensor_B.stride[1] != 1) and (matmul_element_bits != 8):
-                    is8BitTransposeB = True
-
-                if is_float_dtype(tensor_A.data_type):
-                    isUTCHMMA = True
-                elif is_integer_dtype(tensor_A.data_type):
-                    isUTCIMMA = True
-
-                m = tensor_A.dim[1]
-                n = tensor_B.dim[2]
-                k = tensor_A.dim[2]
-                flag_matmul = True
-                isBlockScaled = node.op_name == "scaled_matmul"
-                break
-
-        if not flag_matmul:
-            raise ValueError("No matmul or scaled_matmul found in the graph for collective backend")
-    else:
-        raise ValueError("Invalid compiler backend: {}".format(compiler_backend))
-
-    if tensorir_args.sweep_tile_configs or (tensorir_args.random_sweep_tile_configs and tensorir_args.random_sweep_tile_configs > 0):
-        assert not (isUTCHMMA and isUTCIMMA), "isUTCHMMA and isUTCIMMA cannot be True at the same time"
-        kernel_config = generate_tensorir_compilation_configs(
-            m,
-            n,
-            k,
-            matmul_element_bits,
-            tensorir_args,
-            is8BitTransposeB,
-            isUTCHMMA,
-            isUTCIMMA,
-            isBlockScaled,
-            compiler_backend=compiler_backend,
-        )
-    else:
-        kernel_config = [get_tensorir_compilation_config(m, n, k, matmul_element_bits, tensorir_args)]
-
-    # For CudaTile batched (rank > 2) matmul, the iteration space is [B..., M, N, K].
-    # Tile sizes are specified as [M, N], so prepend batch dims of 1.
-    if compiler_backend == "CudaTile" and cudatile_matmul_output_rank is not None and cudatile_matmul_output_rank > 2:
-        num_batch_dims = cudatile_matmul_output_rank - 2
-        for cfg in kernel_config:
-            cfg[0] = [1] * num_batch_dims + list(cfg[0])[:2]
-
     status = run_tensor_ir_test_from_json_definition(
         testGraph,
-        kernel_config,
         tensorir_args,
         concrete_test_dict,
         legacy_args,
@@ -966,7 +888,58 @@ def run_test_from_json_definition(testGraph, json_dict):
     testGraph.cudnn_execute_and_compare_to_reference(atol=atol, rtol=rtol)
 
 
-def run_tensor_ir_test_from_json_definition(testGraph, kernel_config, tensorir_args, concrete_test_dict, legacy_args):
+def _extract_kernel_config(testGraph, tensorir_args, concrete_test_dict, tensor_ir_module, compiler_backend):
+    from test_tensor_ir import (
+        get_element_bits,
+        generate_tensorir_compilation_configs,
+        get_tensorir_compilation_config,
+    )
+
+    if compiler_backend in ("Tile", "CudaTile"):
+        matmul_element_bits = get_element_bits(get_input_dataTypes(concrete_test_dict)[0])
+        cudatile_matmul_output_rank = None
+        if compiler_backend == "CudaTile":
+            for node in testGraph.nodes:
+                if isinstance(node, operation) and node.op_name in ("matmul", "scaled_matmul"):
+                    cudatile_matmul_output_rank = len(node.output[0].dim)
+                    matmul_element_bits = get_element_bits(node.producer_nodes[0].output[0].data_type)
+                    break
+    elif compiler_backend == "Collective":
+        flag_matmul = False
+        for node in testGraph.nodes:
+            if isinstance(node, operation) and (node.op_name == "matmul" or node.op_name == "scaled_matmul"):
+                tensor_A = node.producer_nodes[0].output[0]
+
+                matmul_element_bits = get_element_bits(tensor_A.data_type)
+                flag_matmul = True
+                break
+
+        if not flag_matmul:
+            raise ValueError("No matmul or scaled_matmul found in the graph for collective backend")
+    else:
+        raise ValueError("Invalid compiler backend: {}".format(compiler_backend))
+
+    if tensorir_args.sweep_tile_configs or (tensorir_args.random_sweep_tile_configs and tensorir_args.random_sweep_tile_configs > 0):
+        kernel_config = generate_tensorir_compilation_configs(
+            tensorir_args,
+            tensor_ir_module,
+            matmul_element_bits,
+            compiler_backend=compiler_backend,
+        )
+    else:
+        kernel_config = [get_tensorir_compilation_config(tensor_ir_module, matmul_element_bits, tensorir_args)]
+
+    # For CudaTile batched (rank > 2) matmul, the iteration space is [B..., M, N, K].
+    # Tile sizes are specified as [M, N], so prepend batch dims of 1.
+    if compiler_backend == "CudaTile" and cudatile_matmul_output_rank is not None and cudatile_matmul_output_rank > 2:
+        num_batch_dims = cudatile_matmul_output_rank - 2
+        for cfg in kernel_config:
+            cfg[0] = [1] * num_batch_dims + list(cfg[0])[:2]
+
+    return kernel_config
+
+
+def run_tensor_ir_test_from_json_definition(testGraph, tensorir_args, concrete_test_dict, legacy_args):
 
     static_shapes_only = tensorir_args.staticShapesOnly if tensorir_args.staticShapesOnly else False
     compiler_backend = tensorir_args.compiler_backend if tensorir_args.compiler_backend else "Tile"
@@ -985,6 +958,14 @@ def run_tensor_ir_test_from_json_definition(testGraph, kernel_config, tensorir_a
 
     # Do something with tensor_ir_module...
     reportCurrentTime("test_setup")
+
+    kernel_config = _extract_kernel_config(
+        testGraph,
+        tensorir_args,
+        concrete_test_dict,
+        tensor_ir_module,
+        compiler_backend,
+    )
 
     status = tensor_ir_tester.run_tensor_ir_module(
         tensor_ir_module,
