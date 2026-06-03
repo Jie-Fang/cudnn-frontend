@@ -384,11 +384,6 @@ backend:dev:
     needs: []
     interruptible: true
 
-# backend:next_arch removed 2026-05-26: the `feature/rubin-bringup` branch was
-# merged into `dev`, so the third child pipeline is no longer triggered.
-# Pre-merge bisects can re-add this block (project: cudnn/cudnn,
-# branch: feature/rubin-bringup) for historical reference.
-
 # ==============================================================================
 # Slack Notification
 # ==============================================================================

@@ -1295,7 +1295,7 @@ class test_graph:
                 else:
                     torch.testing.assert_close(Y_expected, Y_actual, atol=atol, rtol=rtol)
             except Exception as e:
-                # Note: assert_close will raise an unexpected exception if run with rubin amodel, so add this branch to skip it
+                # Note: assert_close raises an unexpected dtype/shape-mismatch on some amodel arches; skip cleanly in that case rather than fail.
                 if (
                     "The values for attribute 'dtype' do not match" in e.args[0]
                     or "The values for attribute 'shape' do not match" in e.args[0]
