@@ -1,6 +1,16 @@
 workflow:
   auto_cancel:
     on_new_commit: interruptible
+  rules:
+    # Branch and tag pushes should not create pipelines. CI should enter through
+    # scheduled pipelines, merge request pipelines, or explicit API launches.
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: always
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: always
+    - if: '$CI_PIPELINE_SOURCE == "api"'
+      when: always
+    - when: never
 
 default:
     interruptible: true
