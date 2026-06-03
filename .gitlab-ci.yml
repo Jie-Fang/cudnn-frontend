@@ -2,8 +2,16 @@ workflow:
   auto_cancel:
     on_new_commit: interruptible
   rules:
-    # Branch and tag pushes should not create pipelines. CI should enter through
-    # scheduled pipelines, merge request pipelines, or explicit API launches.
+    # CI_PIPELINE_SOURCE reference:
+    # | Source              | Meaning |
+    # | push                | A Git push created the pipeline. This includes branch pushes and tag pushes. |
+    # | merge_request_event | GitLab created the pipeline for a merge request. |
+    # | schedule            | A GitLab CI schedule created it. |
+    # | api                 | Someone or something called the GitLab pipeline API, like our bot does. |
+    # | web                 | A user clicked Run pipeline in the GitLab web UI. |
+    # | trigger             | A pipeline trigger token created it. This is different from the normal API with a PAT. |
+    # | pipeline            | A downstream multi-project pipeline created it. For example, project A triggers project B. |
+    # | parent_pipeline     | A child pipeline created from a parent pipeline in the same project. Usually from trigger: include / child pipeline YAML. |
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
       when: always
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
