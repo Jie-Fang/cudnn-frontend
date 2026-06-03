@@ -34,10 +34,6 @@ default:
     - if: $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: '$CI_PIPELINE_SOURCE == "api" && $CI_COMMIT_REF_NAME =~ /^cudnn-gh\/.*$/'
 
-.manual_job_template:
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "web"
-
 .cudnn_dev_image:template:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_13.3.0
 
