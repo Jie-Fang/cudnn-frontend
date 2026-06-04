@@ -339,7 +339,7 @@ py_samples:ga:
 backend:rel:
     trigger:
         project:  cudnn/cudnn
-        branch:   release/9.23.0
+        branch:   release/9.24.0
         strategy: depend
     inherit:
         variables: false
